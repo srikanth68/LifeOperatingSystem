@@ -1,0 +1,334 @@
+/* ── vitara.css — Longevity Intelligence UI ── */
+
+/* ─── Shared module header (used by all modules) ─── */
+.module-header {
+  display: flex; align-items: center; gap: 0.875rem; margin-bottom: 1.25rem;
+}
+.module-header-icon {
+  width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
+  background: color-mix(in srgb, var(--mc) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mc) 25%, transparent);
+  display: flex; align-items: center; justify-content: center;
+}
+.module-header-icon svg { width: 22px; height: 22px; color: var(--mc); }
+h1.module-title  { font-size: 1.35rem; margin-bottom: 0; }
+.module-subtitle { font-size: 0.78rem; color: var(--text3); margin-top: 0.1rem; }
+
+/* ─── Connecting state ─── */
+.v2-connecting {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0.625rem; padding: 4rem; font-size: 0.82rem; color: var(--text3);
+}
+.v2-connecting-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--vitara);
+  animation: v2pulse 1.2s ease-in-out infinite;
+}
+@keyframes v2pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.2 } }
+
+/* ─── Setup screens (NotLinked / BackendDown) ─── */
+.v2-setup {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; padding: 4rem 2rem; gap: 1rem;
+}
+.v2-setup-icon {
+  width: 72px; height: 72px; border-radius: 20px;
+  background: rgba(6,200,160,0.06); border: 1px solid rgba(6,200,160,0.22);
+  display: flex; align-items: center; justify-content: center;
+}
+.v2-setup-icon--error {
+  background: rgba(232,68,68,0.06); border-color: rgba(232,68,68,0.22);
+}
+.v2-setup-icon svg { width: 36px; height: 36px; }
+.v2-setup h2 { font-size: 1.1rem; color: var(--text); font-weight: 700; }
+.v2-setup p  { font-size: 0.83rem; color: var(--text2); max-width: 360px; line-height: 1.65; }
+.v2-link-btn { text-decoration: none; display: inline-flex; margin-top: 0.25rem; }
+.v2-code {
+  font-family: 'Menlo', 'Consolas', monospace; font-size: 0.8rem;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 0.45rem 1rem;
+  color: var(--text2); margin-top: 0.25rem; letter-spacing: 0.01em;
+}
+
+/* ─── Status badge row ─── */
+.v2-status-row {
+  display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;
+}
+.v2-ring-badge {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  font-size: 0.7rem; font-weight: 600; padding: 0.22rem 0.625rem;
+  border-radius: 99px;
+}
+.v2-ring-badge.linked {
+  background: rgba(6,200,160,0.07); border: 1px solid rgba(6,200,160,0.25);
+  color: var(--vitara);
+}
+.v2-ring-badge.unlinked {
+  background: rgba(232,68,68,0.07); border: 1px solid rgba(232,68,68,0.25);
+  color: #e84444;
+}
+.v2-ring-dot {
+  width: 5px; height: 5px; border-radius: 50%; background: currentColor;
+  animation: v2pulse 2s ease-in-out infinite;
+}
+.v2-status-since { font-size: 0.68rem; color: var(--text3); }
+
+/* ─── Sync button ─── */
+.v2-sync-btn {
+  margin-left: auto;
+  font-size: 0.72rem; font-weight: 600; font-family: inherit;
+  padding: 0.28rem 0.875rem; border-radius: 99px; cursor: pointer;
+  background: rgba(6,200,160,0.08); border: 1px solid rgba(6,200,160,0.3);
+  color: var(--vitara); transition: background 0.15s, opacity 0.15s;
+}
+.v2-sync-btn:hover:not(:disabled) { background: rgba(6,200,160,0.15); }
+.v2-sync-btn:disabled { opacity: 0.55; cursor: default; }
+.v2-sync-btn.syncing { animation: v2pulse 1s ease-in-out infinite; }
+.v2-sync-err { font-size: 0.68rem; color: #e84444; }
+
+/* ─── No-data CTA ─── */
+.v2-no-data-cta {
+  font-size: 0.82rem; color: var(--text2); line-height: 1.6;
+  padding: 0.875rem 1rem; margin-bottom: 1.25rem;
+  background: rgba(6,200,160,0.05); border: 1px solid rgba(6,200,160,0.18);
+  border-radius: var(--r-md);
+}
+.v2-no-data-cta strong { color: var(--vitara); }
+
+/* ─── Hero grid (Overview) ─── */
+.v2-hero-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 0.875rem; margin-bottom: 1.5rem;
+}
+.v2-hero-card {
+  background: linear-gradient(160deg, rgba(13,22,46,0.97) 0%, rgba(9,17,38,0.97) 100%);
+  border: 1px solid var(--border); border-radius: var(--r-lg); padding: 1.25rem;
+}
+.v2-hero-label {
+  font-size: 0.58rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.12em; color: var(--text3); margin-bottom: 0.5rem;
+}
+.v2-hero-val {
+  font-family: 'Space Grotesk', sans-serif; font-size: 2.25rem;
+  font-weight: 700; line-height: 1; margin-bottom: 0.3rem;
+}
+.v2-hero-delta { font-size: 0.75rem; font-weight: 600; margin-bottom: 0.2rem; }
+.v2-hero-delta.good { color: var(--vitara); }
+.v2-hero-delta.bad  { color: #e84444; }
+.v2-hero-sub   { font-size: 0.7rem; color: var(--text3); line-height: 1.5; }
+.v2-hero-empty { font-size: 0.8rem; color: var(--text3); margin-top: 0.75rem; }
+
+/* ─── 7-day trail bars ─── */
+.v2-trail-grid {
+  display: flex; gap: 0.5rem; align-items: flex-end;
+  height: 88px; margin-bottom: 1.25rem; padding: 0.75rem 1rem 0.625rem;
+  background: rgba(13,22,46,0.5); border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.v2-trail-day { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; height: 100%; }
+.v2-trail-bar {
+  flex: 1; width: 100%; background: rgba(255,255,255,0.04);
+  border-radius: 3px; overflow: hidden; display: flex;
+  flex-direction: column; justify-content: flex-end;
+}
+.v2-trail-fill { border-radius: 3px 3px 0 0; transition: height 0.6s ease; min-height: 2px; opacity: 0.85; }
+.v2-trail-score     { font-size: 0.6rem; font-weight: 700; line-height: 1; }
+.v2-trail-day-label { font-size: 0.57rem; color: var(--text3); }
+
+/* ─── Stat cards row ─── */
+.v2-stats-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.75rem; margin-bottom: 1.5rem;
+}
+.v2-stat-card {
+  background: rgba(13,22,46,0.8); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: 0.875rem 1rem;
+}
+.v2-stat-label {
+  font-size: 0.58rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--text3); margin-bottom: 0.35rem;
+}
+.v2-stat-val {
+  font-family: 'Space Grotesk', sans-serif; font-size: 1.35rem;
+  font-weight: 700; line-height: 1.1;
+}
+.v2-stat-unit { font-size: 0.6rem; color: var(--text3); font-family: 'Inter', sans-serif; font-weight: 400; }
+
+/* ─── Day-tile grid (Readiness / Activity detail) ─── */
+.v2-day-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.625rem; margin-bottom: 1.5rem;
+}
+.v2-day-tile {
+  background: rgba(13,22,46,0.8); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: 0.75rem 0.875rem;
+}
+.v2-day-tile-date {
+  font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text3); margin-bottom: 0.4rem;
+}
+.v2-day-tile-score {
+  font-family: 'Space Grotesk', sans-serif; font-size: 1.4rem;
+  font-weight: 700; line-height: 1; margin-bottom: 0.45rem;
+}
+.v2-day-tile-row {
+  display: flex; justify-content: space-between; gap: 0.5rem;
+  font-size: 0.66rem; color: var(--text3); margin-top: 0.2rem;
+}
+.v2-day-tile-row span:last-child { color: var(--text2); font-weight: 600; }
+.v2-stage-bar {
+  display: flex; height: 5px; border-radius: 3px; overflow: hidden;
+  margin-top: 0.55rem; background: rgba(255,255,255,0.04);
+}
+.v2-stage-seg { height: 100%; min-width: 1px; }
+
+/* ─── Chart wrapper (Sleep stage chart) ─── */
+.v2-chart-wrap {
+  background: rgba(13,22,46,0.5); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: 0.875rem; margin-bottom: 1.25rem;
+}
+.v2-chart-skeleton {
+  background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+  border-radius: var(--r-md); margin-bottom: 1.25rem;
+  animation: v2shimmer 1.5s ease-in-out infinite;
+}
+@keyframes v2shimmer { 0%, 100% { opacity: 0.4 } 50% { opacity: 0.7 } }
+.v2-no-data {
+  text-align: center; color: var(--text3); font-size: 0.82rem;
+  padding: 3rem; border: 1px dashed var(--border2);
+  border-radius: var(--r-md); margin-bottom: 1.25rem;
+}
+
+/* ─── Legend ─── */
+.v2-legend {
+  display: flex; align-items: center; font-size: 0.65rem; color: var(--text3);
+  margin-bottom: 0.625rem; gap: 0;
+}
+.v2-legend-dot {
+  display: inline-block; width: 8px; height: 8px;
+  border-radius: 50%; margin-right: 0.35rem;
+}
+
+/* ─── Readiness level pills ─── */
+.v2-level-row {
+  display: flex; align-items: center; gap: 0.625rem;
+  flex-wrap: wrap; margin-bottom: 1.25rem;
+}
+.v2-level-pill {
+  display: flex; align-items: center; gap: 0.375rem;
+  padding: 0.28rem 0.75rem; border-radius: 99px; font-size: 0.7rem;
+}
+.v2-level-optimal {
+  background: rgba(6,200,160,0.07); border: 1px solid rgba(6,200,160,0.25);
+}
+.v2-level-good {
+  background: rgba(212,168,67,0.07); border: 1px solid rgba(212,168,67,0.25);
+}
+.v2-level-pay-attention {
+  background: rgba(232,68,68,0.07); border: 1px solid rgba(232,68,68,0.25);
+}
+.v2-level-count { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 0.95rem; }
+.v2-level-label { color: var(--text2); text-transform: capitalize; }
+.v2-level-hint  { font-size: 0.68rem; color: var(--text3); margin-left: 0.25rem; }
+
+/* ─── Bio Age hero ─── */
+.v2-bioage-hero {
+  background: linear-gradient(160deg, rgba(13,22,46,0.97), rgba(9,17,38,0.97));
+  border: 1px solid var(--border); border-radius: var(--r-lg);
+  padding: 2.5rem 2rem; text-align: center; margin-bottom: 1.5rem;
+}
+.v2-bioage-eyebrow {
+  font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.14em; color: var(--text3); margin-bottom: 0.625rem;
+}
+.v2-bioage-val {
+  font-family: 'Space Grotesk', sans-serif; font-size: 4.5rem;
+  font-weight: 700; line-height: 1; margin-bottom: 0.625rem;
+}
+.v2-bioage-delta { font-size: 0.88rem; font-weight: 600; margin-bottom: 0.5rem; }
+.v2-bioage-delta.good { color: var(--vitara); }
+.v2-bioage-delta.bad  { color: #e84444; }
+.v2-bioage-quality { font-size: 0.68rem; color: var(--text3); }
+.v2-bioage-empty   { font-size: 0.85rem; color: var(--text3); margin: 1.25rem 0; line-height: 1.6; }
+
+/* ─── Bio Age factor grid ─── */
+.v2-factor-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.75rem; margin-bottom: 1.5rem;
+}
+.v2-factor-card {
+  background: rgba(13,22,46,0.8); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: 0.875rem 1rem;
+}
+.v2-factor-key {
+  font-size: 0.58rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--text3); margin-bottom: 0.35rem;
+}
+.v2-factor-val {
+  font-family: 'Space Grotesk', sans-serif; font-size: 1.25rem;
+  font-weight: 700; color: var(--vitara); line-height: 1.2;
+}
+.v2-factor-unit { font-size: 0.6rem; color: var(--text3); font-family: 'Inter', sans-serif; font-weight: 400; }
+.v2-factor-hint { font-size: 0.62rem; color: var(--text3); margin-top: 0.25rem; }
+
+/* ─── Protocols ─── */
+.v2-protocols-intro {
+  font-size: 0.82rem; color: var(--text2); line-height: 1.65; margin-bottom: 1.25rem;
+}
+.v2-protocol-list { display: flex; flex-direction: column; gap: 0.75rem; }
+.v2-protocol-card {
+  display: flex; gap: 1rem; align-items: flex-start;
+  background: rgba(13,22,46,0.8); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: 1rem 1.125rem;
+  transition: border-color 0.2s;
+}
+.v2-protocol-on-track  { border-color: rgba(6,200,160,0.2); }
+.v2-protocol-behind,
+.v2-protocol-suggested { border-color: rgba(212,168,67,0.22); }
+.v2-protocol-icon   { font-size: 1.5rem; line-height: 1; flex-shrink: 0; margin-top: 0.1rem; }
+.v2-protocol-body   { flex: 1; min-width: 0; }
+.v2-protocol-name {
+  font-size: 0.88rem; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem; flex-wrap: wrap;
+}
+.v2-protocol-badge {
+  font-size: 0.58rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; padding: 0.1rem 0.45rem; border-radius: 99px;
+}
+.v2-protocol-badge-on-track {
+  background: rgba(6,200,160,0.1); color: var(--vitara);
+  border: 1px solid rgba(6,200,160,0.25);
+}
+.v2-protocol-badge-behind,
+.v2-protocol-badge-suggested {
+  background: rgba(212,168,67,0.1); color: #d4a843;
+  border: 1px solid rgba(212,168,67,0.3);
+}
+.v2-protocol-badge-manual {
+  background: rgba(255,255,255,0.04); color: var(--text3);
+  border: 1px solid var(--border);
+}
+.v2-protocol-target { font-size: 0.73rem; color: var(--vitara); margin-bottom: 0.3rem; font-weight: 500; }
+.v2-protocol-metric { font-size: 0.7rem; color: var(--text2); margin-bottom: 0.45rem; font-weight: 500; }
+.v2-protocol-progress {
+  height: 4px; border-radius: 2px; background: rgba(255,255,255,0.05);
+  overflow: hidden; margin-bottom: 0.6rem;
+}
+.v2-protocol-progress-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
+.v2-protocol-desc   { font-size: 0.71rem; color: var(--text3); line-height: 1.6; }
+
+/* ─── section-label (shared global helper) ─── */
+.section-label {
+  font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.13em; color: var(--text3);
+  margin-bottom: 0.75rem; margin-top: 0.25rem;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 860px) {
+  .v2-hero-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  .v2-hero-grid { grid-template-columns: 1fr; }
+  .v2-stats-row { grid-template-columns: repeat(2, 1fr); }
+  .v2-factor-grid { grid-template-columns: repeat(2, 1fr); }
+}

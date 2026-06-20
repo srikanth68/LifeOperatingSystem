@@ -1,0 +1,215 @@
+.dashboard { max-width: 1280px; }
+
+/* ─── Header ─── */
+.dash-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+.dash-header-right { display: flex; gap: 0.6rem; align-items: center; }
+
+/* ─── Sync bar ─── */
+.sync-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.875rem;
+  border-radius: 99px;
+  font-size: 0.72rem;
+  border: 1px solid;
+  margin-bottom: 1.5rem;
+}
+.sync-bar::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.sync-bar.completed { background: rgba(31,200,122,0.07); border-color: rgba(31,200,122,0.2); color: #5de0a0; }
+.sync-bar.completed::before { background: var(--cash); box-shadow: 0 0 4px var(--cash); }
+.sync-bar.pending, .sync-bar.in_progress { background: rgba(212,168,67,0.07); border-color: rgba(212,168,67,0.2); color: #d4a843; }
+.sync-bar.pending::before, .sync-bar.in_progress::before { background: var(--gold); }
+.sync-bar.failed { background: var(--debt-dim); border-color: rgba(232,68,68,0.25); color: var(--debt-l); }
+.sync-bar.failed::before { background: var(--debt); }
+
+/* ─── Hero strip: Net Worth + Cash + Debt ─── */
+.hero-strip {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 1.2fr;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 4px 40px rgba(0,0,0,0.5);
+}
+
+.hero-cell {
+  padding: 1.5rem 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.hero-cell--worth {
+  background: linear-gradient(145deg, #0c1628 0%, #091220 100%);
+}
+.hero-cell--cash {
+  background: linear-gradient(145deg, #091a0f 0%, #0b1522 100%);
+}
+.hero-cell--debt {
+  background: linear-gradient(145deg, #1a0909 0%, #0d1020 100%);
+}
+
+.hero-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.hero-label .dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+.hero-cell--worth .hero-label { color: var(--text3); }
+.hero-cell--worth .dot { background: var(--text3); }
+.hero-cell--cash .hero-label { color: var(--cash); opacity: 0.75; }
+.hero-cell--cash .dot { background: var(--cash); box-shadow: 0 0 4px var(--cash); }
+.hero-cell--debt .hero-label { color: var(--debt); opacity: 0.75; }
+.hero-cell--debt .dot { background: var(--debt); box-shadow: 0 0 4px var(--debt); }
+
+.hero-value {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.9rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.hero-cell--worth .hero-value { color: var(--text2); }
+.hero-cell--cash .hero-value { color: var(--cash); text-shadow: 0 0 20px rgba(31,200,122,0.3); }
+.hero-cell--debt .hero-value { color: var(--debt); text-shadow: 0 0 20px rgba(232,68,68,0.3); }
+
+.hero-sub {
+  font-size: 0.72rem;
+  margin-top: 0.1rem;
+}
+.hero-cell--cash .hero-sub { color: rgba(31,200,122,0.5); }
+.hero-cell--debt .hero-sub { color: rgba(232,68,68,0.5); }
+.hero-cell--worth .hero-sub { color: var(--text3); }
+
+/* ─── Two-col ─── */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* ─── Institution breakdown ─── */
+.inst-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.inst-bank-name { font-weight: 700; font-size: 0.95rem; }
+.inst-bank-total { font-weight: 700; font-size: 1rem; font-variant-numeric: tabular-nums; }
+
+.inst-accounts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin-bottom: 0.875rem;
+}
+.inst-accounts:last-child { margin-bottom: 0; }
+
+.acct-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.3rem 0.625rem;
+  border-radius: 6px;
+  transition: background 0.12s;
+}
+.acct-row:hover { background: rgba(255,255,255,0.03); }
+
+.acct-left { display: flex; align-items: center; gap: 0.5rem; }
+.acct-dot { width: 4px; height: 4px; border-radius: 50%; opacity: 0.5; flex-shrink: 0; }
+.acct-name { font-size: 0.82rem; color: var(--text2); }
+.acct-subtype {
+  font-size: 0.64rem;
+  color: var(--text3);
+  background: rgba(255,255,255,0.05);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  text-transform: capitalize;
+}
+.acct-bal { font-size: 0.84rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ─── Upcoming bills ─── */
+.bills-list { display: flex; flex-direction: column; gap: 0.125rem; }
+.bill-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid rgba(26,47,82,0.5);
+}
+.bill-row:last-child { border-bottom: none; }
+.bill-name { font-weight: 500; font-size: 0.875rem; }
+.bill-due { font-size: 0.72rem; color: var(--text2); margin-top: 0.15rem; }
+.bill-urgent { color: var(--debt) !important; }
+.bill-amount { font-weight: 700; font-size: 0.95rem; font-variant-numeric: tabular-nums; color: var(--debt); }
+
+/* ─── Category spending bars ─── */
+.cat-list { display: flex; flex-direction: column; gap: 0.75rem; }
+.cat-row { display: flex; flex-direction: column; gap: 0.3rem; }
+.cat-header { display: flex; justify-content: space-between; align-items: baseline; }
+.cat-name { font-size: 0.84rem; color: var(--text2); }
+.cat-amount { font-size: 0.84rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+.cat-bar-wrap { height: 3px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; }
+.cat-bar { height: 100%; background: linear-gradient(90deg, var(--gold-d), var(--gold)); border-radius: 2px; transition: width 0.6s ease; }
+.cat-count { font-size: 0.65rem; color: var(--text3); }
+
+/* ─── Recent transactions ─── */
+.recent-txns { display: flex; flex-direction: column; }
+.txn-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(26,47,82,0.5);
+  gap: 1rem;
+}
+.txn-row:last-child { border-bottom: none; }
+.txn-left { flex: 1; min-width: 0; }
+.txn-merchant { font-size: 0.875rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.txn-meta { font-size: 0.7rem; color: var(--text3); margin-top: 0.2rem; display: flex; align-items: center; gap: 0.35rem; }
+.txn-right { text-align: right; flex-shrink: 0; }
+.txn-amount { font-size: 0.9rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.txn-date { font-size: 0.68rem; color: var(--text3); margin-top: 0.15rem; }
+
+/* ─── Empty state ─── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 5rem 2rem;
+  max-width: 400px;
+  margin: 2rem auto;
+}
+.empty-icon { font-size: 3rem; margin-bottom: 1.25rem; }
+.empty-state h2 { margin-bottom: 0.5rem; }
+.empty-state p { color: var(--text2); font-size: 0.875rem; margin-bottom: 2rem; line-height: 1.65; }
+
+@media (max-width: 860px) {
+  .hero-strip { grid-template-columns: 1fr; gap: 1px; }
+  .hero-cell { padding: 1.125rem 1.25rem; flex-direction: row; justify-content: space-between; align-items: center; }
+  .hero-value { font-size: 1.4rem; }
+  .two-col { grid-template-columns: 1fr; }
+}

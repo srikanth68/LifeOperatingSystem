@@ -1,0 +1,312 @@
+/* ── modules.css — shared styles for all Maaya sub-modules ── */
+
+/* ── Module sub-navigation tabs ── */
+.module-subnav {
+  display: flex;
+  margin-bottom: 1.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.module-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text3);
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.5rem 1.125rem 0.625rem;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  letter-spacing: 0.01em;
+  margin-bottom: -1px;
+}
+.module-tab:hover { color: var(--text2); }
+.module-tab.active {
+  color: var(--mc, var(--gold));
+  border-bottom-color: var(--mc, var(--gold));
+}
+
+/* ── Empty / coming-soon state ── */
+.module-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 3rem 2rem 2rem;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.module-empty-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--mc, var(--gold)) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--mc, var(--gold)) 28%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 0 48px color-mix(in srgb, var(--mc, var(--gold)) 12%, transparent);
+}
+.module-empty-icon svg { width: 36px; height: 36px; color: var(--mc, var(--gold)); }
+
+.module-empty h2 {
+  font-size: 1.45rem;
+  color: var(--text);
+  margin-bottom: 0.35rem;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+}
+.module-empty .tagline {
+  color: var(--mc, var(--gold));
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin-bottom: 0.875rem;
+}
+.module-empty p {
+  color: var(--text2);
+  font-size: 0.875rem;
+  line-height: 1.75;
+  margin-bottom: 1.75rem;
+}
+
+.module-features {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: 100%;
+  margin-bottom: 2rem;
+  text-align: left;
+}
+
+.module-feature-item {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.65rem 1rem;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 0.82rem;
+  color: var(--text2);
+  transition: border-color 0.15s, background 0.15s;
+}
+.module-feature-item:hover {
+  border-color: color-mix(in srgb, var(--mc, var(--gold)) 25%, transparent);
+  background: color-mix(in srgb, var(--mc, var(--gold)) 4%, transparent);
+}
+.feat-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--mc, var(--gold));
+  flex-shrink: 0;
+  box-shadow: 0 0 6px var(--mc, var(--gold));
+}
+.feat-icon { font-size: 1rem; flex-shrink: 0; width: 20px; text-align: center; }
+
+/* ── Placeholder metric cards ── */
+.placeholder-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.875rem;
+  margin-bottom: 1.5rem;
+}
+.placeholder-metric {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 1.25rem;
+  position: relative;
+  overflow: hidden;
+}
+.placeholder-metric::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--mc, var(--gold)), transparent);
+  opacity: 0.5;
+}
+.pm-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text3);
+  margin-bottom: 0.5rem;
+}
+.pm-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  font-family: 'Space Grotesk', sans-serif;
+  color: var(--mc, var(--gold));
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.pm-sub { font-size: 0.72rem; color: var(--text3); margin-top: 0.3rem; }
+
+/* ── NorthStar graph ── */
+.ns-graph-wrap {
+  border-radius: var(--r-lg);
+  background: radial-gradient(ellipse at center, rgba(10,18,40,0.9) 0%, rgba(4,8,20,0.98) 100%);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+.ns-graph { width: 100%; height: auto; display: block; }
+.ns-edge-center { animation: ns-dash 25s linear infinite; }
+@keyframes ns-dash { to { stroke-dashoffset: -200; } }
+.ns-pulse-ring { animation: ns-pulse 3s ease-in-out infinite; }
+@keyframes ns-pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 0; } }
+
+.ns-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  padding: 0 0 0.5rem;
+}
+.ns-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--text3);
+}
+.ns-legend-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+
+/* ── San chat ── */
+.chat-shell {
+  display: flex;
+  flex-direction: column;
+  height: 380px;
+  background: rgba(5,9,22,0.6);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.125rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+.chat-bubble { display: flex; gap: 0.625rem; align-items: flex-start; }
+.chat-avatar {
+  width: 26px; height: 26px; border-radius: 7px;
+  background: linear-gradient(135deg, var(--san) 0%, rgba(168,85,247,0.4) 100%);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+.chat-text {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 12px 12px 12px 2px;
+  padding: 0.6rem 0.875rem;
+  font-size: 0.84rem;
+  color: var(--text2);
+  line-height: 1.6;
+  max-width: 440px;
+}
+.chat-bar {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-top: 1px solid var(--border);
+  background: rgba(8,15,32,0.8);
+}
+.chat-bar input {
+  flex: 1; background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border2);
+  border-radius: var(--r-sm);
+  padding: 0.5rem 0.875rem;
+  font-size: 0.84rem;
+  color: var(--text);
+  font-family: inherit;
+}
+.chat-bar input:focus {
+  outline: none;
+  border-color: var(--san);
+  box-shadow: 0 0 0 3px rgba(168,85,247,0.1);
+}
+.chat-send {
+  width: 34px; height: 34px;
+  border-radius: var(--r-sm);
+  background: rgba(168,85,247,0.1);
+  border: 1px solid rgba(168,85,247,0.25);
+  color: var(--san);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* ── Reminder rows ── */
+.reminder-item {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  margin-bottom: 0.45rem;
+}
+.reminder-check {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 1px solid var(--border2);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.reminder-check:hover { border-color: var(--san); background: rgba(168,85,247,0.1); }
+.reminder-text { flex: 1; font-size: 0.875rem; color: var(--text); }
+.reminder-due { font-size: 0.7rem; color: var(--text3); flex-shrink: 0; }
+
+/* ── Document rows ── */
+.doc-item {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  margin-bottom: 0.45rem;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.doc-item:hover { border-color: var(--border2); }
+.doc-type-badge {
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+}
+.doc-name { flex: 1; font-size: 0.875rem; color: var(--text); }
+.doc-meta { font-size: 0.7rem; color: var(--text3); flex-shrink: 0; }
+
+/* ── Responsive ── */
+@media (max-width: 860px) {
+  .placeholder-grid { grid-template-columns: 1fr 1fr; }
+  .module-tab { padding: 0.5rem 0.75rem 0.625rem; font-size: 0.78rem; }
+}
+@media (max-width: 600px) {
+  .placeholder-grid { grid-template-columns: 1fr; }
+}

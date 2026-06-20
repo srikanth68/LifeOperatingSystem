@@ -1,0 +1,6 @@
+@Vitara.API_HostAddress = http://localhost:5280
+
+GET {{Vitara.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

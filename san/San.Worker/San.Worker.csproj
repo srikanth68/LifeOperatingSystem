@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-San.Worker-ec0dd535-d7a2-43ce-9e1c-fb60cc88e183</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\San.Domain\San.Domain.csproj" />
+    <ProjectReference Include="..\San.Application\San.Application.csproj" />
+    <ProjectReference Include="..\San.Infrastructure\San.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
