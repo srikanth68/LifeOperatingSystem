@@ -1,0 +1,42 @@
+.settings { max-width: 720px; }
+
+.settings-card {
+  margin-bottom: 1rem;
+}
+
+.settings-card h2 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+  margin-bottom: 1rem;
+}
+
+.settings-card--danger {
+  border-color: rgba(240, 84, 84, 0.2);
+}
+
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.settings-label {
+  font-weight: 500;
+  font-size: 0.875rem;
+  margin-bottom: 0.15rem;
+}
+
+.about-grid { display: flex; flex-direction: column; gap: 0.5rem; }
+.about-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+.about-row:last-child { border-bottom: none; }

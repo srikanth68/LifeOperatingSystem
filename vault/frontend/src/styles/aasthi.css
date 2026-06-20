@@ -1,0 +1,156 @@
+/* ── aasthi.css — Real Estate Manager ── */
+
+.aasthi-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+
+/* ── Form ── */
+.aasthi-form { margin-bottom: 1.25rem; }
+.aasthi-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.875rem;
+}
+.aasthi-form-span2 { grid-column: span 2; }
+.aasthi-form-group { display: flex; flex-direction: column; gap: 0.3rem; }
+.aasthi-form-group label { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); }
+.aasthi-form-group input,
+.aasthi-form-group select {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border2);
+  border-radius: var(--r-sm);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text);
+  font-family: inherit;
+}
+.aasthi-form-group input:focus,
+.aasthi-form-group select:focus {
+  outline: none;
+  border-color: var(--mc, var(--aasthi));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mc, var(--aasthi)) 15%, transparent);
+}
+.aasthi-form-actions { display: flex; gap: 0.6rem; margin-top: 1rem; }
+
+/* ── Property list / cards ── */
+.aasthi-property-list { display: flex; flex-direction: column; gap: 0.875rem; }
+.aasthi-property-card { padding: 1.125rem 1.375rem; }
+
+.aasthi-property-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+.aasthi-property-info { min-width: 200px; flex: 1; }
+.aasthi-property-address { font-size: 1rem; font-weight: 700; color: var(--text); margin-bottom: 0.15rem; }
+.aasthi-map-link {
+  display: inline-block;
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--mc, var(--aasthi));
+  text-decoration: none;
+}
+.aasthi-map-link:hover { text-decoration: underline; }
+
+.aasthi-property-stats { display: flex; gap: 1.5rem; }
+.aasthi-stat { display: flex; flex-direction: column; align-items: flex-end; }
+.aasthi-stat-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); }
+.aasthi-stat-value { font-size: 0.95rem; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 0.15rem; white-space: nowrap; }
+
+.aasthi-property-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+.aasthi-property-detail {
+  margin-top: 1.125rem;
+  padding-top: 1.125rem;
+  border-top: 1px solid var(--border);
+}
+.aasthi-detail-actions { margin-bottom: 1rem; }
+
+/* ── Subsections (contacts / documents) ── */
+.aasthi-subsection { margin-top: 1.25rem; }
+.aasthi-section-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text3);
+  margin-bottom: 0.65rem;
+}
+
+.aasthi-contact-list { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.5rem; }
+.aasthi-contact-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.875rem;
+  padding: 0.6rem 0.875rem;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+.aasthi-contact-info { display: flex; align-items: center; gap: 0.625rem; flex-wrap: wrap; font-size: 0.82rem; }
+.aasthi-contact-name { font-weight: 600; color: var(--text); }
+.aasthi-contact-role {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mc, var(--aasthi));
+  background: color-mix(in srgb, var(--mc, var(--aasthi)) 12%, transparent);
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+}
+
+.aasthi-inline-form { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+.aasthi-inline-form input {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border2);
+  border-radius: var(--r-sm);
+  padding: 0.45rem 0.7rem;
+  font-size: 0.8rem;
+  color: var(--text);
+  font-family: inherit;
+  flex: 1;
+  min-width: 120px;
+}
+.aasthi-inline-form input:focus {
+  outline: none;
+  border-color: var(--mc, var(--aasthi));
+}
+
+.aasthi-upload-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+.aasthi-upload-row select {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border2);
+  border-radius: var(--r-sm);
+  padding: 0.45rem 0.7rem;
+  font-size: 0.8rem;
+  color: var(--text);
+  font-family: inherit;
+}
+.aasthi-upload-row input[type="file"] {
+  font-size: 0.78rem;
+  color: var(--text2);
+  max-width: 240px;
+}
+
+@media (max-width: 860px) {
+  .aasthi-form-grid { grid-template-columns: 1fr 1fr; }
+  .aasthi-form-span2 { grid-column: span 2; }
+  .aasthi-property-stats { gap: 0.875rem; }
+}
+@media (max-width: 600px) {
+  .aasthi-form-grid { grid-template-columns: 1fr; }
+  .aasthi-form-span2 { grid-column: span 1; }
+  .aasthi-property-top { flex-direction: column; }
+  .aasthi-property-stats { width: 100%; justify-content: space-between; }
+}

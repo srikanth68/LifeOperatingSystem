@@ -1,0 +1,256 @@
+/* ── maaya.css — Maaya home dashboard ── */
+
+.maaya-home { padding-top: 0.5rem; }
+
+/* ── Quick Actions Bar ── */
+.quick-actions {
+  display: flex;
+  gap: 0.625rem;
+  margin-bottom: 1.75rem;
+  flex-wrap: wrap;
+}
+.qa-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1.125rem;
+  border-radius: var(--r-sm);
+  border: 1px solid color-mix(in srgb, var(--qa, var(--gold)) 28%, transparent);
+  background: color-mix(in srgb, var(--qa, var(--gold)) 7%, rgba(8,14,30,0.9));
+  color: color-mix(in srgb, var(--qa, var(--gold)) 85%, var(--text));
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, transform 0.18s, box-shadow 0.18s;
+  font-family: inherit;
+  letter-spacing: 0.01em;
+}
+.qa-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+.qa-btn:hover {
+  background: color-mix(in srgb, var(--qa, var(--gold)) 14%, rgba(8,14,30,0.9));
+  border-color: color-mix(in srgb, var(--qa, var(--gold)) 55%, transparent);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--qa, var(--gold)) 12%, transparent);
+  transform: translateY(-1px);
+}
+
+/* ── Greeting ── */
+.maaya-greeting {
+  margin-bottom: 2rem;
+}
+.maaya-greeting-time {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--gold);
+  margin-bottom: 0.35rem;
+  opacity: 0.8;
+}
+.maaya-greeting h1 {
+  font-size: 2.1rem;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin-bottom: 0.35rem;
+}
+.maaya-tagline {
+  font-size: 0.875rem;
+  color: var(--text3);
+}
+.maaya-tagline span { color: var(--gold); opacity: 0.7; }
+
+/* ── Module grid ── */
+.maaya-section-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text3);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.875rem;
+}
+.maaya-section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.maaya-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.875rem;
+  margin-bottom: 2rem;
+}
+
+/* ── Module card ── */
+.mod-card {
+  background: linear-gradient(160deg, rgba(13,22,46,0.97) 0%, rgba(9,17,38,0.97) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 1.125rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+.mod-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--mc, var(--gold)) 50%, transparent);
+  opacity: 0.5;
+}
+.mod-card:hover {
+  border-color: color-mix(in srgb, var(--mc, var(--gold)) 35%, transparent);
+  box-shadow: 0 8px 32px color-mix(in srgb, var(--mc, var(--gold)) 8%, transparent),
+              inset 0 0 0 1px color-mix(in srgb, var(--mc, var(--gold)) 8%, transparent);
+  transform: translateY(-2px);
+}
+
+.mod-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-bottom: 0.875rem;
+}
+.mod-card-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--mc, var(--gold)) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mc, var(--gold)) 25%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.mod-card-icon svg { width: 17px; height: 17px; color: var(--mc, var(--gold)); }
+.mod-card-title-wrap {}
+.mod-card-name {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
+  line-height: 1.1;
+}
+.mod-card-sub {
+  font-size: 0.62rem;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.mod-stat-value {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--mc, var(--gold));
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  margin-bottom: 0.2rem;
+}
+.mod-stat-label {
+  font-size: 0.68rem;
+  color: var(--text3);
+}
+
+.mod-card-setup {
+  font-size: 0.78rem;
+  color: var(--text3);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.mod-card-setup-arrow {
+  color: var(--mc, var(--gold));
+  opacity: 0.7;
+  font-size: 0.85rem;
+  transition: transform 0.15s;
+}
+.mod-card:hover .mod-card-setup-arrow { transform: translateX(3px); }
+
+/* ── Activity feed ── */
+.maaya-activity { margin-top: 0.5rem; }
+
+.activity-list { display: flex; flex-direction: column; }
+.activity-row {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid rgba(26,47,82,0.4);
+}
+.activity-row:last-child { border-bottom: none; }
+.activity-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
+.activity-module {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  flex-shrink: 0;
+  width: 72px;
+}
+.activity-text {
+  flex: 1;
+  font-size: 0.82rem;
+  color: var(--text2);
+}
+.activity-time {
+  font-size: 0.7rem;
+  color: var(--text3);
+  flex-shrink: 0;
+}
+
+/* ── Status row ── */
+.maaya-status-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 99px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border: 1px solid;
+  transition: all 0.15s;
+}
+.status-chip.active {
+  background: rgba(31,200,122,0.07);
+  border-color: rgba(31,200,122,0.25);
+  color: var(--cash);
+}
+.status-chip.setup {
+  background: rgba(255,255,255,0.03);
+  border-color: var(--border);
+  color: var(--text3);
+}
+.status-chip .chip-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+}
+.status-chip.active .chip-dot { background: var(--cash); box-shadow: 0 0 4px var(--cash); }
+.status-chip.setup .chip-dot { background: var(--text3); }
+
+/* ── Responsive ── */
+@media (max-width: 1100px) {
+  .maaya-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 800px) {
+  .maaya-grid { grid-template-columns: repeat(2, 1fr); }
+  .maaya-greeting h1 { font-size: 1.6rem; }
+}
+@media (max-width: 500px) {
+  .maaya-grid { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,28 @@
+# ── Maaya OS ──
+
+# .NET build artifacts
+**/bin/
+**/obj/
+**/.vs/
+*.user
+
+# SQLite databases (recreated on startup)
+*.db
+*.db-shm
+*.db-wal
+
+# Secrets (each module has a .env.template checked in instead)
+.env
+
+# Document storage (user uploads, not source)
+**/storage/
+
+# Node / frontend
+**/node_modules/
+**/dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

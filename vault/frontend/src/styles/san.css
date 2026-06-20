@@ -1,0 +1,147 @@
+/* ── san.css — San Assistant ── */
+
+.san-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.san-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  color: var(--text2);
+  white-space: nowrap;
+}
+
+/* ── Inline form (reminders) ── */
+.san-inline-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.875rem;
+  padding: 0.75rem;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+.san-inline-form input[type="text"],
+.san-inline-form input:not([type]) {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border2);
+  border-radius: var(--r-sm);
+  padding: 0.45rem 0.7rem;
+  font-size: 0.8rem;
+  color: var(--text);
+  font-family: inherit;
+}
+.san-inline-form input[type="datetime-local"] {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border2);
+  border-radius: var(--r-sm);
+  padding: 0.4rem 0.6rem;
+  font-size: 0.78rem;
+  color: var(--text);
+  font-family: inherit;
+}
+
+/* ── Telegram badge ── */
+.san-tg-badge {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--mc, var(--san));
+  background: color-mix(in srgb, var(--mc, var(--san)) 12%, transparent);
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* ── Form grid (alerts) ── */
+.san-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.875rem;
+  margin-bottom: 1.25rem;
+  padding: 1rem;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+.san-form-span2 { grid-column: span 2; }
+.san-form-group { display: flex; flex-direction: column; gap: 0.3rem; }
+.san-form-group > label:not(.san-checkbox-label) { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); }
+.san-form-group input,
+.san-form-group select {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border2);
+  border-radius: var(--r-sm);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text);
+  font-family: inherit;
+}
+.san-form-group input:focus,
+.san-form-group select:focus {
+  outline: none;
+  border-color: var(--mc, var(--san));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mc, var(--san)) 15%, transparent);
+}
+.san-form-actions { display: flex; gap: 0.6rem; margin-top: 0.25rem; }
+
+/* ── Alerts list ── */
+.san-alert-list { display: flex; flex-direction: column; gap: 0.875rem; }
+.san-alert-card { padding: 1rem 1.25rem; }
+.san-alert-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+.san-alert-title { font-size: 0.95rem; font-weight: 700; color: var(--text); margin-top: 0.3rem; }
+.san-alert-actions { display: flex; gap: 0.5rem; align-items: center; flex-shrink: 0; }
+.san-alert-meta { display: flex; gap: 0.75rem; align-items: center; margin-top: 0.65rem; font-size: 0.78rem; color: var(--text2); flex-wrap: wrap; }
+
+.san-type-badge {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+/* ── Activity feed ── */
+.san-module-status { display: flex; gap: 0.75rem; margin-bottom: 1.125rem; flex-wrap: wrap; }
+.san-module-pill {
+  font-size: 0.72rem;
+  color: var(--mc, var(--san));
+  background: color-mix(in srgb, var(--mc, var(--san)) 10%, transparent);
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+}
+.san-module-pill.down { color: var(--text3); background: rgba(255,255,255,0.04); }
+
+.san-feed-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.san-feed-item {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.65rem 0.875rem;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+.san-feed-module { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; width: 56px; flex-shrink: 0; }
+.san-feed-body { flex: 1; min-width: 0; }
+.san-feed-title { font-size: 0.85rem; color: var(--text); font-weight: 600; }
+.san-feed-time { font-size: 0.7rem; color: var(--text3); flex-shrink: 0; white-space: nowrap; }
+
+@media (max-width: 860px) {
+  .san-form-grid { grid-template-columns: 1fr 1fr; }
+  .san-form-span2 { grid-column: span 2; }
+}
+@media (max-width: 600px) {
+  .san-form-grid { grid-template-columns: 1fr; }
+  .san-form-span2 { grid-column: span 1; }
+  .san-inline-form { flex-direction: column; align-items: stretch; }
+}
