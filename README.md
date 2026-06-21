@@ -195,6 +195,14 @@ That's it. One command spins up all APIs, workers, and the frontend.
 
 ---
 
+## Built with AI Agents
+
+This project was architected and built using **AI-assisted development** — directing Claude Code agents with architectural constraints, design decisions, and iterative refinement. The developer's role: vision, decisions, and quality control. The AI's role: velocity.
+
+**[Read the full AI development methodology →](docs/AI-DEVELOPMENT.md)**
+
+---
+
 ## License
 
 Private project. All rights reserved.
