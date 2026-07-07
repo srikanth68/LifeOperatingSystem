@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -9,6 +10,7 @@ namespace Vitara.API.Controllers;
 [ApiController, Route("api/oura")]
 public class OuraController(IOuraClient client, IVitaraRepository repo, IConfiguration cfg) : ControllerBase
 {
+    [AllowAnonymous]
     [HttpGet("auth")]
     public IActionResult Auth()
     {
@@ -18,6 +20,7 @@ public class OuraController(IOuraClient client, IVitaraRepository repo, IConfigu
         return Redirect(url);
     }
 
+    [AllowAnonymous]
     [HttpGet("callback")]
     public async Task<IActionResult> Callback([FromQuery] string code)
     {

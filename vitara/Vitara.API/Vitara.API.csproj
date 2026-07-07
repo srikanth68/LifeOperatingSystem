@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Vitara.Application\Vitara.Application.csproj" />
     <ProjectReference Include="..\Vitara.Infrastructure\Vitara.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\shared\Maaya.Auth\Maaya.Auth.csproj" />
   </ItemGroup>
 
   <ItemGroup>

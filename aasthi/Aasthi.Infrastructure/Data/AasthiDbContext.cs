@@ -14,6 +14,7 @@ public class AasthiDbContext(DbContextOptions<AasthiDbContext> options) : DbCont
     public DbSet<Property> Properties => Set<Property>();
     public DbSet<PropertyContact> Contacts => Set<PropertyContact>();
     public DbSet<PropertyDocument> Documents => Set<PropertyDocument>();
+    public DbSet<PropertyTask> Tasks => Set<PropertyTask>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -37,5 +38,15 @@ public class AasthiDbContext(DbContextOptions<AasthiDbContext> options) : DbCont
 
         b.Entity<PropertyContact>().HasKey(c => c.Id);
         b.Entity<PropertyDocument>().HasKey(d => d.Id);
+
+        b.Entity<PropertyTask>(t =>
+        {
+            t.HasKey(x => x.Id);
+            t.Property(x => x.DueDate).HasConversion(
+                d => d.HasValue ? d.Value.ToString(DateFormat, CultureInfo.InvariantCulture) : null,
+                s => string.IsNullOrEmpty(s) ? null : DateOnly.ParseExact(s, DateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None));
+            t.HasOne(x => x.Property).WithMany().HasForeignKey(x => x.PropertyId).OnDelete(DeleteBehavior.Cascade);
+            t.HasIndex(x => new { x.PropertyId, x.Status });
+        });
     }
 }

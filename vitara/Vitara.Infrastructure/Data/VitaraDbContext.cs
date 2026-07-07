@@ -6,37 +6,173 @@ namespace Vitara.Infrastructure.Data;
 
 public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbContext(options)
 {
-    // ISO-8601, zero-padded — sorts identically whether compared as text (SQLite has no
-    // native date type) or as a date. The previous d.ToString()/DateOnly.Parse(s) pair used
-    // the current culture's short-date pattern (e.g. "6/9/2026", no leading zeros), which
-    // SQLite compares lexicographically: "6/9/2026" > "6/15/2026" and "6/9/2026" > "6/14/2026"
-    // as strings even though those dates are earlier. That made `Day >= from && Day <= to`
-    // range filters silently drop rows whenever `from` landed on a single-digit day in the
-    // same month as a stored double-digit day — exactly the "days=14/7/8/1 return []" bug.
     public const string DayFormat = "yyyy-MM-dd";
 
-    public DbSet<OuraToken>      Tokens     => Set<OuraToken>();
-    public DbSet<SleepSession>   Sleep      => Set<SleepSession>();
-    public DbSet<DailyReadiness> Readiness  => Set<DailyReadiness>();
-    public DbSet<DailyActivity>  Activity   => Set<DailyActivity>();
+    public DbSet<OuraToken>              Tokens          => Set<OuraToken>();
+    public DbSet<UserProfile>            Profiles        => Set<UserProfile>();
+    public DbSet<SleepSession>           Sleep           => Set<SleepSession>();
+    public DbSet<DailyReadiness>         Readiness       => Set<DailyReadiness>();
+    public DbSet<DailyActivity>          Activity        => Set<DailyActivity>();
+    public DbSet<DailyStress>            Stress          => Set<DailyStress>();
+    public DbSet<DailyResilience>        Resilience      => Set<DailyResilience>();
+    public DbSet<DailyCardiovascularAge> CardiovascularAge => Set<DailyCardiovascularAge>();
+    public DbSet<DailySpo2>              Spo2            => Set<DailySpo2>();
+    public DbSet<HeartRateSample>        HeartRate       => Set<HeartRateSample>();
+    public DbSet<Vo2MaxRecord>           Vo2Max          => Set<Vo2MaxRecord>();
+    public DbSet<Workout>                Workouts        => Set<Workout>();
+    public DbSet<DailyNutrition>         Nutrition       => Set<DailyNutrition>();
+    public DbSet<MealEntry>              Meals           => Set<MealEntry>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
         b.Entity<OuraToken>().HasKey(t => t.Id);
+        b.Entity<UserProfile>().HasKey(u => u.Id);
 
-        b.Entity<SleepSession>().HasKey(s => s.Id);
-        b.Entity<SleepSession>().Property(s => s.Day).HasConversion(
-            d => d.ToString(DayFormat, CultureInfo.InvariantCulture),
-            s => DateOnly.ParseExact(s, DayFormat, CultureInfo.InvariantCulture, DateTimeStyles.None));
+        ConfigureDayEntity<SleepSession>(b, s => s.Id, s => s.Day);
+        ConfigureDayEntity<DailyReadiness>(b, r => r.Id, r => r.Day);
+        ConfigureDayEntity<DailyActivity>(b, a => a.Id, a => a.Day);
+        ConfigureDayEntity<DailyStress>(b, s => s.Id, s => s.Day);
+        ConfigureDayEntity<DailyResilience>(b, r => r.Id, r => r.Day);
+        ConfigureDayEntity<DailyCardiovascularAge>(b, c => c.Id, c => c.Day);
+        ConfigureDayEntity<DailySpo2>(b, s => s.Id, s => s.Day);
+        ConfigureDayEntity<Vo2MaxRecord>(b, v => v.Id, v => v.Day);
+        ConfigureDayEntity<Workout>(b, w => w.Id, w => w.Day);
+        ConfigureDayEntity<DailyNutrition>(b, n => n.Id, n => n.Day);
 
-        b.Entity<DailyReadiness>().HasKey(r => r.Id);
-        b.Entity<DailyReadiness>().Property(r => r.Day).HasConversion(
-            d => d.ToString(DayFormat, CultureInfo.InvariantCulture),
-            s => DateOnly.ParseExact(s, DayFormat, CultureInfo.InvariantCulture, DateTimeStyles.None));
+        b.Entity<MealEntry>(e =>
+        {
+            e.HasKey(m => m.Id);
+            e.HasIndex(m => m.Day);
+            e.HasIndex(m => m.MealType);
+            e.Property(m => m.Day).HasConversion(
+                d => d.ToString(DayFormat, System.Globalization.CultureInfo.InvariantCulture),
+                s => DateOnly.ParseExact(s, DayFormat, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None));
+        });
 
-        b.Entity<DailyActivity>().HasKey(a => a.Id);
-        b.Entity<DailyActivity>().Property(a => a.Day).HasConversion(
-            d => d.ToString(DayFormat, CultureInfo.InvariantCulture),
-            s => DateOnly.ParseExact(s, DayFormat, CultureInfo.InvariantCulture, DateTimeStyles.None));
+        b.Entity<HeartRateSample>(e =>
+        {
+            e.HasKey(h => h.Id);
+            e.Property(h => h.Id).ValueGeneratedOnAdd();
+            e.HasIndex(h => h.Timestamp);
+        });
+    }
+
+    public static async Task CreateMissingTablesAsync(VitaraDbContext db)
+    {
+        var sql = """
+            CREATE TABLE IF NOT EXISTS Profiles (
+                Id TEXT PRIMARY KEY,
+                Age INTEGER,
+                Weight REAL,
+                Height REAL,
+                BiologicalSex TEXT,
+                Email TEXT,
+                UpdatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
+            );
+            CREATE TABLE IF NOT EXISTS Stress (
+                Id TEXT PRIMARY KEY,
+                Day TEXT NOT NULL,
+                StressHighSeconds INTEGER,
+                RecoveryHighSeconds INTEGER,
+                DaySummary TEXT
+            );
+            CREATE INDEX IF NOT EXISTS IX_Stress_Day ON Stress(Day);
+            CREATE TABLE IF NOT EXISTS Resilience (
+                Id TEXT PRIMARY KEY,
+                Day TEXT NOT NULL,
+                Level TEXT,
+                SleepRecovery INTEGER,
+                DaytimeRecovery INTEGER,
+                Stress INTEGER
+            );
+            CREATE INDEX IF NOT EXISTS IX_Resilience_Day ON Resilience(Day);
+            CREATE TABLE IF NOT EXISTS CardiovascularAge (
+                Id TEXT PRIMARY KEY,
+                Day TEXT NOT NULL,
+                VascularAge REAL
+            );
+            CREATE INDEX IF NOT EXISTS IX_CardiovascularAge_Day ON CardiovascularAge(Day);
+            CREATE TABLE IF NOT EXISTS Spo2 (
+                Id TEXT PRIMARY KEY,
+                Day TEXT NOT NULL,
+                Spo2Average REAL,
+                BreathingDisturbanceIndex REAL
+            );
+            CREATE INDEX IF NOT EXISTS IX_Spo2_Day ON Spo2(Day);
+            CREATE TABLE IF NOT EXISTS Vo2Max (
+                Id TEXT PRIMARY KEY,
+                Day TEXT NOT NULL,
+                Vo2Max REAL
+            );
+            CREATE INDEX IF NOT EXISTS IX_Vo2Max_Day ON Vo2Max(Day);
+            CREATE TABLE IF NOT EXISTS Workouts (
+                Id TEXT PRIMARY KEY,
+                Day TEXT NOT NULL,
+                Activity TEXT NOT NULL DEFAULT '',
+                StartTime TEXT,
+                EndTime TEXT,
+                Calories INTEGER,
+                Distance INTEGER,
+                Intensity TEXT,
+                Label TEXT,
+                Source TEXT
+            );
+            CREATE INDEX IF NOT EXISTS IX_Workouts_Day ON Workouts(Day);
+            CREATE TABLE IF NOT EXISTS HeartRate (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Timestamp TEXT NOT NULL,
+                Bpm INTEGER NOT NULL,
+                Source TEXT
+            );
+            CREATE INDEX IF NOT EXISTS IX_HeartRate_Timestamp ON HeartRate(Timestamp);
+            CREATE TABLE IF NOT EXISTS Nutrition (
+                Id TEXT PRIMARY KEY,
+                Day TEXT NOT NULL,
+                Calories INTEGER NOT NULL DEFAULT 0,
+                Protein REAL NOT NULL DEFAULT 0,
+                Carbs REAL NOT NULL DEFAULT 0,
+                Fat REAL NOT NULL DEFAULT 0,
+                Fiber REAL,
+                Sugar REAL,
+                Sodium REAL,
+                CalorieGoal INTEGER,
+                ProteinGoal REAL,
+                CarbGoal REAL,
+                FatGoal REAL,
+                MealsJson TEXT
+            );
+            CREATE INDEX IF NOT EXISTS IX_Nutrition_Day ON Nutrition(Day);
+            CREATE TABLE IF NOT EXISTS Meals (
+                Id TEXT PRIMARY KEY,
+                Day TEXT NOT NULL,
+                MealType TEXT NOT NULL DEFAULT 'snack',
+                FoodName TEXT NOT NULL DEFAULT '',
+                FdcId INTEGER,
+                ServingQty REAL NOT NULL DEFAULT 1,
+                ServingUnit TEXT,
+                Calories REAL NOT NULL DEFAULT 0,
+                Protein REAL NOT NULL DEFAULT 0,
+                Carbs REAL NOT NULL DEFAULT 0,
+                Fat REAL NOT NULL DEFAULT 0,
+                Fiber REAL,
+                LoggedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
+            );
+            CREATE INDEX IF NOT EXISTS IX_Meals_Day ON Meals(Day);
+            CREATE INDEX IF NOT EXISTS IX_Meals_MealType ON Meals(MealType);
+            """;
+        await db.Database.ExecuteSqlRawAsync(sql);
+    }
+
+    private void ConfigureDayEntity<T>(ModelBuilder b,
+        System.Linq.Expressions.Expression<Func<T, object?>> keyExpr,
+        System.Linq.Expressions.Expression<Func<T, DateOnly>> dayExpr) where T : class
+    {
+        b.Entity<T>(e =>
+        {
+            e.HasKey(keyExpr);
+            e.Property(dayExpr).HasConversion(
+                d => d.ToString(DayFormat, CultureInfo.InvariantCulture),
+                s => DateOnly.ParseExact(s, DayFormat, CultureInfo.InvariantCulture, DateTimeStyles.None));
+        });
     }
 }

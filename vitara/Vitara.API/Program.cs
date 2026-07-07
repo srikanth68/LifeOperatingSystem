@@ -1,4 +1,5 @@
 using System.Globalization;
+using Maaya.Auth;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Vitara.Application.Interfaces;
@@ -23,10 +24,9 @@ builder.Configuration["Oura:ClientId"]     = Environment.GetEnvironmentVariable(
 builder.Configuration["Oura:ClientSecret"] = Environment.GetEnvironmentVariable("OURA_CLIENT_SECRET") ?? "";
 builder.Configuration["Oura:RedirectUri"]  = Environment.GetEnvironmentVariable("OURA_REDIRECT_URI")
     ?? "http://localhost:5100/api/oura/callback";
-builder.Configuration["Vitara:ChronologicalAge"] = Environment.GetEnvironmentVariable("VITARA_AGE") ?? "30";
-
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
+builder.Services.AddMaayaAuth();
 builder.Services.AddDbContext<VitaraDbContext>(o =>
     o.UseSqlite($"Data Source={Path.Combine(Directory.GetCurrentDirectory(), "..", "vitara.db")}"));
 builder.Services.AddScoped<IVitaraRepository, VitaraRepository>();
@@ -42,10 +42,12 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<VitaraDbContext>();
     await db.Database.EnsureCreatedAsync();
+    await VitaraDbContext.CreateMissingTablesAsync(db);
     await NormalizeDayColumnsAsync(db);
 }
 
 app.UseCors();
+app.UseMaayaAuth();
 app.MapControllers();
 app.Run("http://localhost:5100");
 
@@ -95,3 +97,4 @@ static async Task NormalizeDayColumnsAsync(VitaraDbContext db)
 
     if (opened) await conn.CloseAsync();
 }
+

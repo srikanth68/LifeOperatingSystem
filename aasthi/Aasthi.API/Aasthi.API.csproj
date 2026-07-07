@@ -14,6 +14,7 @@
     <ProjectReference Include="..\Aasthi.Application\Aasthi.Application.csproj" />
     <ProjectReference Include="..\Aasthi.Infrastructure\Aasthi.Infrastructure.csproj" />
     <ProjectReference Include="..\Aasthi.Domain\Aasthi.Domain.csproj" />
+    <ProjectReference Include="..\..\shared\Maaya.Auth\Maaya.Auth.csproj" />
   </ItemGroup>
 
 </Project>

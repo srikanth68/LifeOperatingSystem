@@ -36,6 +36,7 @@ using (var scope = host.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<VitaraDbContext>();
     await db.Database.EnsureCreatedAsync();
+    await VitaraDbContext.CreateMissingTablesAsync(db);
 }
 
 await host.RunAsync();

@@ -6,11 +6,36 @@ import type {
   CategoryGroup,
   CategoryGroupSummary,
 } from '@/types';
+import { auth } from './auth';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
   headers: { 'Content-Type': 'application/json' },
 });
+
+api.interceptors.request.use(config => {
+  const token = auth.getToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+api.interceptors.response.use(
+  res => res,
+  async err => {
+    const orig = err.config;
+    if (err.response?.status === 401 && !orig._retry) {
+      orig._retry = true;
+      const tokens = await auth.refresh();
+      if (tokens) {
+        orig.headers.Authorization = `Bearer ${tokens.accessToken}`;
+        return api(orig);
+      }
+      auth.clear();
+      window.location.reload();
+    }
+    return Promise.reject(err);
+  }
+);
 
 export const summaryApi = {
   getDashboard: () => api.get<DashboardSummary>('/summary'),
@@ -28,6 +53,10 @@ export const transactionsApi = {
         category: filters?.category,
       },
     }),
+  updateCategory: (id: string, category: string | null) =>
+    api.patch(`/transactions/${id}/category`, category, {
+      headers: { 'Content-Type': 'application/json' },
+    }),
 };
 
 export const syncApi = {
@@ -38,6 +67,9 @@ export const syncApi = {
 export const plaidApi = {
   getItems: () => api.get('/plaid/items'),
   unlinkItem: (id: string) => api.delete(`/plaid/items/${id}`),
+  createLinkToken: () => api.post<{ linkToken: string }>('/plaid/link-token'),
+  exchangeToken: (data: { publicToken: string; plaidInstitutionId: string; institutionName: string }) =>
+    api.post('/plaid/exchange-token', data),
 };
 
 export const categoryGroupApi = {

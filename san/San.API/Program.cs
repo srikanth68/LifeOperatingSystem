@@ -1,6 +1,10 @@
+using Maaya.Auth;
 using Microsoft.EntityFrameworkCore;
 using San.Application.Interfaces;
+using San.Infrastructure.Agent;
+using San.Infrastructure.Context;
 using San.Infrastructure.Data;
+using San.Infrastructure.Google;
 using San.Infrastructure.Llm;
 using San.Infrastructure.ModuleClients;
 using San.Infrastructure.Notifications;
@@ -19,33 +23,46 @@ if (File.Exists(envFile))
     }
 }
 
-builder.Configuration["Llm:Provider"] = Environment.GetEnvironmentVariable("LLM_PROVIDER") ?? "anthropic";
-builder.Configuration["Llm:Model"]    = Environment.GetEnvironmentVariable("LLM_MODEL") ?? "claude-sonnet-4-6";
+builder.Configuration["Llm:Provider"] = Environment.GetEnvironmentVariable("LLM_PROVIDER") ?? "gemini";
+builder.Configuration["Llm:Model"]    = Environment.GetEnvironmentVariable("LLM_MODEL") ?? "gemini-2.0-flash";
 
-var vaultUrl  = Environment.GetEnvironmentVariable("VAULT_API_URL")  ?? "http://localhost:5000";
-var vitaraUrl = Environment.GetEnvironmentVariable("VITARA_API_URL") ?? "http://localhost:5100";
-var aasthiUrl = Environment.GetEnvironmentVariable("AASTHI_API_URL") ?? "http://localhost:5200";
+var vaultUrl     = Environment.GetEnvironmentVariable("VAULT_API_URL")     ?? "http://localhost:5000";
+var vitaraUrl    = Environment.GetEnvironmentVariable("VITARA_API_URL")    ?? "http://localhost:5100";
+var aasthiUrl    = Environment.GetEnvironmentVariable("AASTHI_API_URL")    ?? "http://localhost:5200";
+var northstarUrl = Environment.GetEnvironmentVariable("NORTHSTAR_API_URL") ?? "http://localhost:5500";
 
 builder.Services.AddControllers();
+builder.Services.AddMaayaAuth();
 builder.Services.AddDbContext<SanDbContext>(o =>
     o.UseSqlite($"Data Source={Path.Combine(Directory.GetCurrentDirectory(), "..", "san.db")}"));
 builder.Services.AddScoped<ISanRepository, SanRepository>();
 builder.Services.AddScoped<IModuleContextService, ModuleContextService>();
+builder.Services.AddSingleton<IGoogleCalendarService, GoogleCalendarService>();
+builder.Services.AddScoped<IContextReceiver, ContextReceiver>();
 builder.Services.AddHttpClient<ITelegramNotifier, TelegramNotifier>();
 
 // LLM provider selection — purely config-driven so the model/provider can change without
 // touching code. Add another `case` + implementation to support a non-Anthropic provider.
 switch (builder.Configuration["Llm:Provider"])
 {
+    case "gemini":
+        builder.Services.AddHttpClient<IChatProvider, GeminiChatProvider>();
+        break;
+    case "ollama":
+        builder.Services.AddHttpClient<IChatProvider, OllamaChatProvider>();
+        break;
     case "anthropic":
     default:
         builder.Services.AddHttpClient<IChatProvider, AnthropicChatProvider>();
         break;
 }
 
-builder.Services.AddHttpClient("vault",  c => c.BaseAddress = new Uri(vaultUrl));
-builder.Services.AddHttpClient("vitara", c => c.BaseAddress = new Uri(vitaraUrl));
-builder.Services.AddHttpClient("aasthi", c => c.BaseAddress = new Uri(aasthiUrl));
+builder.Services.AddHttpClient("vault",     c => c.BaseAddress = new Uri(vaultUrl));
+builder.Services.AddHttpClient("vitara",    c => c.BaseAddress = new Uri(vitaraUrl));
+builder.Services.AddHttpClient("aasthi",    c => c.BaseAddress = new Uri(aasthiUrl));
+builder.Services.AddHttpClient("northstar", c => c.BaseAddress = new Uri(northstarUrl));
+
+builder.Services.AddScoped<AgentToolExecutor>();
 
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
     p.WithOrigins("http://localhost:3000", "http://localhost:5173").AllowAnyHeader().AllowAnyMethod()));
@@ -56,8 +73,25 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<SanDbContext>();
     await db.Database.EnsureCreatedAsync();
+    await db.Database.ExecuteSqlRawAsync("""
+        CREATE TABLE IF NOT EXISTS People (
+            Id TEXT PRIMARY KEY,
+            Name TEXT NOT NULL DEFAULT '',
+            Phone TEXT,
+            Email TEXT,
+            Birthday TEXT,
+            Relationship TEXT NOT NULL DEFAULT 'other',
+            Notes TEXT,
+            Tags TEXT,
+            CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00',
+            UpdatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
+        );
+        CREATE INDEX IF NOT EXISTS IX_People_Name ON People(Name);
+        CREATE INDEX IF NOT EXISTS IX_People_Birthday ON People(Birthday);
+        """);
 }
 
 app.UseCors();
+app.UseMaayaAuth();
 app.MapControllers();
 app.Run("http://localhost:5300");

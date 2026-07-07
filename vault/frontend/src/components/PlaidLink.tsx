@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
-import axios from 'axios';
+import { plaidApi } from '@/services/api';
 
 interface Props {
   onSuccess: () => void;
@@ -15,7 +15,7 @@ export default function PlaidLinkButton({ onSuccess }: Props) {
     try {
       setLoading(true);
       setError(null);
-      const res = await axios.post('/api/plaid/link-token');
+      const res = await plaidApi.createLinkToken();
       setLinkToken(res.data.linkToken);
     } catch (err) {
       setError('Failed to start bank connection. Check API is running.');
@@ -26,7 +26,7 @@ export default function PlaidLinkButton({ onSuccess }: Props) {
   const handleSuccess = useCallback(async (publicToken: string, metadata: any) => {
     try {
       setLoading(true);
-      await axios.post('/api/plaid/exchange-token', {
+      await plaidApi.exchangeToken({
         publicToken,
         plaidInstitutionId: metadata.institution?.institution_id ?? '',
         institutionName: metadata.institution?.name ?? 'Unknown'

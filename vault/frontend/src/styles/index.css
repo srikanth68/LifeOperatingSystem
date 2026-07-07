@@ -287,6 +287,9 @@ select option { background: var(--surface2); }
   color: var(--text3);
 }
 .sidebar-search-btn:hover { color: var(--text2); }
+
+.sidebar-logout { color: var(--text3); }
+.sidebar-logout:hover { color: var(--debt-l); }
 .sidebar-search-kbd {
   margin-left: auto;
   font-size: 0.58rem;

@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Vault.Worker\Vault.Worker.csproj" />
+    <ProjectReference Include="..\..\shared\Maaya.Auth\Maaya.Auth.csproj" />
   </ItemGroup>
 
 </Project>
