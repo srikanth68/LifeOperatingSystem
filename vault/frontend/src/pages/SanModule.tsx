@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { QueryClient, QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { makeModuleQueryClient } from '../services/moduleQuery';
+import { authHeaders } from '../services/auth';
 import '../styles/modules.css';
 import '../styles/san.css';
 
@@ -7,13 +9,13 @@ const API = 'http://localhost:5300';
 const MC = 'var(--san)';
 const style = { '--mc': MC } as React.CSSProperties;
 
-const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30_000, refetchOnWindowFocus: false } } });
+const qc = makeModuleQueryClient(30_000);
 
-const get = (url: string) => fetch(url).then(r => { if (!r.ok) throw new Error(r.status.toString()); return r.json(); });
+const get = (url: string) => fetch(url, { headers: authHeaders() }).then(r => { if (!r.ok) throw new Error(r.status.toString()); return r.json(); });
 const send = (url: string, method: string, body?: unknown) =>
   fetch(url, {
     method,
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    headers: { ...authHeaders(), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   }).then(r => { if (!r.ok) throw new Error(r.status.toString()); return r.status === 204 ? null : r.json(); });
 
@@ -28,6 +30,12 @@ interface AlertItem {
 interface FeedEntry { module: string; title: string; description: string; occurredAt: string }
 interface ModuleStatus { module: string; reachable: boolean; error: string | null }
 interface FeedResult { entries: FeedEntry[]; modules: ModuleStatus[] }
+interface CalendarEvent {
+  id: string; title: string; description?: string; startTime: string; endTime: string;
+  location?: string; source: string; calendarName?: string; allDay: boolean;
+}
+interface NowNextResult { current?: CalendarEvent; upcoming: CalendarEvent[]; asOf: string }
+interface ContextResult { location?: { latitude: number; longitude: number; address?: string; timestamp: string }; recentActivity: unknown[] }
 
 const fmtDateTime = (d: string | null) => d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
 const toLocalInputValue = (iso: string) => {
@@ -47,12 +55,14 @@ const ALERT_TYPE_COLOR: Record<string, string> = {
 };
 const MODULE_COLOR: Record<string, string> = { Vault: '#4f9ef8', Vitara: '#e8527c', Aasthi: '#d4a843' };
 
-type Page = 'assistant' | 'reminders' | 'alerts' | 'feed';
+type Page = 'assistant' | 'reminders' | 'alerts' | 'feed' | 'calendar' | 'people';
 const TABS: { id: Page; label: string }[] = [
   { id: 'assistant', label: 'Assistant' },
   { id: 'reminders', label: 'Reminders' },
   { id: 'alerts',    label: 'Alerts' },
   { id: 'feed',      label: 'Activity Feed' },
+  { id: 'calendar',  label: 'Calendar' },
+  { id: 'people',    label: 'People' },
 ];
 
 function Icon() {
@@ -418,10 +428,439 @@ function Feed() {
   );
 }
 
+/* ── Helpers ── */
+const fmtTime = (d: string) => new Date(d).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+const fmtTimeRange = (s: string, e: string) => `${fmtTime(s)} – ${fmtTime(e)}`;
+const relativeMinutes = (target: string, from: Date) => {
+  const diff = Math.round((new Date(target).getTime() - from.getTime()) / 60_000);
+  if (diff <= 0) return 'now';
+  if (diff < 60) return `in ${diff} min`;
+  const h = Math.floor(diff / 60); const m = diff % 60;
+  return m > 0 ? `in ${h}h ${m}m` : `in ${h}h`;
+};
+const endsIn = (endTime: string, from: Date) => {
+  const diff = Math.round((new Date(endTime).getTime() - from.getTime()) / 60_000);
+  if (diff <= 0) return 'ending now';
+  if (diff < 60) return `ends in ${diff} min`;
+  const h = Math.floor(diff / 60); const m = diff % 60;
+  return m > 0 ? `ends in ${h}h ${m}m` : `ends in ${h}h`;
+};
+
+const SOURCE_BADGE_CLASS: Record<string, string> = { google: 'san-google', ical: 'san-ical', manual: 'san-manual' };
+const SOURCE_LABEL: Record<string, string> = { google: 'Google', ical: 'iCal', manual: 'Manual' };
+
+/* ── Now & Next Widget ── */
+function NowNext() {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const nowNextQ = useQuery<NowNextResult>({
+    queryKey: ['san-now-next'],
+    queryFn: () => get(`${API}/api/calendar/now-next?hours=3`),
+    refetchInterval: 60_000,
+  });
+  const contextQ = useQuery<ContextResult>({
+    queryKey: ['san-context'],
+    queryFn: () => get(`${API}/api/context/latest`),
+    refetchInterval: 60_000,
+  });
+
+  const data = nowNextQ.data;
+  const location = contextQ.data?.location;
+  const currentTime = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+  return (
+    <div className="san-now-next" style={style}>
+      <div className="san-now-next-header">
+        <span>{currentTime}</span>
+        {location?.address && <span className="san-location-badge">{'\u{1F4CD}'} {location.address}</span>}
+      </div>
+      {data ? (
+        <>
+          <div className="san-now-section">
+            <span className="san-now-label">NOW</span>
+            {data.current ? (
+              <div className="san-now-event">
+                <span className="san-now-event-title">{data.current.title}</span>
+                <span className="san-time-remaining">{endsIn(data.current.endTime, now)}</span>
+                {data.current.location && <span className="san-location-badge">{'\u{1F4CD}'} {data.current.location}</span>}
+              </div>
+            ) : (
+              <span className="san-free-time">Free time</span>
+            )}
+          </div>
+          {data.upcoming.length > 0 ? (
+            <div className="san-next-section">
+              <span className="san-next-label">NEXT</span>
+              {data.upcoming.map((ev, i) => (
+                <div key={ev.id ?? i} className="san-next-event">
+                  <span className="san-next-event-title">{ev.title}</span>
+                  <span className="san-next-event-time">{relativeMinutes(ev.startTime, now)} · {fmtTime(ev.startTime)}</span>
+                  {ev.location && <span className="san-location-badge">{'\u{1F4CD}'} {ev.location}</span>}
+                </div>
+              ))}
+            </div>
+          ) : !data.current ? (
+            <div className="san-free-time">Clear schedule for the next 3 hours</div>
+          ) : null}
+        </>
+      ) : nowNextQ.isLoading ? (
+        <span className="text-dim" style={{ fontSize: '0.78rem' }}>Loading schedule…</span>
+      ) : null}
+    </div>
+  );
+}
+
+/* ── Calendar Tab ── */
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+type EventFormState = { title: string; startTime: string; endTime: string; location: string; allDay: boolean };
+const emptyEventForm: EventFormState = { title: '', startTime: '', endTime: '', location: '', allDay: false };
+
+function Calendar() {
+  const queryClient = useQueryClient();
+  const today = new Date();
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
+  const [selectedDay, setSelectedDay] = useState<number | null>(today.getDate());
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState<EventFormState>(emptyEventForm);
+
+  const monthStart = new Date(viewYear, viewMonth, 1);
+  const monthEnd = new Date(viewYear, viewMonth + 1, 0, 23, 59, 59);
+
+  const eventsQ = useQuery<CalendarEvent[]>({
+    queryKey: ['san-calendar-events', viewYear, viewMonth],
+    queryFn: () => get(`${API}/api/calendar/events?from=${monthStart.toISOString()}&to=${monthEnd.toISOString()}`),
+  });
+
+  const createMut = useMutation({
+    mutationFn: (f: EventFormState) => send(`${API}/api/calendar/events`, 'POST', {
+      title: f.title,
+      startTime: new Date(f.startTime).toISOString(),
+      endTime: new Date(f.endTime).toISOString(),
+      location: f.location || undefined,
+      allDay: f.allDay,
+    }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['san-calendar-events'] }); setAdding(false); setForm(emptyEventForm); },
+  });
+
+  const syncMut = useMutation({ mutationFn: () => get(`${API}/api/calendar/sync`) });
+  const authMut = useMutation({
+    mutationFn: () => get(`${API}/api/calendar/auth`),
+    onSuccess: (data: { url: string }) => { if (data?.url) window.open(data.url, '_blank'); },
+  });
+
+  const events = eventsQ.data ?? [];
+
+  // Build calendar grid
+  const firstDayOfWeek = monthStart.getDay();
+  const daysInMonth = monthEnd.getDate();
+  const prevMonthEnd = new Date(viewYear, viewMonth, 0).getDate();
+
+  const cells: { day: number; month: 'prev' | 'current' | 'next' }[] = [];
+  for (let i = firstDayOfWeek - 1; i >= 0; i--) cells.push({ day: prevMonthEnd - i, month: 'prev' });
+  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, month: 'current' });
+  const remaining = 7 - (cells.length % 7);
+  if (remaining < 7) for (let d = 1; d <= remaining; d++) cells.push({ day: d, month: 'next' });
+
+  // Events by day
+  const eventsByDay = new Map<number, CalendarEvent[]>();
+  for (const ev of events) {
+    const d = new Date(ev.startTime).getDate();
+    const m = new Date(ev.startTime).getMonth();
+    if (m === viewMonth) {
+      if (!eventsByDay.has(d)) eventsByDay.set(d, []);
+      eventsByDay.get(d)!.push(ev);
+    }
+  }
+
+  const isToday = (day: number) => day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
+  const monthName = monthStart.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); setSelectedDay(null); };
+  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); setSelectedDay(null); };
+  const goToday = () => { setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); setSelectedDay(today.getDate()); };
+
+  const selectedEvents = selectedDay ? (eventsByDay.get(selectedDay) ?? []) : [];
+
+  return (
+    <div className="san-calendar" style={style}>
+      {/* Actions bar */}
+      <div className="san-calendar-actions">
+        <button className="btn-primary" onClick={() => authMut.mutate()} disabled={authMut.isPending}>Connect Google Calendar</button>
+        <button className="btn-ghost" onClick={() => syncMut.mutate()} disabled={syncMut.isPending}>{syncMut.isPending ? 'Syncing…' : 'Sync'}</button>
+        <button className="btn-primary" onClick={() => setAdding(a => !a)}>{adding ? 'Close' : '+ Add Event'}</button>
+      </div>
+
+      {/* Add event form */}
+      {adding && (
+        <div className="san-inline-form san-add-event-form">
+          <input placeholder="Event title…" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} style={{ flex: 2 }} />
+          <input type="datetime-local" value={form.startTime} onChange={e => setForm({ ...form, startTime: e.target.value })} />
+          <input type="datetime-local" value={form.endTime} onChange={e => setForm({ ...form, endTime: e.target.value })} />
+          <input placeholder="Location (optional)" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} />
+          <label className="san-checkbox-label">
+            <input type="checkbox" checked={form.allDay} onChange={e => setForm({ ...form, allDay: e.target.checked })} />
+            All Day
+          </label>
+          <button className="btn-primary" disabled={createMut.isPending || !form.title.trim() || !form.startTime || !form.endTime} onClick={() => createMut.mutate(form)}>Save</button>
+          <button className="btn-ghost" onClick={() => { setAdding(false); setForm(emptyEventForm); }}>Cancel</button>
+        </div>
+      )}
+
+      {/* Calendar header */}
+      <div className="san-calendar-header">
+        <button className="btn-ghost" onClick={prevMonth}>&larr;</button>
+        <span className="san-calendar-month-title">{monthName}</span>
+        <button className="btn-ghost" onClick={goToday}>Today</button>
+        <button className="btn-ghost" onClick={nextMonth}>&rarr;</button>
+      </div>
+
+      {/* Weekday headers */}
+      <div className="san-calendar-weekdays">
+        {WEEKDAYS.map(d => <div key={d} className="san-calendar-weekday">{d}</div>)}
+      </div>
+
+      {/* Day grid */}
+      <div className="san-calendar-grid">
+        {cells.map((c, i) => {
+          const isCurrent = c.month === 'current';
+          const hasEvents = isCurrent && eventsByDay.has(c.day);
+          const cls = [
+            'san-calendar-day',
+            !isCurrent && 'san-other-month',
+            isCurrent && isToday(c.day) && 'san-today',
+            hasEvents && 'san-has-events',
+            isCurrent && selectedDay === c.day && 'san-selected',
+          ].filter(Boolean).join(' ');
+          return (
+            <div
+              key={i}
+              className={cls}
+              onClick={() => isCurrent && setSelectedDay(c.day === selectedDay ? null : c.day)}
+            >
+              {c.day}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Selected day events */}
+      {selectedDay !== null && (
+        <div className="san-day-events">
+          <h4 style={{ margin: '0 0 0.5rem' }}>
+            {new Date(viewYear, viewMonth, selectedDay).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+          </h4>
+          {selectedEvents.length === 0 && <p className="text-dim" style={{ fontSize: '0.82rem' }}>No events this day.</p>}
+          {selectedEvents.map(ev => (
+            <div key={ev.id} className="san-event-card">
+              <div className="san-event-card-top">
+                <span className="san-event-card-title">{ev.title}</span>
+                <span className={`san-source-badge ${SOURCE_BADGE_CLASS[ev.source] ?? ''}`}>{SOURCE_LABEL[ev.source] ?? ev.source}</span>
+              </div>
+              <div className="san-event-card-meta">
+                <span>{ev.allDay ? 'All day' : fmtTimeRange(ev.startTime, ev.endTime)}</span>
+                {ev.location && <span className="san-location-badge">{'\u{1F4CD}'} {ev.location}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── People ── */
+interface PersonItem {
+  id: string; name: string; phone: string | null; email: string | null;
+  birthday: string | null; relationship: string; notes: string | null;
+  tags: string | null; createdAt: string; updatedAt: string;
+}
+
+const REL_TYPES = ['family', 'friend', 'professional', 'neighbor', 'other'] as const;
+const REL_COLOR: Record<string, string> = { family: '#f472b6', friend: '#4f9ef8', professional: '#f0a030', neighbor: '#1fc87a', other: '#94a3b8' };
+const REL_ICON: Record<string, string> = { family: '👨‍👩‍👧', friend: '🤝', professional: '💼', neighbor: '🏠', other: '👤' };
+
+function People() {
+  const queryClient = useQueryClient();
+  const { data: people } = useQuery<PersonItem[]>({ queryKey: ['people'], queryFn: () => get(`${API}/api/people`) });
+  const { data: birthdays } = useQuery<PersonItem[]>({ queryKey: ['birthdays'], queryFn: () => get(`${API}/api/people/birthdays?days=30`) });
+  const [adding, setAdding] = useState(false);
+  const [search, setSearch] = useState('');
+  const [relFilter, setRelFilter] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [form, setForm] = useState({ name: '', phone: '', email: '', birthday: '', relationship: 'friend', notes: '', tags: '' });
+  const invalidate = () => { queryClient.invalidateQueries({ queryKey: ['people'] }); queryClient.invalidateQueries({ queryKey: ['birthdays'] }); };
+
+  const addPerson = useMutation({
+    mutationFn: () => send(`${API}/api/people`, 'POST', form),
+    onSuccess: () => { setForm({ name: '', phone: '', email: '', birthday: '', relationship: 'friend', notes: '', tags: '' }); setAdding(false); invalidate(); },
+  });
+  const deletePerson = useMutation({
+    mutationFn: (id: string) => send(`${API}/api/people/${id}`, 'DELETE'),
+    onSuccess: invalidate,
+  });
+
+  const filtered = people?.filter(p => {
+    if (relFilter && p.relationship !== relFilter) return false;
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return p.name.toLowerCase().includes(q) || p.tags?.toLowerCase().includes(q) || p.email?.toLowerCase().includes(q) || p.phone?.includes(q);
+  });
+
+  const bdayStr = (b: string | null) => {
+    if (!b) return null;
+    try {
+      const d = new Date(b + 'T00:00:00');
+      const today = new Date();
+      let next = new Date(today.getFullYear(), d.getMonth(), d.getDate());
+      if (next < today) next = new Date(today.getFullYear() + 1, d.getMonth(), d.getDate());
+      const days = Math.ceil((next.getTime() - today.getTime()) / 86400000);
+      const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      if (days === 0) return `🎉 Today!`;
+      if (days <= 7) return `in ${days}d`;
+      if (days <= 30) return `in ${days}d`;
+      return label;
+    } catch { return b; }
+  };
+
+  const relCounts = people?.reduce((acc, p) => { acc[p.relationship] = (acc[p.relationship] ?? 0) + 1; return acc; }, {} as Record<string, number>) ?? {};
+
+  return (
+    <div className="sp" style={style}>
+      {/* ── Stats row ── */}
+      <div className="sp-stats">
+        <div className="sp-stat">
+          <div className="sp-stat-val">{people?.length ?? 0}</div>
+          <div className="sp-stat-label">Contacts</div>
+        </div>
+        <div className="sp-stat">
+          <div className="sp-stat-val">{birthdays?.length ?? 0}</div>
+          <div className="sp-stat-label">Birthdays (30d)</div>
+        </div>
+        {REL_TYPES.slice(0, 3).map(r => (
+          <div className="sp-stat" key={r}>
+            <div className="sp-stat-val" style={{ color: REL_COLOR[r] }}>{relCounts[r] ?? 0}</div>
+            <div className="sp-stat-label">{r}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Upcoming birthdays ── */}
+      {birthdays && birthdays.length > 0 && (
+        <>
+          <div className="sp-section-header">
+            <span>🎂 Upcoming Birthdays</span>
+          </div>
+          <div className="sp-bday-row">
+            {birthdays.map(p => (
+              <div key={p.id} className="sp-bday-card">
+                <div className="sp-avatar" style={{ '--av-color': REL_COLOR[p.relationship] || '#94a3b8' } as React.CSSProperties}>
+                  {p.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="sp-bday-name">{p.name.split(' ')[0]}</div>
+                <div className="sp-bday-date">{bdayStr(p.birthday)}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* ── Search + filter ── */}
+      <div className="sp-controls">
+        <div className="sp-search-row">
+          <input className="sp-search" placeholder="Search contacts..." value={search} onChange={e => setSearch(e.target.value)} />
+          <button className="sp-add-btn" onClick={() => setAdding(!adding)}>{adding ? 'Cancel' : '+ Add'}</button>
+        </div>
+        <div className="sp-filter-pills">
+          <button className={`sp-pill ${relFilter === null ? 'active' : ''}`} onClick={() => setRelFilter(null)}>
+            All ({people?.length ?? 0})
+          </button>
+          {REL_TYPES.map(r => (
+            <button key={r} className={`sp-pill ${relFilter === r ? 'active' : ''}`} onClick={() => setRelFilter(relFilter === r ? null : r)}
+              style={{ '--pill-color': REL_COLOR[r] } as React.CSSProperties}>
+              {REL_ICON[r]} {r} {relCounts[r] ? `(${relCounts[r]})` : ''}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Add form ── */}
+      {adding && (
+        <div className="sp-add-form">
+          <div className="sp-form-row">
+            <input className="sp-input sp-input--wide" placeholder="Name *" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            <select className="sp-input" value={form.relationship} onChange={e => setForm(f => ({ ...f, relationship: e.target.value }))}>
+              {REL_TYPES.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          <div className="sp-form-row">
+            <input className="sp-input" placeholder="Phone" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+            <input className="sp-input" placeholder="Email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+            <input className="sp-input" type="date" placeholder="Birthday" value={form.birthday} onChange={e => setForm(f => ({ ...f, birthday: e.target.value }))} />
+          </div>
+          <div className="sp-form-row">
+            <input className="sp-input" placeholder="Tags (comma-sep)" value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} />
+            <input className="sp-input sp-input--wide" placeholder="Notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+            <button className="sp-save-btn" disabled={!form.name || addPerson.isPending} onClick={() => addPerson.mutate()}>
+              {addPerson.isPending ? 'Adding...' : 'Save Contact'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Contact list ── */}
+      <div className="sp-list">
+        {filtered?.length === 0 && <div className="sp-empty">{search || relFilter ? 'No matches found.' : 'No contacts yet.'}</div>}
+
+        {filtered?.map(p => {
+          const expanded = expandedId === p.id;
+          const color = REL_COLOR[p.relationship] || '#94a3b8';
+          return (
+            <div key={p.id} className={`sp-card ${expanded ? 'expanded' : ''}`} onClick={() => setExpandedId(expanded ? null : p.id)}>
+              <div className="sp-card-main">
+                <div className="sp-avatar" style={{ '--av-color': color } as React.CSSProperties}>
+                  {p.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="sp-card-info">
+                  <div className="sp-card-name">{p.name}</div>
+                  <div className="sp-card-meta">
+                    {p.phone && <span className="sp-meta-item">📞 {p.phone}</span>}
+                    {p.email && <span className="sp-meta-item">✉ {p.email}</span>}
+                  </div>
+                </div>
+                <span className="sp-rel-badge" style={{ '--rel-color': color } as React.CSSProperties}>{p.relationship}</span>
+              </div>
+              {expanded && (
+                <div className="sp-card-detail" onClick={e => e.stopPropagation()}>
+                  {p.birthday && <div className="sp-detail-row"><span className="sp-detail-label">Birthday</span><span>{new Date(p.birthday + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</span></div>}
+                  {p.tags && <div className="sp-detail-row"><span className="sp-detail-label">Tags</span><span className="sp-tags">{p.tags.split(',').map(t => <span key={t} className="sp-tag">{t.trim()}</span>)}</span></div>}
+                  {p.notes && <div className="sp-detail-row"><span className="sp-detail-label">Notes</span><span className="sp-notes">{p.notes}</span></div>}
+                  <div className="sp-detail-actions">
+                    {p.phone && <a href={`tel:${p.phone}`} className="sp-action-btn" onClick={e => e.stopPropagation()}>📞 Call</a>}
+                    {p.email && <a href={`mailto:${p.email}`} className="sp-action-btn" onClick={e => e.stopPropagation()}>✉ Email</a>}
+                    <button className="sp-action-btn sp-action-btn--danger" onClick={e => { e.stopPropagation(); deletePerson.mutate(p.id); }}>Delete</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function SanModuleInner() {
   const [page, setPage] = useState<Page>('assistant');
   return (
     <div>
+      <NowNext />
       <nav className="module-subnav" style={style}>
         {TABS.map(t => (
           <button key={t.id} className={`module-tab ${page === t.id ? 'active' : ''}`} onClick={() => setPage(t.id)}>
@@ -433,6 +872,8 @@ function SanModuleInner() {
       {page === 'reminders' && <Reminders />}
       {page === 'alerts'    && <Alerts />}
       {page === 'feed'      && <Feed />}
+      {page === 'calendar'  && <Calendar />}
+      {page === 'people'    && <People />}
     </div>
   );
 }

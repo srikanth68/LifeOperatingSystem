@@ -1,20 +1,9 @@
-# Maaya OS — start all backend services + frontend in one shot.
+# Maaya OS - start all backend services + frontend in one shot.
 # Usage: .\maaya-start.ps1
 # Press Ctrl+C to stop everything.
 
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-
-$envLoader = {
-    param($envPath)
-    if (Test-Path $envPath) {
-        Get-Content $envPath | ForEach-Object {
-            if ($_ -match '^\s*#' -or $_ -match '^\s*$') { return }
-            $p = $_ -split '=', 2
-            if ($p.Count -eq 2) { [Environment]::SetEnvironmentVariable($p[0].Trim(), $p[1].Trim(), 'Process') }
-        }
-    }
-}
 
 $services = @(
     @{ Name = 'vault-api';     Dir = "$root\vault\Vault.API";          Env = "$root\vault\.env";    Color = 'Cyan'      }
@@ -22,20 +11,26 @@ $services = @(
     @{ Name = 'vitara-api';    Dir = "$root\vitara\Vitara.API";        Env = "$root\vitara\.env";   Color = 'Magenta'   }
     @{ Name = 'vitara-worker'; Dir = "$root\vitara\Vitara.Worker";     Env = "$root\vitara\.env";   Color = 'DarkMagenta' }
     @{ Name = 'aasthi-api';    Dir = "$root\aasthi\Aasthi.API";        Env = "$root\aasthi\.env";   Color = 'Yellow'    }
-    @{ Name = 'san-api';       Dir = "$root\san\San.API";              Env = "$root\san\.env";      Color = 'DarkYellow'}
-    @{ Name = 'san-worker';    Dir = "$root\san\San.Worker";           Env = "$root\san\.env";      Color = 'DarkGreen' }
-    @{ Name = 'frontend';      Dir = "$root\vault\frontend";           Env = $null;                 Color = 'Green'     }
+    @{ Name = 'san-api';       Dir = "$root\san\San.API";              Env = "$root\san\.env";       Color = 'DarkYellow'}
+    @{ Name = 'san-worker';    Dir = "$root\san\San.Worker";           Env = "$root\san\.env";       Color = 'DarkGreen' }
+    @{ Name = 'northstar-api'; Dir = "$root\northstar\NorthStar.API";  Env = "$root\northstar\.env"; Color = 'Blue'      }
+    @{ Name = 'sutra-api';     Dir = "$root\sutra\Sutra.API";          Env = "$root\sutra\.env";     Color = 'DarkBlue'  }
+    @{ Name = 'karma-api';     Dir = "$root\karma\Karma.API";          Env = "$root\karma\.env";     Color = 'Magenta'   }
+    @{ Name = 'frontend';      Dir = "$root\vault\frontend";           Env = $null;                  Color = 'Green'     }
 )
 
 Write-Host ""
-Write-Host " ╔══════════════════════════════════════╗" -ForegroundColor White
-Write-Host " ║          M A A Y A   O S             ║" -ForegroundColor White
-Write-Host " ╚══════════════════════════════════════╝" -ForegroundColor White
+Write-Host " +======================================+" -ForegroundColor White
+Write-Host " |          M A A Y A   O S             |" -ForegroundColor White
+Write-Host " +======================================+" -ForegroundColor White
 Write-Host ""
 Write-Host "  Vault     http://localhost:5000  (API + Worker)" -ForegroundColor Cyan
 Write-Host "  Vitara    http://localhost:5100  (API + Worker)" -ForegroundColor Magenta
 Write-Host "  Aasthi    http://localhost:5200  (API)"          -ForegroundColor Yellow
 Write-Host "  San       http://localhost:5300  (API + Worker)" -ForegroundColor DarkYellow
+Write-Host "  NorthStar http://localhost:5500  (API)"          -ForegroundColor Blue
+Write-Host "  Sutra     http://localhost:5400  (API)"          -ForegroundColor DarkBlue
+Write-Host "  Karma     http://localhost:5600  (API)"          -ForegroundColor Magenta
 Write-Host "  Frontend  http://localhost:5173"                 -ForegroundColor Green
 Write-Host ""
 
@@ -43,11 +38,11 @@ $jobs = @()
 
 foreach ($svc in $services) {
     $dir  = $svc.Dir
-    $env  = $svc.Env
+    $envFile = $svc.Env
     $name = $svc.Name
 
     if (-not (Test-Path $dir)) {
-        Write-Host "  SKIP $name — $dir not found" -ForegroundColor DarkGray
+        Write-Host "  SKIP $name - $dir not found" -ForegroundColor DarkGray
         continue
     }
 
@@ -69,15 +64,15 @@ foreach ($svc in $services) {
             }
             Set-Location $d
             dotnet run 2>&1
-        } -ArgumentList $dir, $env
+        } -ArgumentList $dir, $envFile
     }
 
-    Write-Host "  ✓ $name" -ForegroundColor $svc.Color
+    Write-Host "  OK $name" -ForegroundColor $svc.Color
 }
 
 Write-Host ""
 Write-Host "All services launched. Streaming logs (Ctrl+C to stop all):" -ForegroundColor White
-Write-Host "─────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
+Write-Host "-------------------------------------------------------------" -ForegroundColor DarkGray
 
 $colorMap = @{}
 foreach ($svc in $services) { $colorMap[$svc.Name] = $svc.Color }

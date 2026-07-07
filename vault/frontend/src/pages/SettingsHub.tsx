@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { summaryApi, syncApi } from '@/services/api';
+import { authHeaders } from '../services/auth';
 import PlaidLinkButton from '@/components/PlaidLink';
 import '../styles/modules.css';
 
@@ -82,7 +83,7 @@ function Integrations() {
   const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
-    fetch('/api/config/plaid-env')
+    fetch('/api/config/plaid-env', { headers: authHeaders() })
       .then(r => r.json())
       .then(d => setPlaidEnv(d.environment ?? 'sandbox'))
       .catch(() => setPlaidEnv('sandbox'));
@@ -106,8 +107,8 @@ function Integrations() {
     setClearing(true);
     setSyncMsg('');
     try {
-      const items: { id: string }[] = await fetch('/api/plaid/items').then(r => r.json());
-      await Promise.all(items.map(i => fetch(`/api/plaid/items/${i.id}`, { method: 'DELETE' })));
+      const items: { id: string }[] = await fetch('/api/plaid/items', { headers: authHeaders() }).then(r => r.json());
+      await Promise.all(items.map(i => fetch(`/api/plaid/items/${i.id}`, { method: 'DELETE', headers: authHeaders() })));
       setSyncMsg(`Unlinked ${items.length} account(s). Connect your real bank below.`);
     } catch {
       setSyncMsg('Failed to unlink accounts.');

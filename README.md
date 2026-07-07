@@ -33,34 +33,37 @@ No cloud vendor lock-in. No monthly subscriptions. Your data stays on your machi
 | **Vitara** | Health — Oura Ring integration, sleep, readiness, activity, bio-age scoring | `5100` |
 | **Aasthi** | Property — real estate portfolio, contacts, documents, profit tracking | `5200` |
 | **San** | AI Assistant — model-agnostic chat, reminders, alerts, cross-module activity feed | `5300` |
+| **Sutra** | Document vault — upload, categorize, expiry tracking, cross-module document links | `5400` |
+| **NorthStar** | Knowledge hub — cross-module aggregation, insights, search, agent-ready | `5500` |
 | **Frontend** | Unified React dashboard for all modules | `5173` |
 
-> **Coming soon:** Nexus (social network & contacts), NorthStar (knowledge hub), Karma (habits & goals), Sutra (journal & reflection)
+> **Coming soon:** Nexus (social network & contacts), Karma (habits & goals)
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    Frontend (React)                  │
-│              Unified dashboard · Port 5173           │
-└──────┬──────────┬──────────┬──────────┬──────────────┘
-       │          │          │          │
-  ┌────▼───┐ ┌───▼────┐ ┌───▼────┐ ┌───▼───┐
-  │ Vault  │ │ Vitara │ │ Aasthi │ │  San  │
-  │  API   │ │  API   │ │  API   │ │  API  │
-  │ :5000  │ │ :5100  │ │ :5200  │ │ :5300 │
-  └────┬───┘ └───┬────┘ └───┬────┘ └───┬───┘
-       │         │          │          │
-  ┌────▼───┐ ┌───▼────┐    │     ┌────▼────┐
-  │ Worker │ │ Worker │    │     │ Worker  │
-  │ (sync) │ │ (sync) │    │     │ (alerts)│
-  └────┬───┘ └───┬────┘    │     └────┬────┘
-       │         │          │          │
-  ┌────▼───┐ ┌───▼────┐ ┌──▼─────┐ ┌──▼─────┐
-  │ SQLite │ │ SQLite │ │ SQLite │ │ SQLite │
-  └────────┘ └────────┘ └────────┘ └────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                        Frontend (React)                         │
+│                 Unified dashboard · Port 5173                   │
+└──┬─────────┬──────────┬──────────┬──────────┬──────────┬────────┘
+   │         │          │          │          │          │
+┌──▼───┐ ┌───▼──┐ ┌────▼───┐ ┌───▼───┐ ┌───▼────┐ ┌───▼─────┐
+│Vault │ │Vitara│ │ Aasthi │ │  San  │ │ Sutra  │ │NorthStar│
+│ :5000│ │:5100 │ │ :5200  │ │ :5300 │ │ :5400  │ │ :5500   │
+└──┬───┘ └──┬───┘ └───┬────┘ └──┬────┘ └───┬────┘ └────┬────┘
+   │        │         │ proxy   │          │           │
+   │        │         └────────►│◄─────────┘           │
+   │        │       (docs→Sutra)│                      │
+┌──▼───┐ ┌──▼───┐           ┌──▼────┐                 │
+│Worker│ │Worker│            │Worker │                  │
+│(sync)│ │(sync)│            │(alert)│                  │
+└──┬───┘ └──┬───┘            └──┬────┘                 │
+   │        │                   │                      │
+┌──▼───┐ ┌──▼───┐ ┌────────┐ ┌─▼──────┐ ┌────────┐ ┌─▼──────┐
+│SQLite│ │SQLite│ │ SQLite │ │ SQLite │ │ SQLite │ │ SQLite │
+└──────┘ └──────┘ └────────┘ └────────┘ └────────┘ └────────┘
 ```
 
 Each module is fully independent — its own database, its own API, its own deployment. San bridges them via live HTTP calls, not shared databases.
@@ -189,6 +192,8 @@ That's it. One command spins up all APIs, workers, and the frontend.
 - [ ] **NorthStar** — Obsidian-like knowledge hub for notes, goals, and planning
 - [ ] **Karma** — Habit tracking, goal setting, streaks
 - [ ] **Sutra** — Journaling, reflection, mood tracking
+- [ ] **SAN → Aasthi task automation** — SAN creates property tasks from emails, calendar events, and context data
+- [ ] **Vitara AI Reasoning** — Claude-powered biological age scoring, weekly briefs, cross-signal correlation engine
 - [ ] Raspberry Pi deployment with external access
 - [ ] WhatsApp notification support
 - [ ] Additional LLM providers (OpenAI, Ollama, local models)

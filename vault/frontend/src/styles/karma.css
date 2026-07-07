@@ -1,0 +1,350 @@
+/* ── karma.css — Goals & Habits module ── */
+
+/* ── Habits Today View ──────────────────────────────────── */
+.karma-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 1.5rem;
+  gap: 1rem;
+}
+.karma-date-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--karma);
+  margin-bottom: 0.2rem;
+}
+.karma-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-family: 'Space Grotesk', sans-serif;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+.karma-progress-ring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  flex-shrink: 0;
+}
+.karma-ring-wrap {
+  position: relative;
+  width: 52px;
+  height: 52px;
+}
+.karma-ring-wrap svg { width: 52px; height: 52px; transform: rotate(-90deg); }
+.karma-ring-bg { fill: none; stroke: rgba(244,114,182,0.12); stroke-width: 4; }
+.karma-ring-fg { fill: none; stroke: var(--karma); stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 0.5s cubic-bezier(0.4,0,0.2,1); }
+.karma-ring-count {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.78rem; font-weight: 700; color: var(--karma);
+}
+.karma-ring-label { font-size: 0.64rem; color: var(--text3); }
+
+/* ── Habit Card ─────────────────────────────────────────── */
+.habit-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.habit-card {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.875rem 1rem;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  transition: border-color 0.18s, background 0.18s, transform 0.12s;
+  cursor: default;
+}
+.habit-card.completed {
+  border-color: rgba(244,114,182,0.28);
+  background: rgba(244,114,182,0.06);
+}
+.habit-card:hover { background: rgba(255,255,255,0.04); }
+.habit-emoji { font-size: 1.35rem; flex-shrink: 0; line-height: 1; }
+.habit-info { flex: 1; min-width: 0; }
+.habit-name {
+  font-size: 0.875rem; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.habit-meta { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.2rem; }
+.habit-cat {
+  font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--karma); opacity: 0.8;
+}
+.habit-streak {
+  font-size: 0.72rem; color: var(--text3);
+  display: flex; align-items: center; gap: 0.2rem;
+}
+.habit-streak-fire { color: var(--karma); font-weight: 700; }
+.habit-check {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: transparent;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s, transform 0.12s;
+  flex-shrink: 0;
+  color: var(--text3);
+}
+.habit-check:hover {
+  border-color: var(--karma);
+  background: rgba(244,114,182,0.1);
+  color: var(--karma);
+}
+.habit-check.checked {
+  border-color: var(--karma);
+  background: var(--karma);
+  color: #111;
+  transform: scale(1.05);
+}
+.habit-check svg { width: 16px; height: 16px; }
+@keyframes habit-pop { 0% { transform: scale(1); } 40% { transform: scale(1.25); } 100% { transform: scale(1.05); } }
+.habit-check.pop { animation: habit-pop 0.25s ease-out forwards; }
+
+/* ── Add Habit Form ─────────────────────────────────────── */
+.karma-form-panel {
+  border: 1px solid rgba(244,114,182,0.25);
+  border-radius: var(--r);
+  background: rgba(244,114,182,0.04);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.karma-form-panel h4 { margin: 0 0 1rem; font-size: 0.9rem; color: var(--text); }
+.karma-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.625rem;
+}
+.karma-form-grid .full { grid-column: 1 / -1; }
+.karma-form-label {
+  font-size: 0.72rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text3); margin-bottom: 0.3rem; display: block;
+}
+.karma-input, .karma-select {
+  width: 100%; box-sizing: border-box;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-size: 0.84rem; font-family: inherit;
+  padding: 0.525rem 0.75rem;
+  outline: none;
+  transition: border-color 0.18s;
+}
+.karma-input:focus, .karma-select:focus { border-color: rgba(244,114,182,0.5); }
+.karma-select option { background: #0e1420; }
+.karma-emoji-options {
+  display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.4rem;
+}
+.karma-emoji-btn {
+  font-size: 1.15rem; cursor: pointer; padding: 0.3rem 0.4rem;
+  border-radius: var(--r-sm); border: 1px solid transparent;
+  background: rgba(255,255,255,0.04);
+  transition: border-color 0.15s, background 0.15s;
+}
+.karma-emoji-btn.active { border-color: rgba(244,114,182,0.5); background: rgba(244,114,182,0.1); }
+.karma-day-row { display: flex; gap: 0.3rem; }
+.karma-day-btn {
+  flex: 1; padding: 0.35rem 0;
+  font-size: 0.7rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  border-radius: var(--r-sm); border: 1px solid var(--border);
+  background: transparent; color: var(--text3); cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.karma-day-btn.on { border-color: rgba(244,114,182,0.5); background: rgba(244,114,182,0.12); color: var(--karma); }
+.karma-form-actions { display: flex; gap: 0.5rem; margin-top: 1rem; justify-content: flex-end; }
+
+/* ── Goals ──────────────────────────────────────────────── */
+.goal-cat-tabs {
+  display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1.25rem;
+}
+.goal-cat-tab {
+  padding: 0.35rem 0.875rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  font-size: 0.75rem; font-weight: 600;
+  color: var(--text3); cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.goal-cat-tab.active {
+  border-color: rgba(244,114,182,0.5);
+  background: rgba(244,114,182,0.1);
+  color: var(--karma);
+}
+.goal-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: rgba(255,255,255,0.02);
+  margin-bottom: 0.625rem;
+  transition: border-color 0.18s;
+  overflow: hidden;
+}
+.goal-card:hover { border-color: rgba(244,114,182,0.2); }
+.goal-card.expanded { border-color: rgba(244,114,182,0.3); }
+.goal-card-header {
+  display: flex; align-items: flex-start; gap: 0.75rem;
+  padding: 1rem 1.125rem;
+  cursor: pointer;
+  user-select: none;
+}
+.goal-cat-badge {
+  font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.09em; padding: 0.2rem 0.5rem;
+  border-radius: 999px; background: rgba(244,114,182,0.12);
+  color: var(--karma); flex-shrink: 0; margin-top: 0.15rem;
+}
+.goal-title-wrap { flex: 1; min-width: 0; }
+.goal-title {
+  font-size: 0.9rem; font-weight: 700; color: var(--text);
+  margin-bottom: 0.35rem;
+}
+.goal-progress-bar-wrap {
+  height: 4px; background: rgba(255,255,255,0.07);
+  border-radius: 2px; overflow: hidden; margin-bottom: 0.35rem;
+}
+.goal-progress-bar {
+  height: 100%; border-radius: 2px;
+  background: linear-gradient(90deg, var(--karma), rgba(244,114,182,0.7));
+  transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+}
+.goal-meta-row { display: flex; align-items: center; gap: 0.75rem; }
+.goal-pct { font-size: 0.75rem; font-weight: 700; color: var(--karma); }
+.goal-target-date { font-size: 0.72rem; color: var(--text3); }
+.goal-milestone-count { font-size: 0.72rem; color: var(--text3); }
+.goal-chevron {
+  color: var(--text3); flex-shrink: 0; margin-top: 0.2rem;
+  transition: transform 0.22s;
+}
+.goal-chevron.open { transform: rotate(180deg); }
+.goal-card-body {
+  padding: 0 1.125rem 1rem;
+  border-top: 1px solid var(--border);
+}
+.goal-desc {
+  font-size: 0.83rem; color: var(--text2); line-height: 1.65;
+  padding: 0.875rem 0 0.75rem;
+}
+.goal-section-label {
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--text3); margin: 0.75rem 0 0.45rem;
+}
+.goal-milestones { display: flex; flex-direction: column; gap: 0.35rem; }
+.goal-milestone {
+  display: flex; align-items: center; gap: 0.6rem;
+  font-size: 0.82rem; color: var(--text2);
+}
+.goal-milestone.done { color: var(--text3); text-decoration: line-through; }
+.ms-check {
+  width: 18px; height: 18px; border-radius: 4px;
+  border: 1.5px solid var(--border);
+  background: transparent; cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.15s, background 0.15s;
+  color: transparent;
+}
+.ms-check.done { border-color: var(--karma); background: var(--karma); color: #111; }
+.ms-check svg { width: 11px; height: 11px; }
+.goal-links { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.goal-link {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  font-size: 0.75rem; color: var(--karma);
+  background: rgba(244,114,182,0.08);
+  border: 1px solid rgba(244,114,182,0.2);
+  border-radius: var(--r-sm); padding: 0.25rem 0.6rem;
+  text-decoration: none; transition: background 0.15s;
+}
+.goal-link:hover { background: rgba(244,114,182,0.16); }
+.goal-link svg { width: 11px; height: 11px; }
+.goal-resources {
+  font-size: 0.82rem; color: var(--text2); line-height: 1.6;
+  white-space: pre-wrap;
+}
+.goal-tags { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.goal-tag {
+  font-size: 0.68rem; font-weight: 600; color: var(--text3);
+  background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+  border-radius: 999px; padding: 0.15rem 0.55rem;
+}
+.goal-body-actions { display: flex; gap: 0.5rem; margin-top: 0.875rem; }
+
+/* Progress slider */
+.goal-progress-edit { display: flex; align-items: center; gap: 0.75rem; margin: 0.5rem 0; }
+.karma-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.08);
+  outline: none;
+}
+.karma-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--karma);
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(244,114,182,0.4);
+}
+
+/* Add milestone inline form */
+.ms-add-form { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.ms-add-form input { flex: 1; }
+
+/* ── Progress Tab — Habit Heatmap ────────────────────────── */
+.heatmap-section { margin-bottom: 2rem; }
+.heatmap-habit-name {
+  font-size: 0.8rem; font-weight: 600; color: var(--text2);
+  margin-bottom: 0.45rem; display: flex; align-items: center; gap: 0.5rem;
+}
+.heatmap-grid {
+  display: flex; flex-direction: column; gap: 3px;
+}
+.heatmap-weeks { display: flex; gap: 3px; }
+.heatmap-day {
+  width: 13px; height: 13px; border-radius: 2px;
+  background: rgba(255,255,255,0.05);
+  transition: background 0.15s;
+  cursor: default;
+  flex-shrink: 0;
+}
+.heatmap-day.done { background: var(--karma); }
+.heatmap-day.today { box-shadow: 0 0 0 1.5px rgba(244,114,182,0.7); }
+.heatmap-month-labels {
+  display: flex; gap: 3px; margin-bottom: 2px;
+  font-size: 0.62rem; color: var(--text3); padding-left: 0;
+}
+.heatmap-month-label { white-space: nowrap; }
+
+/* ── Goal summary stats ─────────────────────────────────── */
+.goal-stats-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 0.625rem; margin-bottom: 1.75rem;
+}
+.goal-stat-card {
+  background: rgba(255,255,255,0.025); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 0.875rem;
+  text-align: center;
+}
+.goal-stat-value { font-size: 1.5rem; font-weight: 700; color: var(--karma); }
+.goal-stat-label { font-size: 0.7rem; color: var(--text3); margin-top: 0.15rem; }
+
+/* ── Goal form ──────────────────────────────────────────── */
+.goal-form-panel {
+  border: 1px solid rgba(244,114,182,0.25);
+  border-radius: var(--r);
+  background: rgba(244,114,182,0.04);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.goal-form-panel h4 { margin: 0 0 1rem; font-size: 0.9rem; color: var(--text); }
+.goal-links-editor { display: flex; flex-direction: column; gap: 0.4rem; }
+.goal-link-row { display: grid; grid-template-columns: 1fr 1.4fr auto; gap: 0.4rem; align-items: center; }
+.goal-link-row button { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 1rem; padding: 0.25rem; }
+.goal-link-row button:hover { color: var(--karma); }

@@ -71,6 +71,16 @@ public class TransactionsController : ControllerBase
         return Ok(transactions);
     }
 
+    [HttpPatch("{id}/category")]
+    public async Task<IActionResult> UpdateCategory(string id, [FromBody] string? category)
+    {
+        var t = await _db.Transactions.FindAsync(id);
+        if (t is null) return NotFound();
+        t.Category = string.IsNullOrWhiteSpace(category) ? null : category.Trim();
+        await _db.SaveChangesAsync();
+        return Ok(new { id, category = t.Category });
+    }
+
     [HttpGet("{id}")]
     public async Task<ActionResult<TransactionDto>> GetById(string id)
     {

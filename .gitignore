@@ -26,3 +26,9 @@
 Thumbs.db
 *.swp
 *.swo
+
+# FUSE filesystem leftovers (deleted-but-open file copies, not source)
+.fuse_hidden*
+
+# Third-party MCP clone (has its own git repo; add as a submodule if needed)
+mfp-mcp/

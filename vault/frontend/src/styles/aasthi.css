@@ -143,6 +143,79 @@
   max-width: 240px;
 }
 
+/* ── Tasks ── */
+.aasthi-task-filters {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin-bottom: 1rem; flex-wrap: wrap;
+}
+.aasthi-filter-btn {
+  font-size: 0.72rem; font-weight: 600; font-family: inherit;
+  padding: 0.3rem 0.875rem; border-radius: 99px; cursor: pointer;
+  background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+  color: var(--text3); transition: all 0.15s;
+}
+.aasthi-filter-btn:hover { border-color: var(--aasthi); color: var(--text2); }
+.aasthi-filter-btn.active {
+  background: rgba(168,85,247,0.1); border-color: rgba(168,85,247,0.35);
+  color: var(--aasthi);
+}
+
+.aasthi-task-form { margin-bottom: 1.25rem; }
+
+.aasthi-task-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.aasthi-task-card {
+  display: flex; align-items: flex-start; gap: 0.75rem;
+  background: rgba(13,22,46,0.8); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: 0.875rem 1rem;
+  transition: border-color 0.2s;
+}
+.aasthi-task-card.overdue { border-color: rgba(232,68,68,0.3); }
+.aasthi-task-card.done { opacity: 0.6; }
+
+.aasthi-task-left { flex-shrink: 0; padding-top: 0.1rem; }
+.aasthi-task-check {
+  width: 20px; height: 20px; border-radius: 50%; cursor: pointer;
+  border: 2px solid var(--border2); background: transparent;
+  color: var(--aasthi); font-size: 0.7rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.aasthi-task-check:hover { border-color: var(--aasthi); }
+.aasthi-task-check.checked {
+  background: rgba(168,85,247,0.15); border-color: var(--aasthi);
+}
+
+.aasthi-task-body { flex: 1; min-width: 0; }
+.aasthi-task-title-row {
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+  margin-bottom: 0.2rem;
+}
+.aasthi-task-title { font-size: 0.88rem; font-weight: 600; color: var(--text); }
+.aasthi-task-title.struck { text-decoration: line-through; color: var(--text3); }
+.aasthi-task-priority {
+  font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.aasthi-task-source {
+  font-size: 0.58rem; font-weight: 600; text-transform: uppercase;
+  padding: 0.1rem 0.4rem; border-radius: 4px;
+  background: rgba(79,158,248,0.1); color: #4f9ef8;
+  letter-spacing: 0.04em;
+}
+.aasthi-task-desc {
+  font-size: 0.76rem; color: var(--text2); line-height: 1.5;
+  margin-bottom: 0.3rem;
+}
+.aasthi-task-meta {
+  display: flex; gap: 0.75rem; font-size: 0.68rem; color: var(--text3);
+}
+.aasthi-task-status-badge {
+  padding: 0.05rem 0.4rem; border-radius: 4px;
+  background: rgba(212,168,67,0.1); color: #d4a843;
+  font-weight: 600; font-size: 0.6rem;
+}
+
 @media (max-width: 860px) {
   .aasthi-form-grid { grid-template-columns: 1fr 1fr; }
   .aasthi-form-span2 { grid-column: span 2; }

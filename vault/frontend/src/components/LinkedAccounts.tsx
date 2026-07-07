@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { plaidApi } from '@/services/api';
 
 interface LinkedItem {
   id: string;
@@ -17,7 +17,7 @@ export default function LinkedAccounts({ refreshKey }: Props) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    axios.get('/api/plaid/items')
+    plaidApi.getItems()
       .then(res => setItems(res.data))
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -25,7 +25,7 @@ export default function LinkedAccounts({ refreshKey }: Props) {
 
   const handleUnlink = async (id: string, name: string) => {
     if (!window.confirm(`Unlink ${name}? This removes all associated accounts and data.`)) return;
-    await axios.delete(`/api/plaid/items/${id}`);
+    await plaidApi.unlinkItem(id);
     setItems(prev => prev.filter(i => i.id !== id));
   };
 

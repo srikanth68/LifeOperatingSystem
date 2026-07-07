@@ -1,198 +1,467 @@
-import { useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { authHeaders } from '../services/auth';
+import { ApiUnreachable } from '../components/ApiUnreachable';
+import KnowledgeGraph from '../components/KnowledgeGraph';
+import '../styles/northstar.css';
 import '../styles/modules.css';
 
-type Page = 'graph' | 'notes' | 'library' | 'explore';
+const API = 'http://localhost:5500';
+const af = (url: string, init?: RequestInit) => fetch(url, { ...init, headers: { ...authHeaders(), ...init?.headers } });
+const post = (url: string, body: unknown) => af(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+const patch = (url: string, body: unknown) => af(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+const put = (url: string, body: unknown) => af(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+const del = (url: string) => af(url, { method: 'DELETE' });
 
-const TABS: { id: Page; label: string }[] = [
-  { id: 'graph',   label: 'Knowledge Graph' },
-  { id: 'notes',   label: 'Notes' },
-  { id: 'library', label: 'Library' },
-  { id: 'explore', label: 'Explore' },
+type Page = 'brain' | 'actions' | 'knowledge' | 'facts' | 'insights';
+
+const TABS: { id: Page; label: string; icon: string }[] = [
+  { id: 'brain',     label: 'Brain',     icon: '🧠' },
+  { id: 'actions',   label: 'Actions',   icon: '⚡' },
+  { id: 'knowledge', label: 'Knowledge', icon: '📚' },
+  { id: 'facts',     label: 'Profile',   icon: '👤' },
+  { id: 'insights',  label: 'Insights',  icon: '💡' },
 ];
 
 const MC = 'var(--northstar)';
 const style = { '--mc': MC } as React.CSSProperties;
 
-function Icon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10"/>
-      <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
-    </svg>
-  );
-}
-
-/* Pre-calculated node positions (center (300,185), radius 125) */
-const NODES = [
-  { id: 0, x: 300, y: 60,  label: 'Health',      color: '#06c8a0', r: 20 },
-  { id: 1, x: 388, y: 97,  label: 'Trading',     color: '#4f9ef8', r: 17 },
-  { id: 2, x: 425, y: 185, label: 'Finance',     color: '#1fc87a', r: 20 },
-  { id: 3, x: 388, y: 273, label: 'Real Estate', color: '#f0a030', r: 17 },
-  { id: 4, x: 300, y: 310, label: 'Goals',       color: '#f472b6', r: 20 },
-  { id: 5, x: 212, y: 273, label: 'Learning',    color: '#d4a843', r: 17 },
-  { id: 6, x: 175, y: 185, label: 'Work',        color: '#94a3b8', r: 17 },
-  { id: 7, x: 212, y: 97,  label: 'Ideas',       color: '#a855f7', r: 20 },
-];
-const CX = 300, CY = 185;
-
-const INTER_EDGES = [
-  [0, 4], [1, 2], [2, 3], [3, 4], [4, 5], [5, 7], [7, 6], [6, 2], [0, 6],
-];
-
-/* Label placement offsets */
-const LABEL_OFFSET: Record<number, { dx: number; dy: number; anchor: string }> = {
-  0: { dx: 0,    dy: -28, anchor: 'middle' },
-  1: { dx: 28,   dy: -10, anchor: 'start'  },
-  2: { dx: 32,   dy: 4,   anchor: 'start'  },
-  3: { dx: 28,   dy: 16,  anchor: 'start'  },
-  4: { dx: 0,    dy: 32,  anchor: 'middle' },
-  5: { dx: -28,  dy: 16,  anchor: 'end'    },
-  6: { dx: -32,  dy: 4,   anchor: 'end'    },
-  7: { dx: -28,  dy: -10, anchor: 'end'    },
+const SOURCE_COLORS: Record<string, string> = {
+  vault: '#1fc87a', vitara: '#06c8a0', aasthi: '#f0a030',
+  san: '#a855f7', sutra: '#4f9ef8', manual: '#94a3b8',
+};
+const MODULE_LABELS: Record<string, string> = {
+  vault: 'Vault', vitara: 'Vitara', aasthi: 'Aasthi',
+  san: 'San', sutra: 'Sutra',
 };
 
-function KnowledgeGraph() {
-  const [hoveredNode, setHoveredNode] = useState<number | null>(null);
-
-  return (
-    <div style={style}>
-      <div className="ns-graph-wrap">
-        <svg viewBox="20 35 560 320" className="ns-graph">
-          <defs>
-            <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="4" result="blur"/>
-              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-            </filter>
-            <radialGradient id="center-grad" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#d4a843" stopOpacity="0.6"/>
-              <stop offset="100%" stopColor="#d4a843" stopOpacity="0.1"/>
-            </radialGradient>
-          </defs>
-
-          {/* Center → peripheral edges */}
-          {NODES.map(n => (
-            <line
-              key={`c-${n.id}`}
-              x1={CX} y1={CY} x2={n.x} y2={n.y}
-              stroke="rgba(212,168,67,0.14)"
-              strokeWidth="1.5"
-              strokeDasharray="5 4"
-              className="ns-edge-center"
-              style={{ animationDelay: `${n.id * 0.4}s` }}
-            />
-          ))}
-
-          {/* Inter-node edges */}
-          {INTER_EDGES.map(([a, b], i) => (
-            <line
-              key={`e-${i}`}
-              x1={NODES[a].x} y1={NODES[a].y}
-              x2={NODES[b].x} y2={NODES[b].y}
-              stroke="rgba(255,255,255,0.05)"
-              strokeWidth="1"
-            />
-          ))}
-
-          {/* Peripheral nodes */}
-          {NODES.map(n => {
-            const lbl = LABEL_OFFSET[n.id];
-            const hov = hoveredNode === n.id;
-            return (
-              <g
-                key={n.id}
-                transform={`translate(${n.x},${n.y})`}
-                style={{ cursor: 'pointer' }}
-                onMouseEnter={() => setHoveredNode(n.id)}
-                onMouseLeave={() => setHoveredNode(null)}
-              >
-                {hov && <circle r={n.r + 8} fill={n.color} opacity="0.12" className="ns-pulse-ring"/>}
-                <circle r={n.r} fill={n.color + '1a'} stroke={n.color} strokeWidth={hov ? 1.75 : 1} filter={hov ? 'url(#glow)' : undefined}/>
-                <circle r={n.r * 0.42} fill={n.color} opacity={hov ? 0.9 : 0.65}/>
-                <text
-                  x={lbl.dx} y={lbl.dy + 4}
-                  textAnchor={lbl.anchor}
-                  fill={hov ? n.color : '#4a6280'}
-                  fontSize="10"
-                  fontWeight={hov ? '600' : '400'}
-                  fontFamily="Inter, sans-serif"
-                  style={{ transition: 'fill 0.15s' }}
-                >
-                  {n.label}
-                </text>
-              </g>
-            );
-          })}
-
-          {/* Central YOU node */}
-          <g transform={`translate(${CX},${CY})`}>
-            <circle r="36" fill="url(#center-grad)" opacity="0.4"/>
-            <circle r="26" fill="rgba(212,168,67,0.15)" stroke="rgba(212,168,67,0.55)" strokeWidth="1.5"/>
-            <circle r="12" fill="rgba(212,168,67,0.5)"/>
-            <text y="42" textAnchor="middle" fill="#d4a843" fontSize="10" fontWeight="700" fontFamily="Inter, sans-serif" letterSpacing="0.12em">MAAYA</text>
-          </g>
-        </svg>
-      </div>
-
-      <div className="ns-legend">
-        {NODES.map(n => (
-          <div key={n.id} className="ns-legend-item">
-            <span className="ns-legend-dot" style={{ background: n.color }}/>
-            {n.label}
-          </div>
-        ))}
-      </div>
-
-      <div className="card" style={{ marginTop: '0.5rem' }}>
-        <h3>About NorthStar</h3>
-        <p style={{ fontSize: '0.875rem', color: 'var(--text2)', lineHeight: 1.7, marginTop: '0.5rem' }}>
-          NorthStar is your personal knowledge graph — a living neural network of everything you know and care about. Connect ideas, notes, books, and concepts. Discover non-obvious links between your health, finances, goals, and work.
-        </p>
-      </div>
-    </div>
-  );
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function EmptyPage({ title, desc }: { title: string; desc: string }) {
+// ── BRAIN (central context view) ──
+
+interface ModuleStatus { name: string; lastSync: string; healthy: boolean; error: string | null; snapshot: unknown }
+interface ContextData {
+  generatedAt: string;
+  user: Record<string, string>;
+  modules: ModuleStatus[];
+  pendingActions: { id: string; source: string; category: string; title: string; priority: number; dueDate: string | null }[];
+  activeInsights: { id: string; title: string; body: string; generatedBy: string }[];
+  recentKnowledge: { source: string; topic: string; summary: string; day: string | null; createdAt: string }[];
+}
+
+function BrainPage() {
+  const [ctx, setCtx] = useState<ContextData | null>(null);
+  const [err, setErr] = useState('');
+  const [syncing, setSyncing] = useState(false);
+
+  const load = useCallback(() => {
+    af(`${API}/api/context`).then(r => { if (!r.ok) throw new Error(); return r.json(); }).then(d => { setCtx(d); setErr(''); }).catch(() => setErr('unreachable'));
+  }, []);
+  useEffect(load, [load]);
+
+  const sync = async () => {
+    setSyncing(true);
+    try { await post(`${API}/api/context/sync`, {}); load(); }
+    catch { /* */ }
+    setSyncing(false);
+  };
+
+  if (err) return <ApiUnreachable name="NorthStar" port={5500} mc="var(--northstar)" onRetry={() => { setErr(''); load(); }} />;
+  if (!ctx) return <div className="ns-loading">Loading brain...</div>;
+
+  const mods = ctx.modules ?? [];
+  const healthy = mods.filter(m => m.healthy).length;
+
   return (
-    <div style={style}>
-      <div className="module-empty">
-        <div className="module-empty-icon"><Icon /></div>
-        <h2>{title}</h2>
-        <p>{desc}</p>
-        <div className="module-features">
-          {[
-            { icon: '🔗', text: 'Bi-directional links between notes and concepts' },
-            { icon: '🏷️', text: 'Tags, properties, and custom attributes' },
-            { icon: '🔍', text: 'Full-text search across your entire knowledge base' },
-            { icon: '📌', text: 'Pin important nodes to the graph view' },
-          ].map(f => (
-            <div key={f.text} className="module-feature-item" style={style}>
-              <span className="feat-icon">{f.icon}</span>
-              <span>{f.text}</span>
+    <div>
+      {/* Header */}
+      <div className="ns-brain-header">
+        <div>
+          <div className="ns-brain-title">NorthStar Brain</div>
+          <div className="ns-brain-sub">Context snapshot · {new Date(ctx.generatedAt).toLocaleTimeString()}</div>
+        </div>
+        <button className="ns-sync-btn" onClick={sync} disabled={syncing}>
+          {syncing ? 'Syncing...' : '🔄 Sync All Modules'}
+        </button>
+      </div>
+
+      {/* Knowledge graph visualization */}
+      <KnowledgeGraph
+        modules={mods}
+        knowledge={ctx.recentKnowledge}
+        actions={ctx.pendingActions}
+        facts={ctx.user}
+      />
+
+      {/* Module health grid */}
+      <div className="ns-section-label">Module Health</div>
+      <div className="ns-module-grid">
+        {['vault','vitara','aasthi','san','sutra'].map(mod => {
+          const m = mods.find(x => x.name === mod);
+          return (
+            <div key={mod} className={`ns-module-card ${m?.healthy ? 'ns-healthy' : ''}`}>
+              <div className="ns-module-dot" style={{ background: SOURCE_COLORS[mod] }}/>
+              <div className="ns-module-info">
+                <div className="ns-module-name">{MODULE_LABELS[mod]}</div>
+                <div className="ns-module-status">
+                  {m ? (m.healthy ? `Synced ${timeAgo(m.lastSync)}` : `Error: ${m.error}`) : 'No data'}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        <div className="ns-module-card ns-module-summary">
+          <div className="ns-module-big">{healthy}/{mods.length}</div>
+          <div className="ns-module-status">modules online</div>
+        </div>
+      </div>
+
+      {/* Pending actions preview */}
+      {ctx.pendingActions.length > 0 && (
+        <>
+          <div className="ns-section-label">Pending Actions <span className="ns-badge">{ctx.pendingActions.length}</span></div>
+          <div className="ns-action-list">
+            {ctx.pendingActions.slice(0, 5).map(a => (
+              <div key={a.id} className="ns-action-row">
+                <span className="ns-action-priority" data-p={a.priority}>P{a.priority}</span>
+                <span className="ns-action-source" style={{ color: SOURCE_COLORS[a.source] }}>{a.source}</span>
+                <span className="ns-action-title">{a.title}</span>
+                {a.dueDate && <span className="ns-action-due">due {a.dueDate}</span>}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* User profile facts */}
+      {Object.keys(ctx.user).length > 0 && (
+        <>
+          <div className="ns-section-label">User Profile</div>
+          <div className="ns-facts-grid">
+            {Object.entries(ctx.user).slice(0, 8).map(([k, v]) => (
+              <div key={k} className="ns-fact-chip">
+                <span className="ns-fact-key">{k}</span>
+                <span className="ns-fact-val">{v}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Recent knowledge feed */}
+      <div className="ns-section-label">Recent Knowledge <span className="ns-badge">{ctx.recentKnowledge.length}</span></div>
+      {ctx.recentKnowledge.length > 0 ? (
+        <div className="ns-knowledge-feed">
+          {ctx.recentKnowledge.slice(0, 10).map((k, i) => (
+            <div key={i} className="ns-feed-item">
+              <span className="ns-feed-dot" style={{ background: SOURCE_COLORS[k.source] }}/>
+              <div className="ns-feed-body">
+                <div className="ns-feed-header">
+                  <span className="ns-feed-source">{k.source}</span>
+                  <span className="ns-feed-topic">{k.topic}</span>
+                  <span className="ns-feed-time">{timeAgo(k.createdAt)}</span>
+                </div>
+                <div className="ns-feed-summary">{k.summary}</div>
+              </div>
             </div>
           ))}
         </div>
-        <button className="btn-primary" disabled>Coming Soon</button>
+      ) : (
+        <div className="ns-empty-mini">No knowledge entries yet. Click "Sync All Modules" to pull data.</div>
+      )}
+    </div>
+  );
+}
+
+// ── ACTIONS ──
+
+interface ActionItem {
+  id: string; source: string; category: string; title: string; description: string | null;
+  priority: number; dueDate: string | null; status: string; resolvedBy: string | null;
+  createdAt: string; completedAt: string | null;
+}
+
+function ActionsPage() {
+  const [actions, setActions] = useState<ActionItem[]>([]);
+  const [filter, setFilter] = useState('pending');
+  const [title, setTitle] = useState('');
+  const [desc, setDesc] = useState('');
+  const [priority, setPriority] = useState('3');
+  const [category, setCategory] = useState('task');
+  const [due, setDue] = useState('');
+
+  const load = useCallback(() => {
+    af(`${API}/api/actions?status=${filter}&limit=50`).then(r => r.json()).then(setActions).catch(() => {});
+  }, [filter]);
+  useEffect(load, [load]);
+
+  const create = async () => {
+    if (!title.trim()) return;
+    await post(`${API}/api/actions`, { title, description: desc || null, priority: parseInt(priority), category, dueDate: due || null, source: 'manual' });
+    setTitle(''); setDesc(''); setDue('');
+    load();
+  };
+
+  const updateStatus = async (id: string, status: string) => {
+    await patch(`${API}/api/actions/${id}`, { status });
+    load();
+  };
+
+  return (
+    <div>
+      <div className="ns-section-label">Add Action</div>
+      <div className="ns-action-form">
+        <input className="ns-input" placeholder="What needs to be done?" value={title} onChange={e => setTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && create()} />
+        <div className="ns-action-form-row">
+          <input className="ns-input ns-input-sm" placeholder="Details (optional)" value={desc} onChange={e => setDesc(e.target.value)} />
+          <select className="ns-select" value={priority} onChange={e => setPriority(e.target.value)}>
+            <option value="1">P1 Critical</option>
+            <option value="2">P2 High</option>
+            <option value="3">P3 Medium</option>
+            <option value="4">P4 Low</option>
+          </select>
+          <select className="ns-select" value={category} onChange={e => setCategory(e.target.value)}>
+            {['task','reminder','bill','health','document','follow-up'].map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <input className="ns-input ns-input-date" type="date" value={due} onChange={e => setDue(e.target.value)} />
+          <button className="ns-btn" onClick={create} disabled={!title.trim()}>Add</button>
+        </div>
+      </div>
+
+      <div className="ns-filter-bar">
+        {['pending','completed','dismissed','all'].map(f => (
+          <button key={f} className={`ns-filter-btn ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>{f}</button>
+        ))}
+      </div>
+
+      <div className="ns-action-list">
+        {actions.map(a => (
+          <div key={a.id} className={`ns-action-row ns-action-${a.status}`}>
+            <span className="ns-action-priority" data-p={a.priority}>P{a.priority}</span>
+            <span className="ns-action-source" style={{ color: SOURCE_COLORS[a.source] || '#94a3b8' }}>{a.source}</span>
+            <div className="ns-action-body">
+              <div className="ns-action-title">{a.title}</div>
+              {a.description && <div className="ns-action-desc">{a.description}</div>}
+            </div>
+            {a.dueDate && <span className="ns-action-due">due {a.dueDate}</span>}
+            {a.status === 'pending' && (
+              <div className="ns-action-btns">
+                <button className="ns-btn-sm ns-btn-done" onClick={() => updateStatus(a.id, 'completed')}>✓</button>
+                <button className="ns-btn-sm ns-btn-dismiss" onClick={() => updateStatus(a.id, 'dismissed')}>×</button>
+              </div>
+            )}
+            {a.status !== 'pending' && <span className="ns-action-status">{a.status}</span>}
+          </div>
+        ))}
+        {actions.length === 0 && <div className="ns-empty-mini">No {filter} actions.</div>}
       </div>
     </div>
   );
 }
 
-export default function NorthStarModule() {
-  const [page, setPage] = useState<Page>('graph');
+// ── KNOWLEDGE (search + browse) ──
+
+interface KnowledgeEntry { id: string; source: string; topic: string; summary: string; day: string | null; createdAt: string }
+
+function KnowledgePage() {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<KnowledgeEntry[]>([]);
+  const [entries, setEntries] = useState<KnowledgeEntry[]>([]);
+  const [days, setDays] = useState(14);
+  const [searched, setSearched] = useState(false);
+
+  useEffect(() => {
+    af(`${API}/api/knowledge/timeline?days=${days}&limit=100`).then(r => r.json()).then(d => setEntries(d.entries ?? [])).catch(() => {});
+  }, [days]);
+
+  const search = async () => {
+    if (!query.trim()) return;
+    const resp = await af(`${API}/api/knowledge/search?q=${encodeURIComponent(query)}`);
+    const data = await resp.json();
+    setResults(data.entries ?? []);
+    setSearched(true);
+  };
+
+  const display = searched ? results : entries;
+
   return (
     <div>
-      <nav className="module-subnav" style={style}>
+      <div className="ns-search-bar">
+        <input className="ns-search-input" placeholder="Search knowledge base..." value={query}
+          onChange={e => { setQuery(e.target.value); if (!e.target.value) setSearched(false); }}
+          onKeyDown={e => e.key === 'Enter' && search()} />
+        <button className="ns-btn" onClick={search}>Search</button>
+      </div>
+
+      {!searched && (
+        <div className="ns-filter-bar">
+          {[7,14,30,90].map(d => (
+            <button key={d} className={`ns-filter-btn ${days === d ? 'active' : ''}`} onClick={() => setDays(d)}>{d}d</button>
+          ))}
+        </div>
+      )}
+
+      {searched && <div className="ns-section-label">Results for "{query}" <span className="ns-badge">{results.length}</span></div>}
+
+      <div className="ns-knowledge-feed">
+        {display.map((k, i) => (
+          <div key={k.id || i} className="ns-feed-item">
+            <span className="ns-feed-dot" style={{ background: SOURCE_COLORS[k.source] }}/>
+            <div className="ns-feed-body">
+              <div className="ns-feed-header">
+                <span className="ns-feed-source">{k.source}</span>
+                <span className="ns-feed-topic">{k.topic}</span>
+                {k.day && <span className="ns-feed-day">{k.day}</span>}
+                <span className="ns-feed-time">{timeAgo(k.createdAt)}</span>
+              </div>
+              <div className="ns-feed-summary">{k.summary}</div>
+            </div>
+          </div>
+        ))}
+        {display.length === 0 && <div className="ns-empty-mini">{searched ? `No results for "${query}"` : 'No entries yet.'}</div>}
+      </div>
+    </div>
+  );
+}
+
+// ── FACTS (user profile) ──
+
+interface UserFact { key: string; value: string; source: string; updatedAt: string }
+
+function FactsPage() {
+  const [facts, setFacts] = useState<UserFact[]>([]);
+  const [newKey, setNewKey] = useState('');
+  const [newVal, setNewVal] = useState('');
+
+  const load = useCallback(() => {
+    af(`${API}/api/facts`).then(r => r.json()).then(setFacts).catch(() => {});
+  }, []);
+  useEffect(load, [load]);
+
+  const save = async () => {
+    if (!newKey.trim() || !newVal.trim()) return;
+    await put(`${API}/api/facts/${encodeURIComponent(newKey.trim())}`, { value: newVal.trim(), source: 'manual' });
+    setNewKey(''); setNewVal('');
+    load();
+  };
+
+  const remove = async (key: string) => {
+    await del(`${API}/api/facts/${encodeURIComponent(key)}`);
+    load();
+  };
+
+  return (
+    <div>
+      <div className="ns-section-label">User Profile Facts</div>
+      <p className="ns-section-desc">Persistent facts about you that San's AI uses for reasoning. Things like your name, preferences, routines, goals.</p>
+
+      <div className="ns-fact-form">
+        <input className="ns-input" placeholder="Key (e.g. name, diet, wake_time)" value={newKey} onChange={e => setNewKey(e.target.value)} />
+        <input className="ns-input" placeholder="Value" value={newVal} onChange={e => setNewVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && save()} />
+        <button className="ns-btn" onClick={save} disabled={!newKey.trim() || !newVal.trim()}>Save</button>
+      </div>
+
+      <div className="ns-facts-list">
+        {facts.map(f => (
+          <div key={f.key} className="ns-fact-row">
+            <span className="ns-fact-key">{f.key}</span>
+            <span className="ns-fact-val">{f.value}</span>
+            <span className="ns-fact-source">{f.source}</span>
+            <button className="ns-btn-sm ns-btn-dismiss" onClick={() => remove(f.key)}>×</button>
+          </div>
+        ))}
+        {facts.length === 0 && <div className="ns-empty-mini">No facts stored. Add your name, preferences, and routines above.</div>}
+      </div>
+    </div>
+  );
+}
+
+// ── INSIGHTS ──
+
+interface Insight { id: string; title: string; body: string; generatedBy: string; dismissed: boolean; createdAt: string }
+
+function InsightsPage() {
+  const [insights, setInsights] = useState<Insight[]>([]);
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+
+  const load = useCallback(() => {
+    af(`${API}/api/insights`).then(r => r.json()).then(setInsights).catch(() => {});
+  }, []);
+  useEffect(load, [load]);
+
+  const create = async () => {
+    if (!title.trim() || !body.trim()) return;
+    await post(`${API}/api/insights`, { title, body });
+    setTitle(''); setBody('');
+    load();
+  };
+
+  const dismiss = async (id: string) => {
+    await patch(`${API}/api/insights/${id}/dismiss`, {});
+    load();
+  };
+
+  return (
+    <div>
+      <div className="ns-section-label">Add Insight</div>
+      <div className="ns-insight-form">
+        <input className="ns-input" placeholder="Insight title" value={title} onChange={e => setTitle(e.target.value)} />
+        <textarea className="ns-textarea" placeholder="What pattern did you notice?" rows={3} value={body} onChange={e => setBody(e.target.value)} />
+        <button className="ns-btn" onClick={create} disabled={!title.trim() || !body.trim()}>Add Insight</button>
+      </div>
+
+      <div className="ns-section-label">Active Insights</div>
+      <div className="ns-insights-list">
+        {insights.map(i => (
+          <div key={i.id} className="ns-insight-card">
+            <div className="ns-insight-header">
+              <span className="ns-insight-title">{i.title}</span>
+              <span className="ns-insight-badge">{i.generatedBy}</span>
+              <button className="ns-btn-sm ns-btn-dismiss" onClick={() => dismiss(i.id)}>×</button>
+            </div>
+            <div className="ns-insight-body">{i.body}</div>
+            <div className="ns-insight-time">{timeAgo(i.createdAt)}</div>
+          </div>
+        ))}
+        {insights.length === 0 && <div className="ns-empty-mini">No insights yet. Add one manually or wait for AI-generated ones.</div>}
+      </div>
+    </div>
+  );
+}
+
+// ── ROOT ──
+
+export default function NorthStarModule() {
+  const [page, setPage] = useState<Page>('brain');
+
+  return (
+    <div style={style}>
+      <div className="m-header">
+        <h1 className="m-title">NorthStar</h1>
+        <p className="m-subtitle">Knowledge Center & Brain</p>
+      </div>
+      <nav className="m-tabs">
         {TABS.map(t => (
-          <button key={t.id} className={`module-tab ${page === t.id ? 'active' : ''}`} onClick={() => setPage(t.id)}>
-            {t.label}
+          <button key={t.id} className={`m-tab ${page === t.id ? 'active' : ''}`} onClick={() => setPage(t.id)}>
+            {t.icon} {t.label}
           </button>
         ))}
       </nav>
-      {page === 'graph'   && <KnowledgeGraph />}
-      {page === 'notes'   && <EmptyPage title="Notes" desc="Capture ideas, insights, and knowledge. Connect them to modules, goals, and each other." />}
-      {page === 'library' && <EmptyPage title="Library" desc="Books you've read, courses you've taken, and resources you've saved — with key takeaways." />}
-      {page === 'explore' && <EmptyPage title="Explore" desc="Discover connections between your notes, find knowledge gaps, and get AI-suggested links." />}
+      <div className="m-content">
+        {page === 'brain'     && <BrainPage />}
+        {page === 'actions'   && <ActionsPage />}
+        {page === 'knowledge' && <KnowledgePage />}
+        {page === 'facts'     && <FactsPage />}
+        {page === 'insights'  && <InsightsPage />}
+      </div>
     </div>
   );
 }

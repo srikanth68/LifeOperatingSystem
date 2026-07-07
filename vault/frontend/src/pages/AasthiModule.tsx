@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { QueryClient, QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { makeModuleQueryClient } from '../services/moduleQuery';
+import { authHeaders } from '../services/auth';
 import '../styles/modules.css';
 import '../styles/aasthi.css';
 
@@ -7,13 +9,13 @@ const API = 'http://localhost:5200';
 const MC = 'var(--aasthi)';
 const style = { '--mc': MC } as React.CSSProperties;
 
-const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 60_000, refetchOnWindowFocus: false } } });
+const qc = makeModuleQueryClient(60_000);
 
-const get = (url: string) => fetch(url).then(r => { if (!r.ok) throw new Error(r.status.toString()); return r.json(); });
+const get = (url: string) => fetch(url, { headers: authHeaders() }).then(r => { if (!r.ok) throw new Error(r.status.toString()); return r.json(); });
 const send = (url: string, method: string, body?: unknown) =>
   fetch(url, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    headers: { ...authHeaders(), ...(body ? { 'Content-Type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   }).then(r => { if (!r.ok) throw new Error(r.status.toString()); return r.status === 204 ? null : r.json(); });
 
@@ -43,6 +45,11 @@ interface PropertyDetail extends Omit<Property, 'contactCount' | 'documentCount'
 interface PortfolioSummary {
   propertyCount: number; totalPurchasePrice: number; totalCurrentValue: number;
   totalProfit: number; totalProfitPct: number | null;
+}
+interface TaskItem {
+  id: string; propertyId: string; title: string; description: string;
+  dueDate: string | null; status: string; priority: string; source: string;
+  createdAt: string; completedAt: string | null;
 }
 
 const fmtMoney = (n: number) => '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 });
@@ -210,7 +217,7 @@ function DocumentsSection({ propertyId, documents }: { propertyId: string; docum
       const fd = new FormData();
       Array.from(files!).forEach(f => fd.append('files', f));
       fd.append('category', category);
-      return fetch(`${API}/api/properties/${propertyId}/documents`, { method: 'POST', body: fd })
+      return fetch(`${API}/api/properties/${propertyId}/documents`, { method: 'POST', headers: authHeaders(), body: fd })
         .then(r => { if (!r.ok) throw new Error(r.status.toString()); return r.json(); });
     },
     onSuccess: () => { setFiles(null); invalidate(); },
@@ -441,6 +448,145 @@ function Properties() {
   );
 }
 
+const PRIORITY_COLOR: Record<string, string> = {
+  urgent: '#e84444', high: '#ff8c32', medium: '#d4a843', low: '#7a96c0',
+};
+const STATUS_LABELS: Record<string, string> = {
+  pending: 'To Do', in_progress: 'In Progress', completed: 'Done', cancelled: 'Cancelled',
+};
+
+function TasksPage() {
+  const qClient = useQueryClient();
+  const [filter, setFilter] = useState<string>('');
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ title: '', description: '', dueDate: '', priority: 'medium', propertyId: '' });
+
+  const { data: tasks, isPending } = useQuery<TaskItem[]>({
+    queryKey: ['tasks', filter],
+    queryFn: () => get(`${API}/api/tasks${filter ? `?status=${filter}` : ''}`),
+  });
+  const { data: properties } = useQuery<Property[]>({ queryKey: ['properties'], queryFn: () => get(`${API}/api/properties`) });
+
+  const invalidate = () => qClient.invalidateQueries({ queryKey: ['tasks'] });
+
+  const createTask = useMutation({
+    mutationFn: () => send(`${API}/api/tasks?propertyId=${form.propertyId}`, 'POST', {
+      title: form.title, description: form.description || null,
+      dueDate: form.dueDate || null, priority: form.priority,
+    }),
+    onSuccess: () => { setAdding(false); setForm({ title: '', description: '', dueDate: '', priority: 'medium', propertyId: '' }); invalidate(); },
+  });
+  const updateStatus = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) => send(`${API}/api/tasks/${id}/status`, 'PATCH', { status }),
+    onSuccess: invalidate,
+  });
+  const deleteTask = useMutation({
+    mutationFn: (id: string) => send(`${API}/api/tasks/${id}`, 'DELETE'),
+    onSuccess: invalidate,
+  });
+
+  const propMap = new Map(properties?.map(p => [p.id, p.address]) ?? []);
+  const overdue = (t: TaskItem) => t.dueDate && t.status !== 'completed' && t.status !== 'cancelled' && new Date(t.dueDate) < new Date();
+
+  return (
+    <div style={style}>
+      <div className="aasthi-task-filters">
+        {['', 'pending', 'in_progress', 'completed'].map(s => (
+          <button key={s} className={`aasthi-filter-btn ${filter === s ? 'active' : ''}`} onClick={() => setFilter(s)}>
+            {s ? (STATUS_LABELS[s] ?? s) : 'All'}
+          </button>
+        ))}
+        <button className="btn-primary" style={{ marginLeft: 'auto' }} onClick={() => setAdding(a => !a)}>
+          {adding ? 'Cancel' : '+ New Task'}
+        </button>
+      </div>
+
+      {adding && (
+        <div className="card aasthi-task-form">
+          <div className="aasthi-form-grid">
+            <div className="aasthi-form-group aasthi-form-span2">
+              <label>Title</label>
+              <input placeholder="e.g. Renew tenant lease" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+            </div>
+            <div className="aasthi-form-group aasthi-form-span2">
+              <label>Description</label>
+              <input placeholder="Details (optional)" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+            </div>
+            <div className="aasthi-form-group">
+              <label>Property</label>
+              <select value={form.propertyId} onChange={e => setForm(f => ({ ...f, propertyId: e.target.value }))}>
+                <option value="">Select property...</option>
+                {properties?.map(p => <option key={p.id} value={p.id}>{p.address}</option>)}
+              </select>
+            </div>
+            <div className="aasthi-form-group">
+              <label>Due Date</label>
+              <input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
+            </div>
+            <div className="aasthi-form-group">
+              <label>Priority</label>
+              <select value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+          </div>
+          <div className="aasthi-form-actions">
+            <button className="btn-primary" disabled={!form.title || !form.propertyId || createTask.isPending}
+              onClick={() => createTask.mutate()}>
+              {createTask.isPending ? 'Creating...' : 'Create Task'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isPending && <p className="text-dim">Loading tasks...</p>}
+
+      {tasks && tasks.length === 0 && !adding && (
+        <div className="module-empty">
+          <h2>No tasks yet</h2>
+          <p>Create tasks for your properties — track lease renewals, inspections, repairs, and more. SAN will eventually create tasks here automatically from your emails and events.</p>
+        </div>
+      )}
+
+      <div className="aasthi-task-list">
+        {tasks?.map(t => (
+          <div key={t.id} className={`aasthi-task-card ${overdue(t) ? 'overdue' : ''} ${t.status === 'completed' ? 'done' : ''}`}>
+            <div className="aasthi-task-left">
+              <button className={`aasthi-task-check ${t.status === 'completed' ? 'checked' : ''}`}
+                onClick={() => updateStatus.mutate({ id: t.id, status: t.status === 'completed' ? 'pending' : 'completed' })}>
+                {t.status === 'completed' ? '✓' : ''}
+              </button>
+            </div>
+            <div className="aasthi-task-body">
+              <div className="aasthi-task-title-row">
+                <span className={`aasthi-task-title ${t.status === 'completed' ? 'struck' : ''}`}>{t.title}</span>
+                <span className="aasthi-task-priority" style={{ color: PRIORITY_COLOR[t.priority] }}>{t.priority}</span>
+                {t.source !== 'manual' && <span className="aasthi-task-source">{t.source}</span>}
+              </div>
+              {t.description && <div className="aasthi-task-desc">{t.description}</div>}
+              <div className="aasthi-task-meta">
+                <span>{propMap.get(t.propertyId) ?? 'Unknown property'}</span>
+                {t.dueDate && (
+                  <span className={overdue(t) ? 'text-debt' : ''}>
+                    Due {fmtDate(t.dueDate)}
+                  </span>
+                )}
+                {t.status !== 'completed' && t.status !== 'pending' && (
+                  <span className="aasthi-task-status-badge">{STATUS_LABELS[t.status] ?? t.status}</span>
+                )}
+              </div>
+            </div>
+            <button className="btn-danger-ghost" onClick={() => deleteTask.mutate(t.id)}>x</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function EmptyPage({ title, desc }: { title: string; desc: string }) {
   return (
     <div style={style}>
@@ -453,9 +599,10 @@ function EmptyPage({ title, desc }: { title: string; desc: string }) {
   );
 }
 
-type Page = 'properties' | 'financials' | 'maintenance';
+type Page = 'properties' | 'tasks' | 'financials' | 'maintenance';
 const TABS: { id: Page; label: string }[] = [
   { id: 'properties',  label: 'Properties' },
+  { id: 'tasks',       label: 'Tasks' },
   { id: 'financials',  label: 'Financials' },
   { id: 'maintenance', label: 'Maintenance' },
 ];
@@ -472,6 +619,7 @@ function AasthiInner() {
         ))}
       </nav>
       {page === 'properties'  && <Properties />}
+      {page === 'tasks'       && <TasksPage />}
       {page === 'financials'  && <EmptyPage title="Property Financials" desc="Income, expenses, mortgage payments, and ROI breakdown per property and across the portfolio." />}
       {page === 'maintenance' && <EmptyPage title="Maintenance Log" desc="Track repairs, improvements, vendor contacts, and maintenance costs for each property." />}
     </div>

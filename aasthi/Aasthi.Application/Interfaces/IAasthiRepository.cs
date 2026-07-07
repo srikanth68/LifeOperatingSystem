@@ -17,4 +17,11 @@ public interface IAasthiRepository
     Task<PropertyDocument?> AddDocumentAsync(Guid propertyId, PropertyDocument document);
     Task<PropertyDocument?> GetDocumentAsync(Guid propertyId, Guid documentId);
     Task<bool> DeleteDocumentAsync(Guid propertyId, Guid documentId);
+
+    // Tasks
+    Task<List<PropertyTask>> GetTasksAsync(Guid? propertyId = null, string? status = null);
+    Task<PropertyTask?> GetTaskAsync(Guid taskId);
+    Task<PropertyTask> AddTaskAsync(PropertyTask task);
+    Task<bool> UpdateTaskAsync(PropertyTask task);
+    Task<bool> DeleteTaskAsync(Guid taskId);
 }

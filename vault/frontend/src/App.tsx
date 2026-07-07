@@ -9,7 +9,12 @@ import NorthStarModule from './pages/NorthStarModule';
 import KarmaModule     from './pages/KarmaModule';
 import SutraModule     from './pages/SutraModule';
 import SettingsHub     from './pages/SettingsHub';
+import Login           from './pages/Login';
+import PinPad          from './pages/PinPad';
 import CommandPalette  from './components/CommandPalette';
+import ArcReactor      from './components/ArcReactor';
+import { auth }        from './services/auth';
+import type { ProbeResult } from './services/auth';
 import './styles/index.css';
 
 export type ModuleId = 'home' | 'vault' | 'vitara' | 'nexus' | 'aasthi' | 'san' | 'northstar' | 'karma' | 'sutra' | 'settings';
@@ -120,10 +125,23 @@ function SidebarItem({ id, label, color, active, onClick }: {
   );
 }
 
-function Sidebar({ active, onSelect, onOpenPalette }: {
+function BootScreen({ message, ready }: { message: string; ready?: boolean }) {
+  return (
+    <div className="boot-screen">
+      <div className={`boot-reactor ${ready ? 'boot-ready' : ''}`}>
+        <ArcReactor size={140} />
+      </div>
+      <p className="boot-text">{message}</p>
+      {!ready && <div className="boot-scanline" />}
+    </div>
+  );
+}
+
+function Sidebar({ active, onSelect, onOpenPalette, onLogout }: {
   active: ModuleId;
   onSelect: (m: ModuleId) => void;
   onOpenPalette: () => void;
+  onLogout: () => void;
 }) {
   return (
     <aside className="sidebar">
@@ -165,14 +183,34 @@ function Sidebar({ active, onSelect, onOpenPalette }: {
 
       <div className="sidebar-bottom">
         <SidebarItem id="settings" label="Settings" color="var(--text2)" active={active === 'settings'} onClick={() => onSelect('settings')} />
+        <button className="sidebar-item sidebar-logout" onClick={onLogout} title="Sign out">
+          <span className="sidebar-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </span>
+          <span>Sign Out</span>
+        </button>
       </div>
     </aside>
   );
 }
 
 export default function App() {
-  const [active, setActive]   = useState<ModuleId>('home');
-  const [palette, setPalette] = useState(false);
+  const [active, setActive]         = useState<ModuleId>('home');
+  const [palette, setPalette]       = useState(false);
+  const [authState, setAuthState]   = useState<'probing' | 'pin' | 'login' | 'greeting' | 'ready'>(
+    auth.isAuthenticated() ? 'ready' : 'probing'
+  );
+  const [probe, setProbe] = useState<ProbeResult | null>(null);
+
+  useEffect(() => {
+    if (authState !== 'probing') return;
+    auth.probe().then(p => {
+      setProbe(p);
+      setAuthState(p.trusted && p.method === 'pin' ? 'pin' : 'login');
+    });
+  }, [authState]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -184,6 +222,36 @@ export default function App() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
+
+  const greet = () => {
+    setAuthState('greeting');
+    setTimeout(() => setAuthState('ready'), 2000);
+  };
+
+  const handleLogout = async () => {
+    await auth.logout();
+    setProbe(null);
+    setAuthState('probing');
+    setActive('home');
+  };
+
+  if (authState === 'probing') {
+    return <BootScreen message="Initializing..." />;
+  }
+
+  if (authState === 'greeting') {
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    return <BootScreen message={`${greeting}, ${auth.getUsername() ?? 'Sir'}.`} ready />;
+  }
+
+  if (authState === 'pin') {
+    return <PinPad length={probe?.pinLength ?? 4} onSuccess={greet} />;
+  }
+
+  if (authState === 'login') {
+    return <Login onLogin={greet} />;
+  }
 
   const navigate = (m: ModuleId | 'home') => setActive(m as ModuleId);
 
@@ -204,7 +272,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <Sidebar active={active} onSelect={setActive} onOpenPalette={() => setPalette(true)} />
+      <Sidebar active={active} onSelect={setActive} onOpenPalette={() => setPalette(true)} onLogout={handleLogout} />
       <main className="main">
         <div className="container">{renderModule()}</div>
       </main>

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using San.Application.Interfaces;
 using San.Infrastructure.Data;
+using San.Infrastructure.Google;
 using San.Infrastructure.ModuleClients;
 using San.Infrastructure.Notifications;
 using San.Worker;
@@ -31,7 +32,9 @@ builder.Services.AddHttpClient<ITelegramNotifier, TelegramNotifier>();
 builder.Services.AddHttpClient("vault",  c => c.BaseAddress = new Uri(vaultUrl));
 builder.Services.AddHttpClient("vitara", c => c.BaseAddress = new Uri(vitaraUrl));
 builder.Services.AddHttpClient("aasthi", c => c.BaseAddress = new Uri(aasthiUrl));
+builder.Services.AddSingleton<IGoogleCalendarService, GoogleCalendarService>();
 builder.Services.AddHostedService<NotificationWorker>();
+builder.Services.AddHostedService<CalendarSyncWorker>();
 
 var host = builder.Build();
 

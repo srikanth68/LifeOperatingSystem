@@ -92,3 +92,28 @@ public record DocumentResult(
     string Category,
     DateTime UploadedAt
 );
+
+public record TaskResult(
+    Guid Id,
+    Guid PropertyId,
+    string Title,
+    string Description,
+    DateOnly? DueDate,
+    string Status,
+    string Priority,
+    string Source,
+    DateTime CreatedAt,
+    DateTime? CompletedAt
+);
+
+public record TaskUpsertRequest(
+    string Title,
+    string? Description,
+    DateOnly? DueDate,
+    string? Priority,
+    string? Source
+);
+
+public record TaskStatusUpdate(
+    string Status
+);

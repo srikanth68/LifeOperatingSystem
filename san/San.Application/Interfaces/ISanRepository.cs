@@ -23,4 +23,24 @@ public interface ISanRepository
     Task<Alert?> UpdateAlertAsync(Guid id, Action<Alert> apply);
     Task<bool> DeleteAlertAsync(Guid id);
     Task<List<Alert>> GetActiveAlertsAsync();
+
+    // Calendar
+    Task<List<CalendarEvent>> GetCalendarEventsAsync(DateTime from, DateTime to);
+    Task<CalendarEvent> UpsertCalendarEventAsync(CalendarEvent ev);
+
+    // Location
+    Task<LocationUpdate?> GetLatestLocationAsync();
+    Task<LocationUpdate> AddLocationUpdateAsync(LocationUpdate loc);
+
+    // Activity Snapshots
+    Task<ActivitySnapshot> AddActivitySnapshotAsync(ActivitySnapshot snap);
+    Task<List<ActivitySnapshot>> GetRecentActivitySnapshotsAsync(int count);
+
+    // People
+    Task<List<Person>> GetPeopleAsync(string? query = null);
+    Task<Person?> GetPersonAsync(Guid id);
+    Task<Person> AddPersonAsync(Person person);
+    Task<Person?> UpdatePersonAsync(Guid id, Action<Person> apply);
+    Task<bool> DeletePersonAsync(Guid id);
+    Task<List<Person>> GetUpcomingBirthdaysAsync(int withinDays = 30);
 }

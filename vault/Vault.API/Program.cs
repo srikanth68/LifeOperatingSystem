@@ -1,18 +1,32 @@
+using Maaya.Auth;
 using Microsoft.EntityFrameworkCore;
 using Vault.Worker.Data;
 using Vault.Worker.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var envFile = Path.Combine(Directory.GetCurrentDirectory(), "..", ".env");
+if (File.Exists(envFile))
+{
+    foreach (var line in File.ReadAllLines(envFile))
+    {
+        if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#')) continue;
+        var idx = line.IndexOf('=');
+        if (idx > 0) Environment.SetEnvironmentVariable(line[..idx].Trim(), line[(idx + 1)..].Trim());
+    }
+}
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.AddMaayaAuth(isAuthServer: true);
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins("http://localhost:3000", "http://localhost:5173")
               .AllowAnyMethod()
               .AllowAnyHeader();
     });
@@ -40,6 +54,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("AllowFrontend");
+app.UseMaayaAuth();
 app.MapControllers();
 
 app.Run();

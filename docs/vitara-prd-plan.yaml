@@ -1,0 +1,349 @@
+# Vitara AI Reasoning Architecture — Development Plan
+# Based on: Vitara-AI-Reasoning-Architecture.docx (PRD v1.0)
+# Status: Planning only — no implementation yet
+# Generated: 2026-06-20
+
+project: Vitara Longevity Intelligence
+goal: Transform Vitara from a dashboard-only Oura viewer into an AI-powered longevity intelligence platform using Claude's extended thinking for multi-step biomarker analysis
+
+phases:
+
+  - id: phase-1
+    name: Foundation — Reasoning Infrastructure
+    estimated_effort: 3-5 days
+    description: Core infrastructure for AI reasoning jobs — Claude API client, data contracts, insight storage, orchestrator skeleton
+    steps:
+      - id: 1.1
+        task: Build VitaraClaudeClient
+        description: >
+          HttpClient wrapper for Anthropic Messages API with extended thinking enabled.
+          POST to https://api.anthropic.com/v1/messages with configurable budget_tokens.
+          Headers: x-api-key, anthropic-version 2023-06-01, anthropic-beta interleaved-thinking.
+          Returns ReasoningResult { ThinkingTrace, OutputJson, ModelVersion }.
+          3-retry exponential backoff on 529/overload errors.
+        location: Vitara.Infrastructure/AI/VitaraClaudeClient.cs
+        depends_on: []
+        config:
+          - ANTHROPIC_API_KEY added to vitara/.env
+          - Default model: claude-sonnet-4-20250514
+
+      - id: 1.2
+        task: Define VitaraBiomarkerPayload data contract
+        description: >
+          Canonical record types for sending biomarker data to the reasoning model.
+          UserContext (userId, age, sex), DailyBiomarkerSummary[] (date, HRV, sleep score,
+          readiness, sleep efficiency, deep sleep min, REM min, RHR, active cal, steps,
+          training load normalized 0-100), BaselineMetrics (90-day averages),
+          TrendMetrics (30d vs 90d slopes). Include XML doc comments.
+        location: Vitara.Application/DTOs/VitaraBiomarkerPayload.cs
+        depends_on: []
+
+      - id: 1.3
+        task: Build BiomarkerPayloadBuilder
+        description: >
+          Application service that queries last N days from SQLite via IVitaraRepository
+          and assembles the VitaraBiomarkerPayload. Includes SerializeForPrompt() method
+          that produces clean JSON with null values omitted.
+        location: Vitara.Application/Services/BiomarkerPayloadBuilder.cs
+        depends_on: [1.2]
+
+      - id: 1.4
+        task: Add VitaraInsights table to DbContext
+        description: >
+          New entity VitaraInsight with fields: Id (GUID), InsightType (string: BiologicalAge,
+          WeeklyBrief, Correlation, DailyReadiness), GeneratedAt (DateTime), InputDataJson,
+          ThinkingTrace (nullable), OutputJson, ModelVersion. Index on (InsightType, GeneratedAt DESC).
+        location: Vitara.Infrastructure/Data/VitaraDbContext.cs + new entity
+        depends_on: []
+
+      - id: 1.5
+        task: Scaffold ReasoningOrchestrator BackgroundService
+        description: >
+          Worker with 30-min tick loop. Stub out virtual methods:
+          RunBioAgeAsync(), RunWeeklyBriefAsync(), RunDailyPatternCheckAsync(),
+          RunCorrelationDiscoveryAsync(). Schedule logic:
+          Bio Age = every Sunday midnight, Weekly Brief = every Monday 6am,
+          Daily Pattern = every morning 7am, Correlation = 1st of month.
+        location: Vitara.Worker/ReasoningOrchestrator.cs
+        depends_on: [1.1, 1.3, 1.4]
+
+      - id: 1.6
+        task: Register all new services in DI
+        description: >
+          Register VitaraClaudeClient (singleton), BiomarkerPayloadBuilder (scoped),
+          add ReasoningOrchestrator as hosted service in Vitara.Worker/Program.cs.
+          Add ANTHROPIC_API_KEY to env loading in both API and Worker Program.cs.
+        location: Vitara.Worker/Program.cs, Vitara.API/Program.cs
+        depends_on: [1.5]
+
+  - id: phase-2
+    name: Biological Age Score — AI-Powered
+    estimated_effort: 3-4 days
+    description: Replace the current heuristic bio-age calc with Claude extended thinking analysis using 180 days of data
+    steps:
+      - id: 2.1
+        task: Create prompt files as embedded resources
+        description: >
+          Store prompts as text files, NOT hardcoded in C#.
+          /Prompts/BiologicalAge_System.txt — full system prompt (longevity analyst persona,
+          PhenoAge/GrimAge/HRV4Training frameworks, reasoning chain instructions).
+          /Prompts/BiologicalAge_User.txt — template with {userId}, {age}, {sex},
+          {biomarkerJson}, {outputSchema} placeholders.
+          /Prompts/BiologicalAge_Schema.json — output JSON schema (biologicalAge, delta,
+          deltaDirection, confidenceLevel, domainScores, topLever, reasoningChain).
+        location: Vitara.Infrastructure/Prompts/
+        depends_on: []
+
+      - id: 2.2
+        task: Implement RunBioAgeAsync in ReasoningOrchestrator
+        description: >
+          Load 180 days via BiomarkerPayloadBuilder. Load system + user prompts.
+          Interpolate user context + serialized payload. Call VitaraClaudeClient
+          with budget_tokens 8000. Parse JSON into BioAgeInsight record.
+          Upsert into VitaraInsights (one per week). Handle parse failures gracefully
+          (log and skip, don't throw).
+        location: Vitara.Worker/ReasoningOrchestrator.cs
+        depends_on: [2.1, 1.5]
+
+      - id: 2.3
+        task: Add GET /api/insights/bioage endpoint
+        description: >
+          Returns latest BioAgeInsight from VitaraInsights table.
+          Include ThinkingTrace in response under 'reasoningTrace' field.
+          Falls back to existing heuristic calc if no AI insight exists yet.
+        location: Vitara.API/Controllers/InsightsController.cs
+        depends_on: [2.2]
+
+      - id: 2.4
+        task: Update frontend BioAgePillar to use AI insight
+        description: >
+          Fetch from /api/insights/bioage. Show domain scores (HRV, Sleep, Cardiovascular)
+          with trend arrows. Show topLever recommendation card. Add "Show reasoning"
+          collapsible panel that displays the thinking trace steps.
+        location: vault/frontend/src/pages/VitaraModule.tsx
+        depends_on: [2.3]
+
+  - id: phase-3
+    name: Weekly Longevity Brief
+    estimated_effort: 2-3 days
+    description: AI-generated Monday morning health brief with narrative, findings, and action items
+    steps:
+      - id: 3.1
+        task: Create Weekly Brief prompt files
+        description: >
+          System prompt: empathetic but direct physician persona.
+          User template: loads last 7 days + 90-day baselines + current bio age.
+          Output schema: narrative (180-220 words), topFindings[], actionItems[]
+          (max 3, ranked by impact), weekSummaryScore (0-100).
+          budget_tokens: 6000.
+        location: Vitara.Infrastructure/Prompts/WeeklyBrief_*
+        depends_on: []
+
+      - id: 3.2
+        task: Implement RunWeeklyBriefAsync
+        description: >
+          Load 7-day data + 90-day baselines. Call Claude with physician prompt.
+          Parse WeeklyBriefInsight. Store in VitaraInsights with thinking trace.
+        location: Vitara.Worker/ReasoningOrchestrator.cs
+        depends_on: [3.1, 1.5]
+
+      - id: 3.3
+        task: Add GET /api/insights/brief endpoint
+        description: Returns latest weekly brief with reasoning trace
+        location: Vitara.API/Controllers/InsightsController.cs
+        depends_on: [3.2]
+
+      - id: 3.4
+        task: Build Weekly Brief UI card
+        description: >
+          New "Insights" tab or card on Overview. Renders narrative in styled card.
+          Shows top 3 action items as checklist. Date + "Show reasoning" toggle.
+          Auto-refreshes weekly.
+        location: vault/frontend/src/pages/VitaraModule.tsx
+        depends_on: [3.3]
+
+  - id: phase-4
+    name: Cross-Signal Correlation Engine
+    estimated_effort: 3-4 days
+    description: Monthly AI job that discovers personal lead-lag relationships across all biomarker streams
+    steps:
+      - id: 4.1
+        task: Create Correlation prompt files
+        description: >
+          System prompt: biostatistician persona. Instructions for Pearson correlation
+          estimation across all variable pairs with lag analysis (t, t-1, t-2).
+          Filter to |r| > 0.45. Assess causal plausibility.
+          Output: CorrelationInsight[] with variableA, variableB, lagDays,
+          correlationCoefficient, causalHypothesis, plainLanguageInsight,
+          actionability (high/medium/low).
+          budget_tokens: 10000.
+        location: Vitara.Infrastructure/Prompts/Correlation_*
+        depends_on: []
+
+      - id: 4.2
+        task: Implement RunCorrelationDiscoveryAsync
+        description: >
+          Load 90-day full dataset. Assemble all variables as daily rows.
+          Call Claude. Parse CorrelationInsight[]. Store in VitaraInsights.
+          Runs monthly (1st of month).
+        location: Vitara.Worker/ReasoningOrchestrator.cs
+        depends_on: [4.1, 1.5]
+
+      - id: 4.3
+        task: Add GET /api/insights/correlations endpoint
+        description: Returns latest correlation findings
+        location: Vitara.API/Controllers/InsightsController.cs
+        depends_on: [4.2]
+
+      - id: 4.4
+        task: Build Correlations UI page
+        description: >
+          New "Insights" tab with insight cards. Each card shows plain language finding,
+          correlation strength bar, lag days, and actionability badge. User can dismiss
+          or pin individual findings. Show reasoning toggle.
+        location: vault/frontend/src/pages/VitaraModule.tsx
+        depends_on: [4.3]
+
+  - id: phase-5
+    name: Daily Readiness AI Assessment
+    estimated_effort: 1-2 days
+    description: Quick morning AI check — should you push, ease, or rest today?
+    steps:
+      - id: 5.1
+        task: Create Daily Readiness prompt
+        description: >
+          Lightweight prompt using 3 days of sleep + HRV + training load.
+          Output: recommendation (push/ease/rest), rationale (2-3 sentences),
+          key factors. budget_tokens: 3000.
+        location: Vitara.Infrastructure/Prompts/DailyReadiness_*
+        depends_on: []
+
+      - id: 5.2
+        task: Implement RunDailyPatternCheckAsync
+        description: Quick AI assessment every morning at 7am
+        location: Vitara.Worker/ReasoningOrchestrator.cs
+        depends_on: [5.1, 1.5]
+
+      - id: 5.3
+        task: Add daily recommendation to dashboard banner
+        description: >
+          Enhance existing DailyBanner to show AI recommendation
+          (push/ease/rest) with rationale tooltip
+        location: vault/frontend/src/pages/VitaraModule.tsx
+        depends_on: [5.2]
+
+  - id: phase-6
+    name: Protocol Evaluation Engine
+    estimated_effort: 2-3 days
+    description: AI evaluates effectiveness of health protocols using pre/post biomarker data
+    steps:
+      - id: 6.1
+        task: Create Protocol Evaluation prompt
+        description: >
+          System prompt: clinical researcher persona. Analyze 30-day pre/post biomarker
+          data for a specific protocol. Output: effect size, statistical confidence,
+          recommendation (continue/modify/discontinue), reasoning chain.
+          budget_tokens: 6000.
+        location: Vitara.Infrastructure/Prompts/ProtocolEval_*
+        depends_on: []
+
+      - id: 6.2
+        task: Build protocol start/stop tracking
+        description: >
+          New entity ProtocolPeriod (name, startDate, endDate, description).
+          Repository methods. API endpoints for CRUD.
+        location: Vitara.Domain, Vitara.Infrastructure, Vitara.API
+        depends_on: []
+
+      - id: 6.3
+        task: Implement protocol evaluation job
+        description: >
+          When a protocol has 30+ days of data, evaluate it via Claude.
+          Store evaluation in VitaraInsights.
+        location: Vitara.Worker/ReasoningOrchestrator.cs
+        depends_on: [6.1, 6.2, 1.5]
+
+      - id: 6.4
+        task: Update Protocols tab with AI evaluations
+        description: >
+          Show AI verdict on each protocol with confidence level,
+          effect size, and "Show reasoning" panel.
+        location: vault/frontend/src/pages/VitaraModule.tsx
+        depends_on: [6.3]
+
+  - id: phase-7
+    name: Multi-Source Data Integration
+    estimated_effort: 3-5 days
+    description: Expand beyond Oura to Apple Health, Garmin, Whoop data sources
+    steps:
+      - id: 7.1
+        task: Define IHealthDataSource interface
+        description: >
+          Abstraction for health data providers. Methods: SyncAsync(),
+          GetSupportedMetrics(), GetDisplayName(). Oura becomes one
+          implementation of this interface.
+        location: Vitara.Application/Interfaces/IHealthDataSource.cs
+        depends_on: []
+
+      - id: 7.2
+        task: Refactor OuraClient to implement IHealthDataSource
+        description: Adapt existing OuraClient to the new interface pattern
+        location: Vitara.Infrastructure/Oura/OuraClient.cs
+        depends_on: [7.1]
+
+      - id: 7.3
+        task: Build Apple Health import (via iPhone context push)
+        description: >
+          Receive HealthKit data from iPhone companion app's context push.
+          Map to normalized biomarker format. Store via existing repository.
+        location: Vitara.Infrastructure/HealthSources/AppleHealthReceiver.cs
+        depends_on: [7.1]
+
+      - id: 7.4
+        task: Build Garmin Connect integration
+        description: OAuth + API client for Garmin Connect health data
+        location: Vitara.Infrastructure/HealthSources/GarminClient.cs
+        depends_on: [7.1]
+
+  - id: phase-8
+    name: Show My Thinking — Transparency UI
+    estimated_effort: 1-2 days
+    description: Surface the AI reasoning chain in the UI as a key differentiator
+    steps:
+      - id: 8.1
+        task: Build ReasoningTracePanel component
+        description: >
+          Reusable collapsible panel for any insight card. Fetches thinking trace
+          on demand. Monospace numbered step display. Keyboard navigable.
+          ARIA labels for accessibility.
+        location: vault/frontend/src/components/ReasoningTracePanel.tsx
+        depends_on: []
+
+      - id: 8.2
+        task: Wire ReasoningTracePanel into all insight cards
+        description: >
+          Add "Show reasoning" toggle to BioAge, Weekly Brief, Correlation,
+          Daily Readiness, and Protocol Evaluation cards.
+        location: vault/frontend/src/pages/VitaraModule.tsx
+        depends_on: [8.1]
+
+prerequisites:
+  - ANTHROPIC_API_KEY must be set in vitara/.env with sufficient credits for extended thinking
+  - VITARA_AGE in vitara/.env must be set to actual chronological age (currently placeholder 30)
+  - User sex/gender needed for bio-age prompts (add VITARA_SEX to .env)
+  - Minimum 30 days of Oura data for meaningful analysis, 90+ days ideal
+
+risks:
+  - API cost: Extended thinking uses 3-10x more tokens than standard calls. Monthly cost estimate with daily + weekly + monthly jobs ~$15-30/month at current Anthropic pricing
+  - Latency: Reasoning calls take 10-30 seconds. All jobs run in background worker, never blocking API
+  - Data quality: Sparse or irregular Oura data degrades reasoning quality. BiomarkerPayloadBuilder must flag data gaps
+  - Model drift: Prompt engineering requires iteration. Store all prompts as text files, not hardcoded, to enable rapid tuning
+
+implementation_order:
+  recommended: [phase-1, phase-2, phase-5, phase-3, phase-8, phase-4, phase-6, phase-7]
+  rationale: >
+    Start with infrastructure (phase 1), then the flagship feature (bio age, phase 2),
+    then quick-win daily readiness (phase 5). Weekly brief (phase 3) and transparency UI
+    (phase 8) come next for portfolio impact. Correlation engine (phase 4) and protocol
+    evaluation (phase 6) are more complex. Multi-source integration (phase 7) is last
+    since Oura alone provides enough data for all reasoning jobs.

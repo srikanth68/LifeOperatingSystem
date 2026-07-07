@@ -110,4 +110,49 @@ public class AasthiRepository(AasthiDbContext db) : IAasthiRepository
         await db.SaveChangesAsync();
         return true;
     }
+
+    public async Task<List<PropertyTask>> GetTasksAsync(Guid? propertyId = null, string? status = null)
+    {
+        var q = db.Tasks.AsQueryable();
+        if (propertyId.HasValue) q = q.Where(t => t.PropertyId == propertyId.Value);
+        if (!string.IsNullOrEmpty(status)) q = q.Where(t => t.Status == status);
+        return await q.OrderByDescending(t => t.Priority == "urgent" ? 0 : t.Priority == "high" ? 1 : t.Priority == "medium" ? 2 : 3)
+                      .ThenBy(t => t.DueDate)
+                      .ThenByDescending(t => t.CreatedAt)
+                      .ToListAsync();
+    }
+
+    public async Task<PropertyTask?> GetTaskAsync(Guid taskId) =>
+        await db.Tasks.FirstOrDefaultAsync(t => t.Id == taskId);
+
+    public async Task<PropertyTask> AddTaskAsync(PropertyTask task)
+    {
+        db.Tasks.Add(task);
+        await db.SaveChangesAsync();
+        return task;
+    }
+
+    public async Task<bool> UpdateTaskAsync(PropertyTask task)
+    {
+        var existing = await db.Tasks.FirstOrDefaultAsync(t => t.Id == task.Id);
+        if (existing is null) return false;
+        existing.Title = task.Title;
+        existing.Description = task.Description;
+        existing.DueDate = task.DueDate;
+        existing.Status = task.Status;
+        existing.Priority = task.Priority;
+        existing.Source = task.Source;
+        existing.CompletedAt = task.CompletedAt;
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> DeleteTaskAsync(Guid taskId)
+    {
+        var existing = await db.Tasks.FirstOrDefaultAsync(t => t.Id == taskId);
+        if (existing is null) return false;
+        db.Tasks.Remove(existing);
+        await db.SaveChangesAsync();
+        return true;
+    }
 }

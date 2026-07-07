@@ -14,6 +14,7 @@
     <ProjectReference Include="..\San.Domain\San.Domain.csproj" />
     <ProjectReference Include="..\San.Application\San.Application.csproj" />
     <ProjectReference Include="..\San.Infrastructure\San.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\shared\Maaya.Auth\Maaya.Auth.csproj" />
   </ItemGroup>
 
 </Project>
