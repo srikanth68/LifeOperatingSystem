@@ -31,49 +31,42 @@ No cloud vendor lock-in. No monthly subscriptions. Your data stays on your machi
 |--------|-------------|------|
 | **Vault** | Finances — bank sync via Plaid, transactions, budgets, spending trends | `5000` |
 | **Vitara** | Health — Oura Ring integration, sleep, readiness, activity, bio-age scoring | `5100` |
-| **Aasthi** | Property — real estate portfolio, contacts, documents, profit tracking | `5200` |
-| **San** | AI Assistant — model-agnostic chat, reminders, alerts, cross-module activity feed | `5300` |
-| **Sutra** | Document vault — upload, categorize, expiry tracking, cross-module document links | `5400` |
-| **NorthStar** | Knowledge hub — cross-module aggregation, insights, search, agent-ready | `5500` |
+| **Sutra** | Document vault — upload, categorize, expiry tracking | `5400` |
+| **Karma** | Habits & goals tracker with Telegram check-in notifications | `5600` |
 | **Frontend** | Unified React dashboard for all modules | `5173` |
-
-> **Coming soon:** Nexus (social network & contacts), Karma (habits & goals)
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                        Frontend (React)                         │
-│                 Unified dashboard · Port 5173                   │
-└──┬─────────┬──────────┬──────────┬──────────┬──────────┬────────┘
-   │         │          │          │          │          │
-┌──▼───┐ ┌───▼──┐ ┌────▼───┐ ┌───▼───┐ ┌───▼────┐ ┌───▼─────┐
-│Vault │ │Vitara│ │ Aasthi │ │  San  │ │ Sutra  │ │NorthStar│
-│ :5000│ │:5100 │ │ :5200  │ │ :5300 │ │ :5400  │ │ :5500   │
-└──┬───┘ └──┬───┘ └───┬────┘ └──┬────┘ └───┬────┘ └────┬────┘
-   │        │         │ proxy   │          │           │
-   │        │         └────────►│◄─────────┘           │
-   │        │       (docs→Sutra)│                      │
-┌──▼───┐ ┌──▼───┐           ┌──▼────┐                 │
-│Worker│ │Worker│            │Worker │                  │
-│(sync)│ │(sync)│            │(alert)│                  │
-└──┬───┘ └──┬───┘            └──┬────┘                 │
-   │        │                   │                      │
-┌──▼───┐ ┌──▼───┐ ┌────────┐ ┌─▼──────┐ ┌────────┐ ┌─▼──────┐
-│SQLite│ │SQLite│ │ SQLite │ │ SQLite │ │ SQLite │ │ SQLite │
-└──────┘ └──────┘ └────────┘ └────────┘ └────────┘ └────────┘
+┌──────────────────────────────────────────────────────────┐
+│                    Frontend (React)                      │
+│               Unified dashboard · Port 5173               │
+└──┬─────────┬──────────────┬──────────────┬────────────────┘
+   │         │              │              │
+┌──▼───┐ ┌───▼──┐       ┌───▼────┐    ┌───▼───┐
+│Vault │ │Vitara│       │ Sutra  │    │ Karma │
+│ :5000│ │:5100 │       │ :5400  │    │ :5600 │
+└──┬───┘ └──┬───┘       └───┬────┘    └───┬───┘
+   │        │               │             │
+┌──▼───┐ ┌──▼───┐           │             │
+│Worker│ │Worker│           │             │
+│(sync)│ │(sync)│           │             │
+└──┬───┘ └──┬───┘           │             │
+   │        │               │             │
+┌──▼───┐ ┌──▼───┐       ┌───▼────┐    ┌───▼───┐
+│SQLite│ │SQLite│       │ SQLite │    │ SQLite│
+└──────┘ └──────┘       └────────┘    └───────┘
 ```
 
-Each module is fully independent — its own database, its own API, its own deployment. San bridges them via live HTTP calls, not shared databases.
+Each module is fully independent — its own database, its own API, its own deployment.
 
 ### Design Principles
 
 - **Module isolation** — each module can run, fail, and deploy independently
 - **Config over code** — swap AI models, sync schedules, and API keys without touching source
 - **Local-first** — everything runs on your machine, no cloud dependency
-- **Model-agnostic AI** — San's chat provider is an interface; swap Claude for GPT or Llama via env vars
 - **Graceful degradation** — if a module is down, the others keep working
 
 ---
@@ -86,35 +79,21 @@ Each module is fully independent — its own database, its own API, its own depl
 - [Node.js 18+](https://nodejs.org/)
 - PowerShell 7+ (Windows) or pwsh (macOS/Linux)
 
-### 1. Clone & configure
+See **[SETUP.md](SETUP.md)** for the full step-by-step walkthrough (generating secrets, filling in each module's `.env`, API keys). Short version:
 
 ```bash
 git clone https://github.com/srikanth68/LifeOperatingSystem.git
 cd LifeOperatingSystem
 ```
 
-Copy each module's `.env.template` to `.env` and fill in your keys:
-
-```powershell
-# Required for each module that needs secrets:
-cp vault/.env.template vault/.env      # Plaid API keys
-cp vitara/.env.template vitara/.env    # Oura OAuth credentials
-cp san/.env.template san/.env          # Telegram bot + LLM API key
-```
-
-### 2. Install frontend dependencies
+Copy each module's `.env.template` to `.env`, generate a shared `JWT_SECRET` + login via `shared/auth-setup.csx` (see SETUP.md), then:
 
 ```bash
 cd vault/frontend && npm install && cd ../..
-```
-
-### 3. Launch everything
-
-```powershell
 .\maaya-start.ps1
 ```
 
-That's it. One command spins up all APIs, workers, and the frontend.
+One command spins up all APIs, workers, and the frontend:
 
 ```
  ╔══════════════════════════════════════╗
@@ -123,8 +102,8 @@ That's it. One command spins up all APIs, workers, and the frontend.
 
   Vault     http://localhost:5000  (API + Worker)
   Vitara    http://localhost:5100  (API + Worker)
-  Aasthi    http://localhost:5200  (API)
-  San       http://localhost:5300  (API + Worker)
+  Sutra     http://localhost:5400  (API)
+  Karma     http://localhost:5600  (API)
   Frontend  http://localhost:5173
 ```
 
@@ -144,19 +123,14 @@ That's it. One command spins up all APIs, workers, and the frontend.
 - Health protocol tracking
 - Worker syncs every 6 hours
 
-### Aasthi — Property Portfolio
-- Real estate CRUD with profit/loss calculations
-- Contact management per property (tenants, agents, contractors)
-- Bulk document upload with on-disk storage
-- Document download and management
+### Sutra — Document Vault
+- Upload, categorize, and tag documents (identity, finance, insurance, contracts, etc.)
+- Expiry tracking with a dedicated tracker view
+- Full-text search across document metadata
 
-### San — AI Assistant
-- **Model-agnostic chat** — currently Claude, swappable to any LLM via config
-- Chat context enriched with live data from all running modules
-- Reminders with **Telegram** notifications
-- Threshold-based spending alerts (auto-re-arming)
-- Time-based alerts (goal deadlines, document expiry)
-- Unified activity feed across all modules
+### Karma — Habits & Goals
+- Goal and habit tracking with progress views
+- Daily check-in reminders via **Telegram**
 
 ---
 
@@ -169,7 +143,6 @@ That's it. One command spins up all APIs, workers, and the frontend.
 | Frontend | React 18, TypeScript, Vite, React Query |
 | Workers | .NET BackgroundService with PeriodicTimer |
 | Notifications | Telegram Bot API |
-| AI | Anthropic Claude (swappable via `IChatProvider` interface) |
 | Bank Sync | Plaid API |
 | Health Data | Oura Ring API (OAuth 2.0) |
 
@@ -188,15 +161,8 @@ That's it. One command spins up all APIs, workers, and the frontend.
 
 ## Roadmap
 
-- [ ] **Nexus** — Social network, contact management, relationship tracking
-- [ ] **NorthStar** — Obsidian-like knowledge hub for notes, goals, and planning
-- [ ] **Karma** — Habit tracking, goal setting, streaks
-- [ ] **Sutra** — Journaling, reflection, mood tracking
-- [ ] **SAN → Aasthi task automation** — SAN creates property tasks from emails, calendar events, and context data
-- [ ] **Vitara AI Reasoning** — Claude-powered biological age scoring, weekly briefs, cross-signal correlation engine
 - [ ] Raspberry Pi deployment with external access
 - [ ] WhatsApp notification support
-- [ ] Additional LLM providers (OpenAI, Ollama, local models)
 
 ---
 

@@ -170,8 +170,6 @@ function Notifications() {
     vault_unusual:   true,
     vault_sync:      false,
     vitara_goals:    true,
-    nexus_alerts:    true,
-    aasthi_maintain: true,
     sutra_expiry:    true,
     karma_habits:    false,
   });
@@ -188,12 +186,6 @@ function Notifications() {
       </Row>
       <Row label="Health goal not met" desc="Vitara · Daily reminder if steps/sleep goal missed">
         <Toggle enabled={prefs.vitara_goals} onToggle={() => toggle('vitara_goals')} />
-      </Row>
-      <Row label="Price alert triggered" desc="Nexus · When a watchlist stock hits your target price">
-        <Toggle enabled={prefs.nexus_alerts} onToggle={() => toggle('nexus_alerts')} />
-      </Row>
-      <Row label="Property maintenance due" desc="Aasthi · Upcoming maintenance reminders">
-        <Toggle enabled={prefs.aasthi_maintain} onToggle={() => toggle('aasthi_maintain')} />
       </Row>
       <Row label="Document expiry" desc="Sutra · 30 days before passport, insurance, or license expires">
         <Toggle enabled={prefs.sutra_expiry} onToggle={() => toggle('sutra_expiry')} />

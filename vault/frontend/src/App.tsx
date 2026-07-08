@@ -2,10 +2,6 @@ import { useState, useEffect } from 'react';
 import MaayaDashboard  from './pages/MaayaDashboard';
 import VaultModule     from './pages/VaultModule';
 import VitaraModule    from './pages/VitaraModule';
-import NexusModule     from './pages/NexusModule';
-import AasthiModule    from './pages/AasthiModule';
-import SanModule       from './pages/SanModule';
-import NorthStarModule from './pages/NorthStarModule';
 import KarmaModule     from './pages/KarmaModule';
 import SutraModule     from './pages/SutraModule';
 import SettingsHub     from './pages/SettingsHub';
@@ -17,7 +13,7 @@ import { auth }        from './services/auth';
 import type { ProbeResult } from './services/auth';
 import './styles/index.css';
 
-export type ModuleId = 'home' | 'vault' | 'vitara' | 'nexus' | 'aasthi' | 'san' | 'northstar' | 'karma' | 'sutra' | 'settings';
+export type ModuleId = 'home' | 'vault' | 'vitara' | 'karma' | 'sutra' | 'settings';
 
 /* ── SVG icon library ── */
 function Icon({ name }: { name: string }) {
@@ -39,39 +35,6 @@ function Icon({ name }: { name: string }) {
       );
     case 'vitara':
       return <svg {...p}><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>;
-    case 'nexus':
-      return (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
-          <line x1="7" y1="3" x2="7" y2="7"/><rect x="4" y="7" width="6" height="8" rx="0.5"/>
-          <line x1="7" y1="15" x2="7" y2="21"/>
-          <line x1="17" y1="5" x2="17" y2="9"/><rect x="14" y="9" width="6" height="6" rx="0.5"/>
-          <line x1="17" y1="15" x2="17" y2="19"/>
-        </svg>
-      );
-    case 'aasthi':
-      return (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="7" width="9" height="15" rx="0.5"/>
-          <rect x="13" y="11" width="9" height="11" rx="0.5"/>
-          <path d="M2 7l4.5-4L11 7"/><line x1="1" y1="22" x2="23" y2="22"/>
-        </svg>
-      );
-    case 'san':
-      return (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
-          <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
-          <path d="M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12"/>
-          <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>
-        </svg>
-      );
-    case 'northstar':
-      return (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-          <polygon points="12,4 14,12 12,20 10,12" fill="currentColor" stroke="none"/>
-          <polygon points="4,12 12,10 20,12 12,14" fill="currentColor" stroke="none" opacity="0.4"/>
-        </svg>
-      );
     case 'karma':
       return <svg {...p}><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>;
     case 'sutra':
@@ -98,10 +61,6 @@ function MaayaLogo({ size = 24 }: { size?: number }) {
 const CORE_MODULES: { id: ModuleId; label: string; color: string }[] = [
   { id: 'vault',     label: 'Vault',     color: 'var(--vault)'     },
   { id: 'vitara',    label: 'Vitara',    color: 'var(--vitara)'    },
-  { id: 'nexus',     label: 'Nexus',     color: 'var(--nexus)'     },
-  { id: 'aasthi',    label: 'Aasthi',    color: 'var(--aasthi)'    },
-  { id: 'san',       label: 'San',       color: 'var(--san)'       },
-  { id: 'northstar', label: 'NorthStar', color: 'var(--northstar)' },
 ];
 
 const GROWTH_MODULES: { id: ModuleId; label: string; color: string }[] = [
@@ -260,10 +219,6 @@ export default function App() {
       case 'home':      return <MaayaDashboard onNavigate={navigate} />;
       case 'vault':     return <VaultModule />;
       case 'vitara':    return <VitaraModule />;
-      case 'nexus':     return <NexusModule />;
-      case 'aasthi':    return <AasthiModule />;
-      case 'san':       return <SanModule />;
-      case 'northstar': return <NorthStarModule />;
       case 'karma':     return <KarmaModule />;
       case 'sutra':     return <SutraModule />;
       case 'settings':  return <SettingsHub />;

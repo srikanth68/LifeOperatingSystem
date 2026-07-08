@@ -1,9 +1,0 @@
-*.db
-*.db-shm
-*.db-wal
-bin/
-obj/
-.vs/
-*.user
-.env
-google_tokens.json
