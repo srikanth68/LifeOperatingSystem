@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { authHeaders } from '../services/auth';
+import { moduleApi } from '../services/apiHost';
 import { ApiUnreachable } from '../components/ApiUnreachable';
 import KnowledgeGraph from '../components/KnowledgeGraph';
 import '../styles/northstar.css';
 import '../styles/modules.css';
 
-const API = 'http://localhost:5500';
+const API = moduleApi(5500);
 const af = (url: string, init?: RequestInit) => fetch(url, { ...init, headers: { ...authHeaders(), ...init?.headers } });
 const post = (url: string, body: unknown) => af(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 const patch = (url: string, body: unknown) => af(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -196,11 +197,17 @@ function ActionsPage() {
   const [priority, setPriority] = useState('3');
   const [category, setCategory] = useState('task');
   const [due, setDue] = useState('');
+  const [err, setErr] = useState('');
 
   const load = useCallback(() => {
-    af(`${API}/api/actions?status=${filter}&limit=50`).then(r => r.json()).then(setActions).catch(() => {});
+    af(`${API}/api/actions?status=${filter}&limit=50`)
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(d => { setActions(d); setErr(''); })
+      .catch(() => setErr('unreachable'));
   }, [filter]);
   useEffect(load, [load]);
+
+  if (err) return <ApiUnreachable name="NorthStar" port={5500} mc={MC} onRetry={load} />;
 
   const create = async () => {
     if (!title.trim()) return;
@@ -276,18 +283,29 @@ function KnowledgePage() {
   const [entries, setEntries] = useState<KnowledgeEntry[]>([]);
   const [days, setDays] = useState(14);
   const [searched, setSearched] = useState(false);
+  const [err, setErr] = useState('');
 
-  useEffect(() => {
-    af(`${API}/api/knowledge/timeline?days=${days}&limit=100`).then(r => r.json()).then(d => setEntries(d.entries ?? [])).catch(() => {});
+  const loadTimeline = useCallback(() => {
+    af(`${API}/api/knowledge/timeline?days=${days}&limit=100`)
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(d => { setEntries(d.entries ?? []); setErr(''); })
+      .catch(() => setErr('unreachable'));
   }, [days]);
+  useEffect(loadTimeline, [loadTimeline]);
 
   const search = async () => {
     if (!query.trim()) return;
-    const resp = await af(`${API}/api/knowledge/search?q=${encodeURIComponent(query)}`);
-    const data = await resp.json();
-    setResults(data.entries ?? []);
-    setSearched(true);
+    try {
+      const resp = await af(`${API}/api/knowledge/search?q=${encodeURIComponent(query)}`);
+      if (!resp.ok) throw new Error();
+      const data = await resp.json();
+      setResults(data.entries ?? []);
+      setSearched(true);
+      setErr('');
+    } catch { setErr('unreachable'); }
   };
+
+  if (err) return <ApiUnreachable name="NorthStar" port={5500} mc={MC} onRetry={loadTimeline} />;
 
   const display = searched ? results : entries;
 
@@ -339,11 +357,17 @@ function FactsPage() {
   const [facts, setFacts] = useState<UserFact[]>([]);
   const [newKey, setNewKey] = useState('');
   const [newVal, setNewVal] = useState('');
+  const [err, setErr] = useState('');
 
   const load = useCallback(() => {
-    af(`${API}/api/facts`).then(r => r.json()).then(setFacts).catch(() => {});
+    af(`${API}/api/facts`)
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(d => { setFacts(d); setErr(''); })
+      .catch(() => setErr('unreachable'));
   }, []);
   useEffect(load, [load]);
+
+  if (err) return <ApiUnreachable name="NorthStar" port={5500} mc={MC} onRetry={load} />;
 
   const save = async () => {
     if (!newKey.trim() || !newVal.trim()) return;
@@ -391,11 +415,17 @@ function InsightsPage() {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const [err, setErr] = useState('');
 
   const load = useCallback(() => {
-    af(`${API}/api/insights`).then(r => r.json()).then(setInsights).catch(() => {});
+    af(`${API}/api/insights`)
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(d => { setInsights(d); setErr(''); })
+      .catch(() => setErr('unreachable'));
   }, []);
   useEffect(load, [load]);
+
+  if (err) return <ApiUnreachable name="NorthStar" port={5500} mc={MC} onRetry={load} />;
 
   const create = async () => {
     if (!title.trim() || !body.trim()) return;

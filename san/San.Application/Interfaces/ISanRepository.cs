@@ -43,4 +43,8 @@ public interface ISanRepository
     Task<Person?> UpdatePersonAsync(Guid id, Action<Person> apply);
     Task<bool> DeletePersonAsync(Guid id);
     Task<List<Person>> GetUpcomingBirthdaysAsync(int withinDays = 30);
+
+    // Settings (key-value)
+    Task<string?> GetSettingAsync(string key);
+    Task SetSettingAsync(string key, string value);
 }

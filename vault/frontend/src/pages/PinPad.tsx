@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { auth } from '../services/auth';
-import ArcReactor, { HudCorners, HudStatus, HudScanlines } from '../components/ArcReactor';
+import { HudCorners, HudStatus, HudScanlines } from '../components/ArcReactor';
 import '../styles/login.css';
 
 const KEYS = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
@@ -58,8 +58,8 @@ export default function PinPad({ length, onSuccess }: { length: number; onSucces
       <HudScanlines />
       <HudCorners />
       <div className="pin-container">
-        <div className="arc-reactor">
-          <ArcReactor size={130} />
+        <div className="login-sigil">
+          <img src="/sigil.png" alt="Maaya" width={132} height={132} />
         </div>
         <p className="pin-label">Authorization Required</p>
 

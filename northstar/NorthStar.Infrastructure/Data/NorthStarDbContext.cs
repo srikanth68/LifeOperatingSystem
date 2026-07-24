@@ -11,6 +11,8 @@ public class NorthStarDbContext(DbContextOptions<NorthStarDbContext> options) : 
     public DbSet<ActionItem> Actions => Set<ActionItem>();
     public DbSet<ModuleSnapshot> Snapshots => Set<ModuleSnapshot>();
     public DbSet<UserFact> Facts => Set<UserFact>();
+    public DbSet<MemoryEntry> Memories => Set<MemoryEntry>();
+    public DbSet<ActivityEvent> Events => Set<ActivityEvent>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -47,5 +49,21 @@ public class NorthStarDbContext(DbContextOptions<NorthStarDbContext> options) : 
 
         b.Entity<ModuleSnapshot>(e => e.HasKey(m => m.Module));
         b.Entity<UserFact>(e => e.HasKey(f => f.Key));
+
+        b.Entity<MemoryEntry>(e =>
+        {
+            e.HasKey(m => m.Id);
+            e.HasIndex(m => m.Kind);
+            e.HasIndex(m => m.CreatedAt);
+            e.HasIndex(m => m.Importance);
+        });
+
+        b.Entity<ActivityEvent>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.EventKey).IsUnique(); // idempotent ingestion
+            e.HasIndex(x => x.OccurredAt);          // "since <ts>" range scans
+            e.HasIndex(x => x.Source);
+        });
     }
 }

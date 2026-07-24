@@ -32,7 +32,7 @@ builder.Services.AddDbContext<VitaraDbContext>(o =>
 builder.Services.AddScoped<IVitaraRepository, VitaraRepository>();
 builder.Services.AddScoped<IOuraClient, OuraClient>();
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
-    p.WithOrigins("http://localhost:3000", "http://localhost:5173")
+    p.WithOrigins(MaayaCors.Origins("http://localhost:3000", "http://localhost:5173"))
      .AllowAnyHeader()
      .AllowAnyMethod()));
 
@@ -49,7 +49,7 @@ using (var scope = app.Services.CreateScope())
 app.UseCors();
 app.UseMaayaAuth();
 app.MapControllers();
-app.Run("http://localhost:5100");
+app.Run(Environment.GetEnvironmentVariable("BIND_URL") ?? "http://localhost:5100");
 
 // One-time (idempotent) data fix: older rows stored `Day` using DateOnly.ToString()'s
 // culture short-date format (e.g. "6/9/2026", no leading zeros). SQLite compares that

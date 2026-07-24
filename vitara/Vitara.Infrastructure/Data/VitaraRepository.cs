@@ -147,6 +147,11 @@ public class VitaraRepository(VitaraDbContext db) : IVitaraRepository
         return true;
     }
 
+    // ── Weigh-ins ──
+    public Task UpsertWeighInAsync(WeighIn weighIn) => UpsertByIdAsync(db.WeighIns, new[] { weighIn }, w => w.Id);
+    public Task<List<WeighIn>> GetWeighInsAsync(DateOnly from, DateOnly to) =>
+        db.WeighIns.Where(w => w.Day >= from && w.Day <= to).OrderBy(w => w.Day).ToListAsync();
+
     // ── Sync tracking ──
     public async Task<DateOnly?> GetLatestDayAsync()
     {

@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { makeModuleQueryClient } from '../services/moduleQuery';
 import { authHeaders } from '../services/auth';
+import { moduleApi } from '../services/apiHost';
 import '../styles/modules.css';
 import '../styles/aasthi.css';
 
-const API = 'http://localhost:5200';
+const API = moduleApi(5200);
 const MC = 'var(--aasthi)';
 const style = { '--mc': MC } as React.CSSProperties;
 
@@ -461,7 +462,7 @@ function TasksPage() {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', dueDate: '', priority: 'medium', propertyId: '' });
 
-  const { data: tasks, isPending } = useQuery<TaskItem[]>({
+  const { data: tasks, isPending, isError } = useQuery<TaskItem[]>({
     queryKey: ['tasks', filter],
     queryFn: () => get(`${API}/api/tasks${filter ? `?status=${filter}` : ''}`),
   });
@@ -487,6 +488,15 @@ function TasksPage() {
 
   const propMap = new Map(properties?.map(p => [p.id, p.address]) ?? []);
   const overdue = (t: TaskItem) => t.dueDate && t.status !== 'completed' && t.status !== 'cancelled' && new Date(t.dueDate) < new Date();
+
+  if (isError) {
+    return (
+      <div className="module-empty" style={style}>
+        <h2>Can't reach Aasthi API</h2>
+        <p>Make sure the Aasthi backend is running on port 5200 (<code>start.ps1</code> in the aasthi folder).</p>
+      </div>
+    );
+  }
 
   return (
     <div style={style}>
@@ -587,13 +597,312 @@ function TasksPage() {
   );
 }
 
-function EmptyPage({ title, desc }: { title: string; desc: string }) {
+/* ── Financials & Maintenance tabs (real data — replaced the old "Coming Soon" placeholder) ── */
+interface FinancialEntry {
+  id: string; propertyId: string; type: string; category: string;
+  amount: number; date: string; notes: string | null; createdAt: string;
+}
+interface PropertyCashFlow {
+  propertyId: string; address: string; income: number; expenses: number; mortgage: number;
+  netCashFlow: number; appreciation: number; appreciationPct: number | null; cashOnCashPct: number | null;
+}
+interface FinancialsSummaryData {
+  totalIncome: number; totalExpenses: number; totalMortgage: number;
+  netCashFlow: number; byProperty: PropertyCashFlow[];
+}
+
+const FIN_TYPES = ['income', 'expense', 'mortgage'] as const;
+const FIN_CATEGORIES: Record<string, string[]> = {
+  income:   ['rent', 'other'],
+  expense:  ['tax', 'insurance', 'repair', 'hoa', 'utility', 'other'],
+  mortgage: ['mortgage_payment'],
+};
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+function FinancialsPage() {
+  const qClient = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ propertyId: '', type: 'expense', category: 'repair', amount: '', date: todayISO(), notes: '' });
+
+  const { data: properties } = useQuery<Property[]>({ queryKey: ['properties'], queryFn: () => get(`${API}/api/properties`) });
+  const summaryQ = useQuery<FinancialsSummaryData>({ queryKey: ['financials-summary'], queryFn: () => get(`${API}/api/financials/summary`) });
+  const entriesQ = useQuery<FinancialEntry[]>({
+    queryKey: ['financials', form.propertyId || 'all'],
+    queryFn: () => {
+      const pid = form.propertyId || properties?.[0]?.id;
+      return pid ? get(`${API}/api/properties/${pid}/financials`) : Promise.resolve([]);
+    },
+    enabled: !!(form.propertyId || properties?.length),
+  });
+
+  const invalidate = () => {
+    qClient.invalidateQueries({ queryKey: ['financials'] });
+    qClient.invalidateQueries({ queryKey: ['financials-summary'] });
+  };
+
+  const create = useMutation({
+    mutationFn: () => send(`${API}/api/properties/${form.propertyId}/financials`, 'POST', {
+      type: form.type, category: form.category, amount: parseFloat(form.amount),
+      date: form.date, notes: form.notes || null,
+    }),
+    onSuccess: () => { setForm(f => ({ ...f, amount: '', notes: '' })); setAdding(false); invalidate(); },
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => send(`${API}/api/financials/${id}`, 'DELETE'),
+    onSuccess: invalidate,
+  });
+
+  const summary = summaryQ.data;
+  const entries = entriesQ.data ?? [];
+
+  if (summaryQ.isError) {
+    return (
+      <div className="module-empty" style={style}>
+        <h2>Can't reach Aasthi API</h2>
+        <p>Make sure the Aasthi backend is running on port 5200 (<code>start.ps1</code> in the aasthi folder).</p>
+      </div>
+    );
+  }
+
   return (
     <div style={style}>
-      <div className="module-empty">
-        <h2>{title}</h2>
-        <p>{desc}</p>
-        <button className="btn-primary" disabled>Coming Soon</button>
+      {summary && (
+        <div className="placeholder-grid" style={{ marginBottom: '1.25rem' }}>
+          <div className="placeholder-metric"><div className="pm-label">Total Income</div><div className="pm-value" style={{ color: 'var(--cash)' }}>{fmtMoney(summary.totalIncome)}</div></div>
+          <div className="placeholder-metric"><div className="pm-label">Expenses + Mortgage</div><div className="pm-value" style={{ color: 'var(--debt)' }}>{fmtMoney(summary.totalExpenses + summary.totalMortgage)}</div></div>
+          <div className="placeholder-metric"><div className="pm-label">Net Cash Flow</div><div className="pm-value" style={{ color: summary.netCashFlow >= 0 ? 'var(--cash)' : 'var(--debt)' }}>{fmtMoney(summary.netCashFlow)}</div></div>
+        </div>
+      )}
+
+      {summary && summary.byProperty.length > 0 && (
+        <>
+          <div className="maaya-section-label">Per-Property Cash Flow</div>
+          <div className="aasthi-cashflow-list">
+            {summary.byProperty.map(p => (
+              <div key={p.propertyId} className="aasthi-cashflow-row">
+                <span className="aasthi-cf-addr">{p.address}</span>
+                <span className="aasthi-cf-stat"><span className="cf-k">Net</span><b style={{ color: p.netCashFlow >= 0 ? 'var(--cash)' : 'var(--debt)' }}>{fmtMoney(p.netCashFlow)}</b></span>
+                <span className="aasthi-cf-stat"><span className="cf-k">Appreciation</span><b style={{ color: p.appreciation >= 0 ? 'var(--cash)' : 'var(--debt)' }}>{fmtMoney(p.appreciation)}{p.appreciationPct != null ? ` (${p.appreciationPct.toFixed(1)}%)` : ''}</b></span>
+                {p.cashOnCashPct != null && <span className="aasthi-cf-stat"><span className="cf-k">Cash-on-cash</span><b>{p.cashOnCashPct.toFixed(1)}%/yr</b></span>}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      <div className="aasthi-task-filters" style={{ marginTop: '1rem' }}>
+        <div className="maaya-section-label" style={{ margin: 0, flex: 1 }}>Entries</div>
+        <button className="btn-primary" onClick={() => setAdding(a => !a)}>{adding ? 'Cancel' : '+ Add Entry'}</button>
+      </div>
+
+      {adding && (
+        <div className="card aasthi-task-form">
+          <div className="aasthi-form-grid">
+            <div className="aasthi-form-group">
+              <label>Property</label>
+              <select value={form.propertyId} onChange={e => setForm(f => ({ ...f, propertyId: e.target.value }))}>
+                <option value="">Select property...</option>
+                {properties?.map(p => <option key={p.id} value={p.id}>{p.address}</option>)}
+              </select>
+            </div>
+            <div className="aasthi-form-group">
+              <label>Type</label>
+              <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value, category: FIN_CATEGORIES[e.target.value][0] }))}>
+                {FIN_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className="aasthi-form-group">
+              <label>Category</label>
+              <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+                {FIN_CATEGORIES[form.type].map(c => <option key={c} value={c}>{c.replace('_', ' ')}</option>)}
+              </select>
+            </div>
+            <div className="aasthi-form-group">
+              <label>Amount</label>
+              <input type="number" step="any" placeholder="1200" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+            </div>
+            <div className="aasthi-form-group">
+              <label>Date</label>
+              <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            </div>
+            <div className="aasthi-form-group aasthi-form-span2">
+              <label>Notes</label>
+              <input placeholder="Optional" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+            </div>
+          </div>
+          <div className="aasthi-form-actions">
+            <button className="btn-primary" disabled={!form.propertyId || !form.amount || create.isPending} onClick={() => create.mutate()}>
+              {create.isPending ? 'Adding...' : 'Add Entry'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {properties && properties.length > 0 && (
+        <div className="aasthi-task-filters" style={{ marginTop: '0.5rem' }}>
+          <select value={form.propertyId} onChange={e => setForm(f => ({ ...f, propertyId: e.target.value }))} className="aasthi-inline-select">
+            <option value="">{properties[0]?.address} (default)</option>
+            {properties.map(p => <option key={p.id} value={p.id}>{p.address}</option>)}
+          </select>
+        </div>
+      )}
+
+      <div className="aasthi-task-list">
+        {entries.length === 0 && <p className="text-dim">No entries for this property yet.</p>}
+        {entries.map(e => (
+          <div key={e.id} className="aasthi-fin-row">
+            <span className={`aasthi-fin-badge ${e.type}`}>{e.type}</span>
+            <div className="aasthi-fin-body">
+              <span className="aasthi-fin-cat">{e.category.replace('_', ' ')}</span>
+              {e.notes && <span className="aasthi-fin-notes">{e.notes}</span>}
+            </div>
+            <span className="aasthi-fin-date">{fmtDate(e.date)}</span>
+            <span className="aasthi-fin-amount" style={{ color: e.type === 'income' ? 'var(--cash)' : 'var(--debt)' }}>
+              {e.type === 'income' ? '+' : '−'}{fmtMoney(e.amount)}
+            </span>
+            <button className="btn-danger-ghost" onClick={() => remove.mutate(e.id)}>x</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── Maintenance ── */
+interface MaintenanceItem {
+  id: string; propertyId: string; title: string; description: string | null;
+  vendorName: string | null; vendorContact: string | null; cost: number | null;
+  category: string; completedDate: string | null; createdAt: string;
+}
+interface MaintenanceSummaryData {
+  totalSpend: number; byCategory: Record<string, number>; byProperty: Record<string, number>; logCount: number;
+}
+const MAINT_CATEGORIES = ['repair', 'improvement', 'inspection', 'other'] as const;
+
+function MaintenancePage() {
+  const qClient = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [selectedProp, setSelectedProp] = useState('');
+  const [form, setForm] = useState({ title: '', description: '', vendorName: '', vendorContact: '', cost: '', category: 'repair', completedDate: '' });
+
+  const { data: properties } = useQuery<Property[]>({ queryKey: ['properties'], queryFn: () => get(`${API}/api/properties`) });
+  const summaryQ = useQuery<MaintenanceSummaryData>({ queryKey: ['maintenance-summary'], queryFn: () => get(`${API}/api/maintenance/summary`) });
+  const activeProp = selectedProp || properties?.[0]?.id || '';
+  const logsQ = useQuery<MaintenanceItem[]>({
+    queryKey: ['maintenance', activeProp],
+    queryFn: () => activeProp ? get(`${API}/api/properties/${activeProp}/maintenance`) : Promise.resolve([]),
+    enabled: !!activeProp,
+  });
+
+  const invalidate = () => {
+    qClient.invalidateQueries({ queryKey: ['maintenance'] });
+    qClient.invalidateQueries({ queryKey: ['maintenance-summary'] });
+  };
+
+  const create = useMutation({
+    mutationFn: () => send(`${API}/api/properties/${activeProp}/maintenance`, 'POST', {
+      title: form.title, description: form.description || null,
+      vendorName: form.vendorName || null, vendorContact: form.vendorContact || null,
+      cost: form.cost ? parseFloat(form.cost) : null, category: form.category,
+      completedDate: form.completedDate || null,
+    }),
+    onSuccess: () => { setForm({ title: '', description: '', vendorName: '', vendorContact: '', cost: '', category: 'repair', completedDate: '' }); setAdding(false); invalidate(); },
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => send(`${API}/api/maintenance/${id}`, 'DELETE'),
+    onSuccess: invalidate,
+  });
+
+  const summary = summaryQ.data;
+  const logs = logsQ.data ?? [];
+
+  if (summaryQ.isError) {
+    return (
+      <div className="module-empty" style={style}>
+        <h2>Can't reach Aasthi API</h2>
+        <p>Make sure the Aasthi backend is running on port 5200 (<code>start.ps1</code> in the aasthi folder).</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={style}>
+      {summary && (
+        <div className="placeholder-grid" style={{ marginBottom: '1.25rem' }}>
+          <div className="placeholder-metric"><div className="pm-label">Total Spend</div><div className="pm-value">{fmtMoney(summary.totalSpend)}</div></div>
+          <div className="placeholder-metric"><div className="pm-label">Log Entries</div><div className="pm-value">{summary.logCount}</div></div>
+          <div className="placeholder-metric"><div className="pm-label">Categories</div><div className="pm-value">{Object.keys(summary.byCategory).length}</div></div>
+        </div>
+      )}
+
+      <div className="aasthi-task-filters">
+        {properties && properties.length > 0 && (
+          <select value={activeProp} onChange={e => setSelectedProp(e.target.value)} className="aasthi-inline-select">
+            {properties.map(p => <option key={p.id} value={p.id}>{p.address}</option>)}
+          </select>
+        )}
+        <button className="btn-primary" style={{ marginLeft: 'auto' }} onClick={() => setAdding(a => !a)}>{adding ? 'Cancel' : '+ Log Work'}</button>
+      </div>
+
+      {adding && (
+        <div className="card aasthi-task-form">
+          <div className="aasthi-form-grid">
+            <div className="aasthi-form-group aasthi-form-span2">
+              <label>Title</label>
+              <input placeholder="e.g. Replaced water heater" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+            </div>
+            <div className="aasthi-form-group aasthi-form-span2">
+              <label>Description</label>
+              <input placeholder="Details (optional)" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+            </div>
+            <div className="aasthi-form-group">
+              <label>Category</label>
+              <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+                {MAINT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="aasthi-form-group">
+              <label>Cost</label>
+              <input type="number" step="any" placeholder="450" value={form.cost} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))} />
+            </div>
+            <div className="aasthi-form-group">
+              <label>Vendor</label>
+              <input placeholder="ABC Plumbing" value={form.vendorName} onChange={e => setForm(f => ({ ...f, vendorName: e.target.value }))} />
+            </div>
+            <div className="aasthi-form-group">
+              <label>Vendor Contact</label>
+              <input placeholder="Phone / email" value={form.vendorContact} onChange={e => setForm(f => ({ ...f, vendorContact: e.target.value }))} />
+            </div>
+            <div className="aasthi-form-group">
+              <label>Completed Date</label>
+              <input type="date" value={form.completedDate} onChange={e => setForm(f => ({ ...f, completedDate: e.target.value }))} />
+            </div>
+          </div>
+          <div className="aasthi-form-actions">
+            <button className="btn-primary" disabled={!form.title || !activeProp || create.isPending} onClick={() => create.mutate()}>
+              {create.isPending ? 'Saving...' : 'Save Log'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="aasthi-task-list">
+        {logs.length === 0 && <p className="text-dim">No maintenance logged for this property yet.</p>}
+        {logs.map(m => (
+          <div key={m.id} className="aasthi-maint-row">
+            <span className={`aasthi-maint-badge ${m.category}`}>{m.category}</span>
+            <div className="aasthi-maint-body">
+              <span className="aasthi-maint-title">{m.title}</span>
+              {m.description && <span className="aasthi-maint-desc">{m.description}</span>}
+              <div className="aasthi-maint-meta">
+                {m.vendorName && <span>{m.vendorName}{m.vendorContact ? ` · ${m.vendorContact}` : ''}</span>}
+                {m.completedDate && <span>{fmtDate(m.completedDate)}</span>}
+              </div>
+            </div>
+            {m.cost != null && <span className="aasthi-maint-cost">{fmtMoney(m.cost)}</span>}
+            <button className="btn-danger-ghost" onClick={() => remove.mutate(m.id)}>x</button>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -620,8 +929,8 @@ function AasthiInner() {
       </nav>
       {page === 'properties'  && <Properties />}
       {page === 'tasks'       && <TasksPage />}
-      {page === 'financials'  && <EmptyPage title="Property Financials" desc="Income, expenses, mortgage payments, and ROI breakdown per property and across the portfolio." />}
-      {page === 'maintenance' && <EmptyPage title="Maintenance Log" desc="Track repairs, improvements, vendor contacts, and maintenance costs for each property." />}
+      {page === 'financials'  && <FinancialsPage />}
+      {page === 'maintenance' && <MaintenancePage />}
     </div>
   );
 }

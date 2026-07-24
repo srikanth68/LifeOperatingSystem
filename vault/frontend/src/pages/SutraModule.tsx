@@ -2,9 +2,10 @@ import { useState, useRef } from 'react';
 import { QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { makeModuleQueryClient } from '../services/moduleQuery';
 import { authHeaders } from '../services/auth';
+import { moduleApi } from '../services/apiHost';
 import '../styles/sutra.css';
 
-const API = 'http://localhost:5400';
+const API = moduleApi(5400);
 
 const qc = makeModuleQueryClient(30_000);
 
@@ -44,6 +45,9 @@ function fileIcon(ct: string) { if (ct?.includes('pdf')) return '📄'; if (ct?.
 
 const get = (url: string) => fetch(url, { headers: authHeaders() }).then(r => { if (!r.ok) throw new Error(r.status.toString()); return r.json(); });
 const send = (url: string, method: string) => fetch(url, { method, headers: authHeaders() }).then(r => { if (!r.ok) throw new Error(r.status.toString()); });
+const sendJson = (url: string, method: string, body: unknown) =>
+  fetch(url, { method, headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(r => { if (!r.ok) throw new Error(r.status.toString()); return r.json(); });
 
 // Turn a raw fetch/HTTP error into something a human can act on.
 function friendlyError(e: unknown): string {
@@ -67,9 +71,12 @@ function Banner({ kind, text, onClose }: { kind: 'error' | 'ok'; text: string; o
   );
 }
 
-function AllDocuments() {
+function AllDocuments({ filterCategory, onClearFilter }: { filterCategory?: string | null; onClearFilter?: () => void }) {
   const qc = useQueryClient();
-  const docsQ = useQuery<Doc[]>({ queryKey: ['sutra-docs'], queryFn: () => get(`${API}/api/documents`) });
+  const docsQ = useQuery<Doc[]>({
+    queryKey: ['sutra-docs', filterCategory ?? 'all'],
+    queryFn: () => get(`${API}/api/documents${filterCategory ? `?category=${encodeURIComponent(filterCategory)}` : ''}`),
+  });
   const { data: stats } = useQuery<Stats>({ queryKey: ['sutra-stats'], queryFn: () => get(`${API}/api/documents/stats`) });
   const docs = docsQ.data;
   const fileRef = useRef<HTMLInputElement>(null);
@@ -105,12 +112,38 @@ function AllDocuments() {
     onError: (e) => setNotice({ kind: 'error', text: friendlyError(e) }),
   });
 
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ category: 'other', tags: '', expiry: '', notes: '' });
+
+  const beginEdit = (d: Doc) => {
+    setEditId(d.id);
+    setEditForm({ category: d.category, tags: d.tags ?? '', expiry: d.expiresAt ? d.expiresAt.slice(0, 10) : '', notes: d.notes ?? '' });
+  };
+
+  const saveEdit = useMutation({
+    mutationFn: (id: string) => sendJson(`${API}/api/documents/${id}`, 'PUT', {
+      category: editForm.category,
+      tags: editForm.tags,
+      notes: editForm.notes,
+      expiresAt: editForm.expiry || null,
+      clearExpiry: !editForm.expiry,
+    }),
+    onSuccess: () => { setEditId(null); setNotice({ kind: 'ok', text: 'Document updated.' }); invalidate(); },
+    onError: (e) => setNotice({ kind: 'error', text: friendlyError(e) }),
+  });
+
   return (
     <div>
       {docsQ.isError && (
         <Banner kind="error" text={friendlyError(docsQ.error)} onClose={() => docsQ.refetch()} />
       )}
       {notice && <Banner kind={notice.kind} text={notice.text} onClose={() => setNotice(null)} />}
+      {filterCategory && (
+        <div className="sutra-filter-chip">
+          Filtered by <strong>{CAT_ICON[filterCategory] || ''} {filterCategory}</strong>
+          <button onClick={onClearFilter} title="Clear filter">×</button>
+        </div>
+      )}
 
       {stats && (
         <div className="sutra-stats">
@@ -143,42 +176,58 @@ function AllDocuments() {
 
       {docs?.length === 0 && (
         <div className="sutra-empty">
-          <h3>No documents yet</h3>
-          <p>Upload your first document above to get started.</p>
+          <h3>{filterCategory ? 'No documents in this category' : 'No documents yet'}</h3>
+          <p>{filterCategory ? 'Try clearing the filter or upload a document tagged with this category.' : 'Upload your first document above to get started.'}</p>
         </div>
       )}
 
       {docs?.map(d => (
-        <div key={d.id} className="sutra-doc-row">
-          <span className="sutra-doc-icon">{fileIcon(d.contentType)}</span>
-          <div className="sutra-doc-info">
-            <a className="sutra-doc-name" href={`${API}/api/documents/${d.id}/download`} target="_blank" rel="noreferrer">{d.fileName}</a>
-            <div className="sutra-doc-meta">
-              <span>{fmtSize(d.sizeBytes)}</span>
-              <span>{fmtDate(d.uploadedAt)}</span>
-              {d.sourceModule && <span>via {d.sourceModule}</span>}
-              {d.tags && <span>{d.tags}</span>}
-              {d.expiresAt && <span>expires {fmtDate(d.expiresAt)}</span>}
+        <div key={d.id}>
+          <div className="sutra-doc-row">
+            <span className="sutra-doc-icon">{fileIcon(d.contentType)}</span>
+            <div className="sutra-doc-info">
+              <a className="sutra-doc-name" href={`${API}/api/documents/${d.id}/download`} target="_blank" rel="noreferrer">{d.fileName}</a>
+              <div className="sutra-doc-meta">
+                <span>{fmtSize(d.sizeBytes)}</span>
+                <span>{fmtDate(d.uploadedAt)}</span>
+                {d.sourceModule && <span>via {d.sourceModule}</span>}
+                {d.tags && <span>{d.tags}</span>}
+                {d.expiresAt && <span>expires {fmtDate(d.expiresAt)}</span>}
+              </div>
             </div>
+            <span className="sutra-doc-cat" style={{ background: (CAT_COLOR[d.category] || '#7a96c0') + '20', color: CAT_COLOR[d.category] || '#7a96c0', border: `1px solid ${(CAT_COLOR[d.category] || '#7a96c0')}40` }}>
+              {d.category}
+            </span>
+            <button className="sutra-doc-edit" onClick={() => editId === d.id ? setEditId(null) : beginEdit(d)} title="Edit metadata">✎</button>
+            <button className="sutra-doc-delete" onClick={() => del.mutate(d.id)} title="Delete">×</button>
           </div>
-          <span className="sutra-doc-cat" style={{ background: (CAT_COLOR[d.category] || '#7a96c0') + '20', color: CAT_COLOR[d.category] || '#7a96c0', border: `1px solid ${(CAT_COLOR[d.category] || '#7a96c0')}40` }}>
-            {d.category}
-          </span>
-          <button className="sutra-doc-delete" onClick={() => del.mutate(d.id)} title="Delete">×</button>
+          {editId === d.id && (
+            <div className="sutra-edit-form">
+              <select value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}>
+                {CATEGORIES.map(c => <option key={c.name} value={c.name}>{c.label}</option>)}
+                <option value="other">Other</option>
+              </select>
+              <input type="text" placeholder="Tags (comma-sep)" value={editForm.tags} onChange={e => setEditForm(f => ({ ...f, tags: e.target.value }))} />
+              <input type="date" value={editForm.expiry} onChange={e => setEditForm(f => ({ ...f, expiry: e.target.value }))} title="Expiry date" />
+              <input type="text" placeholder="Notes" value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} />
+              <button className="sutra-edit-save" disabled={saveEdit.isPending} onClick={() => saveEdit.mutate(d.id)}>{saveEdit.isPending ? '…' : 'Save'}</button>
+              <button className="sutra-edit-cancel" onClick={() => setEditId(null)}>Cancel</button>
+            </div>
+          )}
         </div>
       ))}
     </div>
   );
 }
 
-function CategoriesPage() {
+function CategoriesPage({ onSelect }: { onSelect: (cat: string) => void }) {
   const { data: stats } = useQuery<Stats>({ queryKey: ['sutra-stats'], queryFn: () => get(`${API}/api/documents/stats`) });
   return (
     <div className="sutra-cat-grid">
       {CATEGORIES.map(c => {
         const count = stats?.byCategory[c.name] ?? 0;
         return (
-          <div key={c.name} className="sutra-cat-card">
+          <div key={c.name} className="sutra-cat-card" onClick={() => onSelect(c.name)} role="button" tabIndex={0}>
             <div className="sutra-cat-head">
               <span className="sutra-cat-icon">{c.icon}</span>
               <span className="sutra-cat-name">{c.label}</span>
@@ -263,18 +312,23 @@ function SearchPage() {
 
 function SutraInner() {
   const [page, setPage] = useState<Page>('all');
+  const [filterCategory, setFilterCategory] = useState<string | null>(null);
   const style = { '--mc': 'var(--sutra)' } as React.CSSProperties;
   return (
     <div style={style}>
       <nav className="module-subnav">
         {TABS.map(t => (
-          <button key={t.id} className={`module-tab ${page === t.id ? 'active' : ''}`} onClick={() => setPage(t.id)}>
+          <button
+            key={t.id}
+            className={`module-tab ${page === t.id ? 'active' : ''}`}
+            onClick={() => { setPage(t.id); if (t.id !== 'all') setFilterCategory(null); }}
+          >
             {t.label}
           </button>
         ))}
       </nav>
-      {page === 'all' && <AllDocuments />}
-      {page === 'categories' && <CategoriesPage />}
+      {page === 'all' && <AllDocuments filterCategory={filterCategory} onClearFilter={() => setFilterCategory(null)} />}
+      {page === 'categories' && <CategoriesPage onSelect={cat => { setFilterCategory(cat); setPage('all'); }} />}
       {page === 'expiry' && <ExpiryTracker />}
       {page === 'search' && <SearchPage />}
     </div>

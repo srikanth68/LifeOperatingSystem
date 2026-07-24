@@ -1,4 +1,6 @@
-const AUTH_API = 'http://localhost:5000/api/auth';
+import { moduleApi } from './apiHost';
+
+const AUTH_API = `${moduleApi(5000)}/api/auth`;
 const TOKEN_KEY = 'maaya_access_token';
 const REFRESH_KEY = 'maaya_refresh_token';
 const USER_KEY = 'maaya_username';
@@ -136,6 +138,32 @@ export function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise
   const headers = new Headers(init?.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
   return fetch(input, { ...init, headers });
+}
+
+// Auto-logoff on session expiry. Most module pages (San, Vitara, Karma, etc.)
+// use their own plain `fetch()` helpers, not authFetchWithRefresh — so a 401
+// from an expired/wiped session (e.g. after a backend restart while you were
+// away) used to just look like every module going "offline" with no
+// explanation, requiring a manual logout+login to fix. Patching window.fetch
+// once, globally, means every existing call site gets this for free with no
+// per-module changes: any 401 seen while we believe we're logged in clears
+// the (now-invalid) session and immediately shows the login/PIN screen again.
+let sessionExpiredHandler: (() => void) | null = null;
+export function onSessionExpired(handler: () => void) { sessionExpiredHandler = handler; }
+
+let interceptorInstalled = false;
+export function installSessionExpiryInterceptor() {
+  if (interceptorInstalled) return;
+  interceptorInstalled = true;
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async (...args: Parameters<typeof fetch>) => {
+    const res = await originalFetch(...args);
+    if (res.status === 401 && auth.isAuthenticated()) {
+      auth.clear();
+      sessionExpiredHandler?.();
+    }
+    return res;
+  };
 }
 
 let refreshPromise: Promise<AuthTokens | null> | null = null;

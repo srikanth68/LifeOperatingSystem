@@ -22,3 +22,17 @@ public record DashboardResult(
 public record InsightCreateRequest(string Title, string Body);
 
 public record SearchResult(List<KnowledgeEntryResult> Entries, int Count, string Query);
+
+// ── Activity events ──
+// OccurredAt is the REAL time the event happened (module-supplied). EventKey is the
+// producer's stable idempotency key ("vault:transaction:<id>"); if omitted, the server
+// derives one so retries still can't duplicate.
+public record EventRequest(
+    string Source, string Kind, string Title,
+    string? Detail = null, DateTime? OccurredAt = null, string? EventKey = null, string? RawJson = null);
+
+public record EventBatchRequest(List<EventRequest> Events);
+
+public record EventResult(
+    Guid Id, string Source, string Kind, string Title, string? Detail,
+    DateTime OccurredAt, DateTime RecordedAt);

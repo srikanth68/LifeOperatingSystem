@@ -6,6 +6,7 @@ public interface INorthStarRepository
 {
     // Knowledge
     Task<KnowledgeEntry> AddEntryAsync(KnowledgeEntry entry);
+    Task<KnowledgeEntry> UpsertDailyEntryAsync(string source, string topic, string summary, string rawJson, DateOnly day);
     Task<List<KnowledgeEntry>> GetEntriesAsync(string? source = null, string? topic = null, int days = 30, int limit = 200);
     Task<KnowledgeEntry?> GetEntryAsync(Guid id);
     Task<List<KnowledgeEntry>> SearchAsync(string query, int limit = 50);
@@ -39,4 +40,16 @@ public interface INorthStarRepository
     Task<UserFact?> GetFactAsync(string key);
     Task<List<UserFact>> GetAllFactsAsync();
     Task<bool> DeleteFactAsync(string key);
+
+    // Activity events (append-only, event-level, real occurrence timestamps)
+    Task<bool> AddEventIfNewAsync(ActivityEvent ev);              // false = duplicate EventKey, skipped
+    Task<int> AddEventsIfNewAsync(IEnumerable<ActivityEvent> evs); // returns count actually inserted
+    Task<List<ActivityEvent>> GetEventsSinceAsync(DateTime sinceUtc, string? source = null, int limit = 200);
+
+    // Agent memory (FTS5-ranked long-term store)
+    Task<MemoryEntry> SaveMemoryAsync(MemoryEntry memory);
+    Task<List<MemoryEntry>> RecallMemoriesAsync(string query, string? kind = null, int limit = 10);
+    Task<List<MemoryEntry>> GetRecentMemoriesAsync(int limit = 20, string? kind = null);
+    Task<bool> DeleteMemoryAsync(Guid id);
+    Task<(int Total, Dictionary<string, int> ByKind)> GetMemoryStatsAsync();
 }

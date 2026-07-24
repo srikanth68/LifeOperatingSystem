@@ -348,3 +348,39 @@
 .goal-link-row { display: grid; grid-template-columns: 1fr 1.4fr auto; gap: 0.4rem; align-items: center; }
 .goal-link-row button { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 1rem; padding: 0.25rem; }
 .goal-link-row button:hover { color: var(--karma); }
+
+/* ── Habit analytics: heatmap + day-of-week ── */
+.karma-stats-toggle { font-size: 0.65rem; color: var(--text3); margin-left: 0.5rem; }
+.karma-heatmap-wrap {
+  padding: 0.9rem 1rem; margin: -0.35rem 0 0.6rem;
+  background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+  border-radius: 0 0 var(--r-md) var(--r-md); border-top: none;
+}
+.karma-stats-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+.karma-stat-pill {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 0.35rem 0.7rem; background: rgba(244,114,182,0.08);
+  border: 1px solid rgba(244,114,182,0.2); border-radius: var(--r-sm);
+}
+.karma-stat-pill b { font-size: 0.95rem; color: var(--karma); font-variant-numeric: tabular-nums; }
+.karma-stat-pill span { font-size: 0.6rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; }
+.karma-heatmap { display: flex; gap: 3px; overflow-x: auto; padding-bottom: 0.4rem; }
+.karma-heat-col { display: flex; flex-direction: column; gap: 3px; }
+.karma-heat-cell { width: 11px; height: 11px; border-radius: 2px; background: rgba(255,255,255,0.04); flex-shrink: 0; }
+.karma-heat-cell.done { background: var(--karma); box-shadow: 0 0 4px rgba(244,114,182,0.4); }
+.karma-heat-cell.miss { background: rgba(232,68,68,0.25); }
+.karma-heat-cell.future { background: transparent; }
+.karma-dow { display: flex; gap: 0.75rem; align-items: flex-end; margin-top: 0.7rem; height: 48px; }
+.karma-dow-item { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; flex: 1; }
+.karma-dow-bar { width: 60%; max-width: 20px; background: var(--karma); border-radius: 2px 2px 0 0; opacity: 0.8; }
+.karma-dow-item span { font-size: 0.6rem; color: var(--text3); }
+
+/* ── Goal linked habits ── */
+.goal-linked-habits { display: flex; flex-direction: column; gap: 0.4rem; }
+.goal-linked-habit { display: flex; align-items: center; gap: 0.6rem; font-size: 0.8rem; }
+.glh-emoji { flex-shrink: 0; }
+.glh-name { flex: 1; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.glh-streak { font-size: 0.72rem; color: var(--text2); flex-shrink: 0; }
+.glh-rate-bar { width: 60px; height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+.glh-rate-fill { height: 100%; background: var(--karma); border-radius: 3px; }
+.glh-rate { font-size: 0.7rem; color: var(--text3); width: 32px; text-align: right; flex-shrink: 0; }

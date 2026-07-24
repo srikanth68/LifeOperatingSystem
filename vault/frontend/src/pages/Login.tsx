@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { auth } from '../services/auth';
-import ArcReactor, { HudCorners, HudStatus, HudScanlines } from '../components/ArcReactor';
+import { HudCorners, HudStatus, HudScanlines } from '../components/ArcReactor';
 import '../styles/login.css';
 
 export default function Login({ onLogin }: { onLogin: () => void }) {
@@ -28,8 +28,8 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
       <HudScanlines />
       <HudCorners />
       <form className="login-card" onSubmit={handleSubmit}>
-        <div className="arc-reactor" style={{ width: 120, height: 120 }}>
-          <ArcReactor size={120} />
+        <div className="login-sigil">
+          <img src="/sigil.png" alt="Maaya" width={132} height={132} />
         </div>
         <h1 className="login-title">MAAYA</h1>
         <p className="login-subtitle">Personal Operating System</p>

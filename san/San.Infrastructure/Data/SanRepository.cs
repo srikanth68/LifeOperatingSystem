@@ -203,4 +203,19 @@ public class SanRepository(SanDbContext db) : ISanRepository
             return thisYear.DayNumber;
         }).ToList();
     }
+
+    // ── Settings ──
+
+    public async Task<string?> GetSettingAsync(string key) =>
+        (await db.Settings.FirstOrDefaultAsync(s => s.Key == key))?.Value;
+
+    public async Task SetSettingAsync(string key, string value)
+    {
+        var existing = await db.Settings.FirstOrDefaultAsync(s => s.Key == key);
+        if (existing is null)
+            db.Settings.Add(new AppSetting { Key = key, Value = value });
+        else
+            existing.Value = value;
+        await db.SaveChangesAsync();
+    }
 }

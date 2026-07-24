@@ -12,9 +12,12 @@ public class SanDbContext(DbContextOptions<SanDbContext> options) : DbContext(op
     public DbSet<LocationUpdate> LocationUpdates => Set<LocationUpdate>();
     public DbSet<ActivitySnapshot> ActivitySnapshots => Set<ActivitySnapshot>();
     public DbSet<Person> People => Set<Person>();
+    public DbSet<AppSetting> Settings => Set<AppSetting>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<AppSetting>(e => e.HasKey(s => s.Key));
+
         b.Entity<ChatMessage>(e =>
         {
             e.HasKey(m => m.Id);

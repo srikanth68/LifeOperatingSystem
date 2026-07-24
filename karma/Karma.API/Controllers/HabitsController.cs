@@ -71,6 +71,7 @@ public class HabitsController(IKarmaRepository repo) : ControllerBase
             NotifyMessage = req.NotifyMessage?.Trim(),
             NotifyChannel = req.NotifyChannel ?? "telegram",
             NotifyDays = req.NotifyDays ?? [0, 1, 2, 3, 4, 5, 6],
+            GoalId = req.GoalId,
         };
         var saved = await repo.AddHabitAsync(habit);
         return Ok(ToResult(saved, 0, 0, null));
@@ -89,6 +90,7 @@ public class HabitsController(IKarmaRepository repo) : ControllerBase
             h.NotifyMessage = req.NotifyMessage?.Trim();
             h.NotifyChannel = req.NotifyChannel ?? h.NotifyChannel;
             if (req.NotifyDays != null) h.NotifyDays = req.NotifyDays;
+            h.GoalId = req.GoalId;
         });
         if (updated is null) return NotFound();
         var today = DateOnly.FromDateTime(DateTime.Now);
@@ -127,8 +129,33 @@ public class HabitsController(IKarmaRepository repo) : ControllerBase
         return Ok(logs.Select(l => new HabitLogResult(l.Id, l.HabitId, l.Date, l.Completed, l.Note, l.LoggedAt)));
     }
 
+    // Analytics for the calendar-heatmap + day-of-week stats view.
+    [HttpGet("{id:guid}/stats")]
+    public async Task<IActionResult> Stats(Guid id, [FromQuery] int days = 365)
+    {
+        var habit = await repo.GetHabitAsync(id);
+        if (habit is null) return NotFound();
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var from = today.AddDays(-days);
+        var logs = await repo.GetHabitLogsAsync(id, from, today);
+        var (cur, best) = KarmaRepository.ComputeStreaks(logs, today);
+
+        var totalLogged = logs.Count;
+        var totalCompleted = logs.Count(l => l.Completed);
+        var dow = new int[7];
+        foreach (var l in logs.Where(l => l.Completed))
+            dow[(int)l.Date.DayOfWeek]++;
+
+        return Ok(new HabitStatsResult(
+            id, totalLogged, totalCompleted,
+            totalLogged > 0 ? (double)totalCompleted / totalLogged : 0,
+            cur, best, dow,
+            logs.Select(l => new HabitLogResult(l.Id, l.HabitId, l.Date, l.Completed, l.Note, l.LoggedAt)).ToList()));
+    }
+
     private static HabitResult ToResult(Habit h, int cur, int best, bool? todayCompleted) =>
         new(h.Id, h.Name, h.Description, h.Emoji, h.Category,
             h.NotifyTime, h.NotifyMessage, h.NotifyChannel, h.NotifyDays,
-            h.IsActive, cur, best, todayCompleted, h.CreatedAt);
+            h.IsActive, cur, best, todayCompleted, h.CreatedAt, h.GoalId);
 }

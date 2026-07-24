@@ -11,7 +11,18 @@
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Maaya reads your calendar events to provide schedule-aware context to your assistant.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Maaya reads health data (steps, heart rate, calories, sleep) to provide wellness-aware assistance.</string>
+	<string>Maaya reads health data (steps, heart rate, calories, sleep, weight, and workouts) to sync with Vitara and provide wellness-aware assistance.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Maaya uses the microphone for hands-free voice conversations with San. Audio is sent only to your own Maaya server for local transcription — never to a cloud service.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- The app talks plain HTTP to Everest over the private NordVPN Meshnet /
+		     Tailscale mesh (e.g. http://100.126.41.41:5300). Those raw-IP HTTP
+		     loads are blocked by ATS unless arbitrary loads are allowed. This is a
+		     private, non-App-Store build reaching only the owner's own mesh host. -->
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>

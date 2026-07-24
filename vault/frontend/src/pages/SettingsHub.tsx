@@ -1,8 +1,25 @@
 import { useState, useEffect } from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { summaryApi, syncApi } from '@/services/api';
+import { makeModuleQueryClient } from '../services/moduleQuery';
 import { authHeaders } from '../services/auth';
+import { getThemePref, setThemePref, type ThemePref } from '../services/theme';
+import { useTimezone, setTimezone, DEFAULT_TIMEZONE } from '../services/timezone';
 import PlaidLinkButton from '@/components/PlaidLink';
 import '../styles/modules.css';
+
+// Settings uses react-query (the timezone setting) — without a provider the whole
+// tab throws "No QueryClient set" and renders blank.
+const qc = makeModuleQueryClient(60_000);
+
+// A short, US-focused list rather than the full IANA database — extend if needed.
+const TIMEZONE_OPTIONS = [
+  { id: 'America/New_York',    label: 'Eastern (EST/EDT)' },
+  { id: 'America/Chicago',     label: 'Central (CST/CDT)' },
+  { id: 'America/Denver',      label: 'Mountain (MST/MDT)' },
+  { id: 'America/Los_Angeles', label: 'Pacific (PST/PDT)' },
+  { id: 'UTC',                 label: 'UTC' },
+];
 
 type Page = 'integrations' | 'notifications' | 'data' | 'appearance' | 'about';
 
@@ -165,6 +182,34 @@ function Integrations() {
   );
 }
 
+function TimezoneSetting() {
+  const tzQ = useTimezone();
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const current = tzQ.data ?? DEFAULT_TIMEZONE;
+
+  const onChange = async (tz: string) => {
+    setSaving(true); setSaved(false);
+    try {
+      await setTimezone(tz);
+      await tzQ.refetch();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <SectionCard title="Timezone">
+      <Row label="System timezone" desc="Used everywhere reminders, habit check-ins, and timestamps are created or shown — across San, Karma, and the rest of Maaya. Defaults to Eastern.">
+        <select value={current} disabled={saving} onChange={e => onChange(e.target.value)} style={{ width: 'auto', padding: '0.35rem 0.75rem' }}>
+          {TIMEZONE_OPTIONS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+        </select>
+        {saved && <span style={{ marginLeft: '0.6rem', fontSize: '0.72rem', color: 'var(--vitara)' }}>Saved ✓</span>}
+      </Row>
+    </SectionCard>
+  );
+}
+
 function Notifications() {
   const [prefs, setPrefs] = useState({
     vault_unusual:   true,
@@ -179,29 +224,32 @@ function Notifications() {
   const toggle = (key: keyof typeof prefs) => setPrefs(p => ({ ...p, [key]: !p[key] }));
 
   return (
-    <SectionCard title="Notification Preferences">
-      <Row label="Unusual spending detected" desc="Vault · Alert when a transaction is significantly above average">
-        <Toggle enabled={prefs.vault_unusual} onToggle={() => toggle('vault_unusual')} />
-      </Row>
-      <Row label="Sync completed" desc="Vault · Notify when bank data syncs successfully">
-        <Toggle enabled={prefs.vault_sync} onToggle={() => toggle('vault_sync')} />
-      </Row>
-      <Row label="Health goal not met" desc="Vitara · Daily reminder if steps/sleep goal missed">
-        <Toggle enabled={prefs.vitara_goals} onToggle={() => toggle('vitara_goals')} />
-      </Row>
-      <Row label="Price alert triggered" desc="Nexus · When a watchlist stock hits your target price">
-        <Toggle enabled={prefs.nexus_alerts} onToggle={() => toggle('nexus_alerts')} />
-      </Row>
-      <Row label="Property maintenance due" desc="Aasthi · Upcoming maintenance reminders">
-        <Toggle enabled={prefs.aasthi_maintain} onToggle={() => toggle('aasthi_maintain')} />
-      </Row>
-      <Row label="Document expiry" desc="Sutra · 30 days before passport, insurance, or license expires">
-        <Toggle enabled={prefs.sutra_expiry} onToggle={() => toggle('sutra_expiry')} />
-      </Row>
-      <Row label="Habit check-in" desc="Karma · Daily reminder to log your habits">
-        <Toggle enabled={prefs.karma_habits} onToggle={() => toggle('karma_habits')} />
-      </Row>
-    </SectionCard>
+    <div>
+      <TimezoneSetting />
+      <SectionCard title="Notification Preferences">
+        <Row label="Unusual spending detected" desc="Vault · Alert when a transaction is significantly above average">
+          <Toggle enabled={prefs.vault_unusual} onToggle={() => toggle('vault_unusual')} />
+        </Row>
+        <Row label="Sync completed" desc="Vault · Notify when bank data syncs successfully">
+          <Toggle enabled={prefs.vault_sync} onToggle={() => toggle('vault_sync')} />
+        </Row>
+        <Row label="Health goal not met" desc="Vitara · Daily reminder if steps/sleep goal missed">
+          <Toggle enabled={prefs.vitara_goals} onToggle={() => toggle('vitara_goals')} />
+        </Row>
+        <Row label="Price alert triggered" desc="Nexus · When a watchlist stock hits your target price">
+          <Toggle enabled={prefs.nexus_alerts} onToggle={() => toggle('nexus_alerts')} />
+        </Row>
+        <Row label="Property maintenance due" desc="Aasthi · Upcoming maintenance reminders">
+          <Toggle enabled={prefs.aasthi_maintain} onToggle={() => toggle('aasthi_maintain')} />
+        </Row>
+        <Row label="Document expiry" desc="Sutra · 30 days before passport, insurance, or license expires">
+          <Toggle enabled={prefs.sutra_expiry} onToggle={() => toggle('sutra_expiry')} />
+        </Row>
+        <Row label="Habit check-in" desc="Karma · Daily reminder to log your habits">
+          <Toggle enabled={prefs.karma_habits} onToggle={() => toggle('karma_habits')} />
+        </Row>
+      </SectionCard>
+    </div>
   );
 }
 
@@ -247,22 +295,20 @@ function DataSync() {
 }
 
 function Appearance() {
+  const [theme, setTheme] = useState<ThemePref>(getThemePref());
+  const pick = (t: ThemePref) => { setTheme(t); setThemePref(t); };
   return (
     <SectionCard title="Theme">
-      <Row label="Color theme" desc="Dark mode (default) — light mode coming soon">
+      <Row label="Color theme" desc="Switch between dark, light, or follow your system setting">
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {[
-            { name: 'Dark', active: true },
-            { name: 'Light', active: false },
-            { name: 'System', active: false },
-          ].map(t => (
+          {(['dark', 'light', 'system'] as ThemePref[]).map(t => (
             <button
-              key={t.name}
-              className={t.active ? 'btn-primary' : 'btn-ghost'}
-              style={{ fontSize: '0.78rem', padding: '0.35rem 0.875rem', opacity: t.active ? 1 : 0.5 }}
-              disabled={!t.active}
+              key={t}
+              className={theme === t ? 'btn-primary' : 'btn-ghost'}
+              style={{ fontSize: '0.78rem', padding: '0.35rem 0.875rem' }}
+              onClick={() => pick(t)}
             >
-              {t.name}
+              {t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
           ))}
         </div>
@@ -286,7 +332,7 @@ function About() {
         { label: 'Backend',      value: '.NET 8 + SQLite' },
         { label: 'Frontend',     value: 'React 18 + Vite + TypeScript' },
         { label: 'Auth',         value: 'Plaid Sandbox' },
-        { label: 'API URL',      value: 'http://localhost:5000' },
+        { label: 'API URL',      value: `http://${window.location.hostname}:5000` },
       ].map(r => (
         <Row key={r.label} label={r.label}>
           <span style={{ fontSize: '0.82rem', color: 'var(--text2)', fontFamily: 'monospace' }}>{r.value}</span>
@@ -303,7 +349,7 @@ function About() {
   );
 }
 
-export default function SettingsHub() {
+function SettingsInner() {
   const [page, setPage] = useState<Page>('integrations');
   return (
     <div>
@@ -324,5 +370,13 @@ export default function SettingsHub() {
       {page === 'appearance'    && <Appearance />}
       {page === 'about'         && <About />}
     </div>
+  );
+}
+
+export default function SettingsHub() {
+  return (
+    <QueryClientProvider client={qc}>
+      <SettingsInner />
+    </QueryClientProvider>
   );
 }

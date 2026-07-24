@@ -18,4 +18,18 @@
     <ProjectReference Include="..\..\shared\Maaya.Auth\Maaya.Auth.csproj" />
   </ItemGroup>
 
+  <!-- Vault.Worker is also its own publishable app (Sdk.Web/Worker), so its
+       appsettings.json flows transitively into this project's publish output via
+       ComputeResolvedFilesToPublishList, colliding with our own appsettings.json
+       (NETSDK1152 — "found multiple publish output files with the same relative
+       path"). `ExcludeAssets` on ProjectReference doesn't stop this — that only
+       governs NuGet package assets, not MSBuild Content items. Drop any
+       "appsettings.json" publish item that didn't originate from this project. -->
+  <Target Name="DedupeReferencedAppSettings" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="'%(ResolvedFileToPublish.RelativePath)' == 'appsettings.json' and !$([System.String]::Copy('%(ResolvedFileToPublish.FullPath)').StartsWith('$(MSBuildProjectDirectory)'))" />
+    </ItemGroup>
+  </Target>
+
 </Project>

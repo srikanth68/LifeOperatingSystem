@@ -22,6 +22,7 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
     public DbSet<Workout>                Workouts        => Set<Workout>();
     public DbSet<DailyNutrition>         Nutrition       => Set<DailyNutrition>();
     public DbSet<MealEntry>              Meals           => Set<MealEntry>();
+    public DbSet<WeighIn>                WeighIns        => Set<WeighIn>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -38,6 +39,7 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
         ConfigureDayEntity<Vo2MaxRecord>(b, v => v.Id, v => v.Day);
         ConfigureDayEntity<Workout>(b, w => w.Id, w => w.Day);
         ConfigureDayEntity<DailyNutrition>(b, n => n.Id, n => n.Day);
+        ConfigureDayEntity<WeighIn>(b, w => w.Id, w => w.Day);
 
         b.Entity<MealEntry>(e =>
         {
@@ -159,8 +161,29 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
             );
             CREATE INDEX IF NOT EXISTS IX_Meals_Day ON Meals(Day);
             CREATE INDEX IF NOT EXISTS IX_Meals_MealType ON Meals(MealType);
+            CREATE TABLE IF NOT EXISTS WeighIns (
+                Id TEXT PRIMARY KEY,
+                Day TEXT NOT NULL,
+                WeightKg REAL NOT NULL DEFAULT 0,
+                CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
+            );
+            CREATE INDEX IF NOT EXISTS IX_WeighIns_Day ON WeighIns(Day);
             """;
         await db.Database.ExecuteSqlRawAsync(sql);
+
+        // Additive column migrations for existing DBs (EnsureCreated won't ALTER).
+        await AddColumnIfMissingAsync(db, "Tokens", "LastSyncedAt", "TEXT");
+    }
+
+    private static async Task AddColumnIfMissingAsync(VitaraDbContext db, string table, string column, string type)
+    {
+        var conn = db.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync();
+        await using var check = conn.CreateCommand();
+        check.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = '{column}'";
+        var exists = Convert.ToInt64(await check.ExecuteScalarAsync()) > 0;
+        if (!exists)
+            await db.Database.ExecuteSqlRawAsync($"ALTER TABLE {table} ADD COLUMN {column} {type}");
     }
 
     private void ConfigureDayEntity<T>(ModelBuilder b,

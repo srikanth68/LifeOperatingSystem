@@ -4,11 +4,19 @@ import MapKit
 struct StatusView: View {
     let locationManager: LocationManager
     let syncManager: SyncManager
+    var healthManager: HealthManager? = nil
+
+    @State private var highlights: HealthPayload?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
+                    // Today's highlights
+                    if let h = highlights {
+                        highlightsStrip(h)
+                    }
+
                     // Sync Status Card
                     syncStatusCard
 
@@ -55,7 +63,31 @@ struct StatusView: View {
                 .padding()
             }
             .navigationTitle("Maaya")
+            .task {
+                if let hm = healthManager, hm.isAuthorized {
+                    highlights = await hm.fetchTodayData()
+                }
+            }
         }
+    }
+
+    private func highlightsStrip(_ h: HealthPayload) -> some View {
+        HStack(spacing: 12) {
+            highlightItem(icon: "figure.walk", value: h.steps.map { "\($0)" } ?? "—", label: "Steps", color: MaayaTheme.cash)
+            highlightItem(icon: "moon.fill", value: h.sleepHours.map { String(format: "%.1fh", $0) } ?? "—", label: "Sleep", color: .indigo)
+            highlightItem(icon: "heart.fill", value: h.heartRate.map { "\($0)" } ?? "—", label: "HR", color: .red)
+        }
+        .frame(maxWidth: .infinity)
+        .glassCard(accent: MaayaTheme.gold)
+    }
+
+    private func highlightItem(icon: String, value: String, label: String, color: Color) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: icon).font(.subheadline).foregroundStyle(color)
+            Text(value).font(.headline).fontWeight(.bold)
+            Text(label).font(.caption2).textCase(.uppercase).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var syncStatusCard: some View {
@@ -80,21 +112,18 @@ struct StatusView: View {
                     .foregroundStyle(.secondary)
             }
 
-            // Server URL
-            let serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? "http://localhost:5300"
+            // Server URL (San context-push target)
             HStack {
                 Image(systemName: "server.rack")
                     .font(.caption)
-                Text(serverURL)
+                Text(AppConfig.moduleURL(ModulePort.san))
                     .font(.caption)
                     .lineLimit(1)
             }
             .foregroundStyle(.secondary)
         }
-        .padding()
         .frame(maxWidth: .infinity)
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .glassCard(accent: syncStatusColor)
     }
 
     private var locationCard: some View {
@@ -127,10 +156,8 @@ struct StatusView: View {
                 .frame(height: 180)
             }
         }
-        .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .glassCard()
     }
 
     private var syncStatusIcon: String {

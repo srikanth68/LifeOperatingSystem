@@ -27,7 +27,7 @@ builder.Services.AddDbContext<SutraDbContext>(o =>
 builder.Services.AddScoped<ISutraRepository, SutraRepository>();
 builder.Services.AddSingleton<IDocumentStorage>(new FileDocumentStorage(storageRoot));
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
-    p.WithOrigins("http://localhost:3000", "http://localhost:3001", "http://localhost:5173")
+    p.WithOrigins(MaayaCors.Origins("http://localhost:3000", "http://localhost:3001", "http://localhost:5173"))
      .AllowAnyHeader()
      .AllowAnyMethod()));
 
@@ -42,4 +42,4 @@ using (var scope = app.Services.CreateScope())
 app.UseCors();
 app.UseMaayaAuth();
 app.MapControllers();
-app.Run("http://localhost:5400");
+app.Run(Environment.GetEnvironmentVariable("BIND_URL") ?? "http://localhost:5400");

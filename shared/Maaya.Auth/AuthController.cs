@@ -1,11 +1,12 @@
 using System.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Maaya.Auth;
 
 [ApiController, Route("api/auth")]
-public class AuthController(TokenService tokenService, RefreshTokenStore refreshStore, JwtConfig config) : ControllerBase
+public class AuthController(TokenService tokenService, RefreshTokenStore refreshStore, JwtConfig config, ILogger<AuthController> logger) : ControllerBase
 {
     [AllowAnonymous]
     [HttpPost("login")]
@@ -17,11 +18,35 @@ public class AuthController(TokenService tokenService, RefreshTokenStore refresh
         if (string.IsNullOrEmpty(expectedHash))
             return StatusCode(503, new { error = "Auth not configured. Set AUTH_PASSWORD_HASH in .env" });
 
-        if (!string.Equals(request.Username, expectedUser, StringComparison.OrdinalIgnoreCase))
-            return Unauthorized(new { error = "Invalid credentials." });
+        // A valid bcrypt hash is exactly 60 chars starting with "$2". If the container
+        // received something else, the env var got mangled in transit (e.g. compose
+        // $-interpolation) — logged so we can tell that apart from a wrong password.
+        var hashLooksValid = expectedHash.Length == 60 && expectedHash.StartsWith("$2");
+        if (!hashLooksValid)
+            logger.LogWarning("AUTH_PASSWORD_HASH looks malformed: length={Length}, prefix={Prefix} (expected 60 chars starting with $2). The env var may have been corrupted.",
+                expectedHash.Length, expectedHash.Length >= 4 ? expectedHash[..4] : expectedHash);
 
-        if (!BCrypt.Net.BCrypt.Verify(request.Password, expectedHash))
+        if (!string.Equals(request.Username, expectedUser, StringComparison.OrdinalIgnoreCase))
+        {
+            logger.LogWarning("Login failed: username mismatch (got '{Got}', expected '{Expected}').", request.Username, expectedUser);
             return Unauthorized(new { error = "Invalid credentials." });
+        }
+
+        bool ok;
+        try { ok = BCrypt.Net.BCrypt.Verify(request.Password, expectedHash); }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Login failed: bcrypt could not parse the stored hash — it's almost certainly corrupted in the environment.");
+            return Unauthorized(new { error = "Invalid credentials." });
+        }
+
+        if (!ok)
+        {
+            logger.LogWarning("Login failed: password mismatch for user '{User}' (username was correct; hash format valid={Valid}).", expectedUser, hashLooksValid);
+            return Unauthorized(new { error = "Invalid credentials." });
+        }
+
+        logger.LogInformation("Login succeeded for user '{User}'.", expectedUser);
 
         var userId = "maaya-owner";
         var accessToken = tokenService.GenerateAccessToken(userId, expectedUser);

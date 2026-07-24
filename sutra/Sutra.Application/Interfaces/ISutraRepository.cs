@@ -6,6 +6,7 @@ public interface ISutraRepository
 {
     Task<Document> AddAsync(Document doc);
     Task<Document?> GetAsync(Guid id);
+    Task<Document?> UpdateAsync(Guid id, Action<Document> mutate);
     Task<List<Document>> ListAsync(string? category = null, string? sourceModule = null, string? query = null);
     Task<bool> DeleteAsync(Guid id);
     Task<List<Document>> GetExpiringAsync(int withinDays);

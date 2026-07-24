@@ -455,3 +455,21 @@
   60%      { transform: translateX(6px); }
   75%      { transform: translateX(-3px); }
 }
+
+/* ── Sigil (replaces the Arc Reactor on auth screens) ── */
+.login-sigil {
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 1.25rem;
+}
+.login-sigil img {
+  width: 132px; height: 132px; object-fit: contain;
+  /* Source PNG has a solid black background (no alpha); `screen` blend drops the
+     black into the dark auth backdrop so only the gold stallion floats. */
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 22px rgba(212,168,67,0.45));
+  animation: sigil-breathe 4s ease-in-out infinite;
+}
+@keyframes sigil-breathe {
+  0%, 100% { filter: drop-shadow(0 0 18px rgba(212,168,67,0.35)); }
+  50%      { filter: drop-shadow(0 0 30px rgba(212,168,67,0.6)); }
+}

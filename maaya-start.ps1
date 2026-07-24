@@ -16,6 +16,8 @@ $services = @(
     @{ Name = 'northstar-api'; Dir = "$root\northstar\NorthStar.API";  Env = "$root\northstar\.env"; Color = 'Blue'      }
     @{ Name = 'sutra-api';     Dir = "$root\sutra\Sutra.API";          Env = "$root\sutra\.env";     Color = 'DarkBlue'  }
     @{ Name = 'karma-api';     Dir = "$root\karma\Karma.API";          Env = "$root\karma\.env";     Color = 'Magenta'   }
+    @{ Name = 'nexus-api';     Dir = "$root\nexus\Nexus.API";          Env = "$root\nexus\.env";     Color = 'DarkCyan'  }
+    @{ Name = 'mcp-gateway';   Dir = "$root\mcp\Maaya.Mcp";            Env = "$root\mcp\.env";       Color = 'White'     }
     @{ Name = 'frontend';      Dir = "$root\vault\frontend";           Env = $null;                  Color = 'Green'     }
 )
 
@@ -31,6 +33,8 @@ Write-Host "  San       http://localhost:5300  (API + Worker)" -ForegroundColor 
 Write-Host "  NorthStar http://localhost:5500  (API)"          -ForegroundColor Blue
 Write-Host "  Sutra     http://localhost:5400  (API)"          -ForegroundColor DarkBlue
 Write-Host "  Karma     http://localhost:5600  (API)"          -ForegroundColor Magenta
+Write-Host "  Nexus     http://localhost:5700  (API, reads Sentinel)" -ForegroundColor DarkCyan
+Write-Host "  MCP       http://localhost:5900  (agent gateway)" -ForegroundColor White
 Write-Host "  Frontend  http://localhost:5173"                 -ForegroundColor Green
 Write-Host ""
 

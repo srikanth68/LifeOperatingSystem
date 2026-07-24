@@ -16,6 +16,15 @@ public class SutraRepository(SutraDbContext db) : ISutraRepository
     public async Task<Document?> GetAsync(Guid id) =>
         await db.Documents.FindAsync(id);
 
+    public async Task<Document?> UpdateAsync(Guid id, Action<Document> mutate)
+    {
+        var doc = await db.Documents.FindAsync(id);
+        if (doc is null) return null;
+        mutate(doc);
+        await db.SaveChangesAsync();
+        return doc;
+    }
+
     public async Task<List<Document>> ListAsync(string? category = null, string? sourceModule = null, string? query = null)
     {
         var q = db.Documents.AsQueryable();

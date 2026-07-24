@@ -1,6 +1,12 @@
 # MaayaCompanion — iOS Companion for Maaya OS
 
-Pushes device context (location, calendar, health) to the Maaya server so your assistant has real-time awareness of where you are, what's on your schedule, and how you're doing.
+A private companion app for Maaya OS. It does three things:
+
+1. **Background telemetry** — pushes device context (location, calendar, health snapshot) to San so your assistant has real-time awareness (the app's original purpose, unchanged).
+2. **Read-only dashboard + San chat** — after signing in with your Maaya credentials/PIN, view a summary of every module (Vault, Vitara, Aasthi, Karma, NorthStar, Sutra, Nexus) and chat with San.
+3. **Apple Health → Vitara** — uploads richer HealthKit data (steps, heart rate, calories, sleep, weight, recent workouts, and the last week of daily activity) straight into Vitara.
+
+All traffic goes directly from the phone to Everest over the private NordVPN Meshnet / Tailscale mesh — no cloud services in the path. The mesh VPN app (NordVPN Meshnet or Tailscale) must be installed and connected on the iPhone; this app just talks plain HTTP to the mesh IP.
 
 ## Requirements
 
@@ -34,15 +40,31 @@ Since an `.xcodeproj` cannot be reliably generated outside Xcode, follow these s
 3. Navigate to the `MaayaCompanion/` source folder and select all `.swift` files and subfolders:
    - `MaayaCompanionApp.swift`
    - `ContentView.swift`
+   - `Theme.swift`
    - `Models/ContextPush.swift`
+   - `Models/AuthModels.swift`
+   - `Models/DashboardModels.swift`
+   - `Models/VoiceModels.swift`
+   - `Models/NotificationModels.swift`
    - `Managers/LocationManager.swift`
    - `Managers/CalendarManager.swift`
    - `Managers/HealthManager.swift`
    - `Managers/SyncManager.swift`
    - `Services/APIClient.swift`
+   - `Services/AppConfig.swift`
+   - `Services/KeychainStore.swift`
+   - `Services/AuthService.swift`
+   - `Services/MaayaClient.swift`
+   - `Services/SpeechPlayer.swift`
+   - `Services/VoiceConversationManager.swift`
+   - `Services/NotificationManager.swift`
    - `Views/StatusView.swift`
    - `Views/HealthSummaryView.swift`
    - `Views/SettingsView.swift`
+   - `Views/LoginView.swift`
+   - `Views/DashboardView.swift`
+   - `Views/ChatView.swift`
+   - `Views/CallView.swift`
 4. Make sure **"Copy items if needed"** is checked and **"Create groups"** is selected
 
 ### 3. Add Info.plist
@@ -62,6 +84,28 @@ Since an `.xcodeproj` cannot be reliably generated outside Xcode, follow these s
      - Location updates
      - Background fetch
      - Background processing
+
+**No extra entitlements are needed for auth, voice, or notifications.** Tokens are stored in the app's own Keychain via a generic-password item — that does **not** require the "Keychain Sharing" capability (that's only for sharing a keychain across apps). Voice uses AVFoundation (mic capture + audio playback), which needs **no capability** — only the `NSMicrophoneUsageDescription` string already in `Info.plist`. **Local notifications** (see below) also need **no capability** — that's the key advantage over remote push: the "Push Notifications" capability + a paid Apple Developer account are only required for APNs/remote push, which a free-Apple-ID sideload can't use anyway. The `Info.plist` also includes an **App Transport Security** exception (`NSAllowsArbitraryLoads`) because the app talks plain HTTP to the mesh IP; iOS blocks raw-IP HTTP otherwise. This is intentional for a private, non-App-Store build.
+
+### Reminder & alert notifications
+
+The app mirrors your San reminders and alerts into **on-device local notifications**, so the phone buzzes on time — natively, not only through Telegram:
+
+- On every sync (foreground, on becoming active, and the ~15-min background refresh) it reads your reminders/alerts from San and schedules a local notification for each future one. iOS delivers these **even when the app is closed** (a `UNCalendarNotificationTrigger` — no server or APNs involved).
+- Edited/completed/deleted items are reconciled off the schedule on the next sync.
+- Server-side alerts that fire (e.g. a spending threshold) surface once, immediately, on the sync that discovers them.
+- First launch prompts for notification permission. If you decline, everything else still works; grant it later in **Settings › MaayaCompanion › Notifications**.
+
+> **Why not "real" push?** True remote push (APNs) needs a paid Apple Developer account, the Push Notifications capability, and a server component to send them — none of which a free-Apple-ID sideload supports. Local notifications deliver the same on-time buzz for time-based reminders with zero cloud and zero extra setup. If you later move to a paid account and want server-triggered pushes, that can be layered on.
+
+### Voice conversation with San
+
+The **San** tab shows two buttons in the nav bar **only when San's voice proxy is configured** (`WHISPER_SERVICE_URL` + `PIPER_SERVICE_URL` set on the server — see `maaya/VOICE.md`):
+
+- **🔊 speaker toggle** — read San's text-chat replies aloud (local Piper TTS).
+- **📞 phone** — enter **call mode**: a hands-free, continuous back-and-forth. It listens, detects when you stop talking, transcribes on your local Whisper, sends to San, speaks the reply on local Piper, and listens again — no push-to-talk. Tap the orb while San is talking to cut in; Mute pauses the mic; the red button hangs up. All audio stays on your mesh (Whisper + Piper + Gemma all run on Everest); nothing goes to a cloud speech service.
+
+The buttons stay hidden until the voice services are up, so the app works normally without them.
 
 ### 5. Set Deployment Target
 
@@ -89,13 +133,18 @@ Since an `.xcodeproj` cannot be reliably generated outside Xcode, follow these s
 
 ## Configuration
 
-1. Open the app on your iPhone
-2. Go to the **Settings** tab
-3. Enter your **Server URL** — use your Mac's local IP for same-network access:
-   - Example: `http://192.168.1.42:5300`
-   - Find your Mac's IP: System Settings → Wi-Fi → Details → IP Address
-4. Enter your **API Key** — this is the `DEVICE_API_KEY` from your `san/.env` file
-5. Go back to the **Status** tab and tap **Sync Now** to test the connection
+1. Make sure NordVPN Meshnet (or Tailscale) is connected on the iPhone so Everest is reachable.
+2. Open the app. On first launch you'll see the **sign-in screen**:
+   - On a trusted mesh network the server reports PIN auth → enter your Maaya PIN.
+   - Otherwise → enter your Maaya username/password. (Tap "Use password instead" to switch off PIN.)
+   - Tokens are saved in the Keychain; the app silently refreshes them and only shows the sign-in screen again if the session truly expires.
+3. Go to the **Settings** tab and set:
+   - **Scheme** — `http` (or `https` if you use the nginx proxy path — not required).
+   - **Host / mesh IP** — e.g. `100.126.41.41` (defaults to this). Each module is reached on its own port off this host (5000–5700).
+   - **Device Key** — the `DEVICE_API_KEY` shared by San and Vitara (used only for the telemetry/HealthKit uploads, not for sign-in).
+4. The **Dashboard** and **San** tabs load automatically once signed in. On the **Status** tab, tap **Sync Now** to test the telemetry + Vitara HealthKit push.
+
+> **One host, many ports.** The app derives every module URL from the single Host + Scheme (Vault 5000, Vitara 5100, Aasthi 5200, San 5300, Sutra 5400, NorthStar 5500, Karma 5600, Nexus 5700). If you later deploy the same-origin nginx proxy (port 3443), point Scheme=`https` and Host at that — but the per-port default needs no extra setup.
 
 ## How It Works
 
@@ -159,13 +208,27 @@ The server should respond with:
 
 ```
 MaayaCompanionApp
+├── AuthService       — probe → PIN/credentials login, Keychain tokens, silent refresh (Maaya.Auth on Vault:5000)
+├── MaayaClient       — authenticated (Bearer) read-only client for dashboards + San chat; refresh-on-401
+├── AppConfig         — single host+scheme → per-module URLs; lenient JSON date decoding
 ├── LocationManager   — CLLocationManager wrapper, background significant changes
 ├── CalendarManager   — EventKit wrapper, fetches next 7 days
-├── HealthManager     — HealthKit wrapper, today's stats
-├── SyncManager       — Coordinates all managers, background refresh task
-├── APIClient         — URLSession POST to /api/context/push
+├── HealthManager     — HealthKit wrapper: today's stats + weight, workouts, multi-day history
+├── SyncManager       — Coordinates telemetry (San /context/push) + Vitara /healthkit/ingest
+├── APIClient         — URLSession POST for the device-key telemetry/HealthKit endpoints
+├── KeychainStore     — generic-password wrapper for the auth tokens
 └── Views
+    ├── LoginView          — PIN pad (trusted network) or username/password
+    ├── DashboardView      — read-only per-module summary cards + Sentinel board drill-in
+    ├── ChatView           — San chat (history + send)
     ├── StatusView         — Sync status, map, sync button
     ├── HealthSummaryView  — Steps, heart rate, calories, sleep cards
-    └── SettingsView       — Server URL, API key, auto-sync toggle
+    └── SettingsView       — Host/scheme, device key, account (sign out), sync toggles
 ```
+
+### Auth & networking notes
+- Every module enforces `RequireAuthenticatedUser` (Maaya.Auth `FallbackPolicy`) except the two device-key endpoints, so all dashboard/chat reads send `Authorization: Bearer <token>`. A 401 triggers one silent refresh, then falls back to the login screen.
+- The telemetry (`/api/context/push`) and HealthKit (`/api/healthkit/ingest`) endpoints stay on the `X-Device-Key` header — unchanged.
+
+### Server-side change
+`vitara/Vitara.API/Controllers/HealthKitController.cs` — `HealthKitPayload` gained optional `WeightKg`, `Workouts[]`, and `DailyActivity[]` fields (plus `HealthKitWorkout` / `HealthKitDailyActivity` records). They upsert into Vitara's WeighIn / Workout / DailyActivity tables tagged `source: "apple_health"`. Fully backward compatible — the older snapshot-only body still works.

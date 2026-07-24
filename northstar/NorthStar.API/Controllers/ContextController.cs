@@ -1,11 +1,12 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using NorthStar.API.Services;
 using NorthStar.Application.Interfaces;
 
 namespace NorthStar.API.Controllers;
 
 [ApiController, Route("api/context")]
-public class ContextController(INorthStarRepository repo, IHttpClientFactory httpFactory) : ControllerBase
+public class ContextController(INorthStarRepository repo, ModuleSyncService syncService) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> GetContext()
@@ -53,57 +54,7 @@ public class ContextController(INorthStarRepository repo, IHttpClientFactory htt
     [HttpPost("sync")]
     public async Task<IActionResult> SyncModules()
     {
-        var modules = new[] { "vault", "vitara", "aasthi", "san", "sutra" };
-        var ports = new Dictionary<string, int>
-        {
-            ["vault"] = 5000, ["vitara"] = 5100, ["aasthi"] = 5200,
-            ["san"] = 5300, ["sutra"] = 5400,
-        };
-        var endpoints = new Dictionary<string, string>
-        {
-            ["vault"] = "/api/summary",
-            ["vitara"] = "/api/dashboard",
-            ["aasthi"] = "/api/properties",
-            ["san"] = "/api/people?limit=5",
-            ["sutra"] = "/api/documents/stats",
-        };
-
-        var results = new Dictionary<string, object?>();
-        var client = httpFactory.CreateClient();
-        client.Timeout = TimeSpan.FromSeconds(5);
-
-        foreach (var mod in modules)
-        {
-            var url = $"http://localhost:{ports[mod]}{endpoints[mod]}";
-            string? error = null;
-            string? json = null;
-
-            try
-            {
-                var resp = await client.GetAsync(url);
-                if (resp.IsSuccessStatusCode)
-                    json = await resp.Content.ReadAsStringAsync();
-                else
-                    error = $"HTTP {(int)resp.StatusCode}";
-            }
-            catch (Exception ex)
-            {
-                error = ex.Message.Length > 100 ? ex.Message[..100] : ex.Message;
-            }
-
-            await repo.UpsertModuleSyncAsync(new() { Module = mod, LastSyncAt = DateTime.UtcNow, LastError = error });
-
-            if (json is not null)
-            {
-                await repo.UpsertSnapshotAsync(new() { Module = mod, SummaryJson = json });
-                results[mod] = "synced";
-            }
-            else
-            {
-                results[mod] = error;
-            }
-        }
-
+        var results = await syncService.SyncAllAsync();
         return Ok(new { syncedAt = DateTime.UtcNow, results });
     }
 }

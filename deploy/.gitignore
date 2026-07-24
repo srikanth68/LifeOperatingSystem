@@ -1,0 +1,3 @@
+# Secrets and live data never enter git.
+env/
+data/

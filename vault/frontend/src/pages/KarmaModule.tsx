@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import '../styles/modules.css';
 import '../styles/karma.css';
 import { authHeaders } from '../services/auth';
+import { moduleApi } from '../services/apiHost';
 import { ApiUnreachable } from '../components/ApiUnreachable';
 
-const API = 'http://localhost:5600';
+const API = moduleApi(5600);
 type Page = 'habits' | 'goals' | 'progress';
 const TABS: { id: Page; label: string }[] = [
   { id: 'habits', label: 'Habits' },
@@ -78,6 +79,73 @@ function LinkIcon() {
   );
 }
 
+interface HabitStats {
+  habitId: string; totalLogged: number; totalCompleted: number;
+  completionRate: number; currentStreak: number; bestStreak: number;
+  dayOfWeekCompletions: number[]; logs: HabitLog[];
+}
+interface LinkedHabit { id: string; name: string; emoji: string; currentStreak: number; last7Rate: number; }
+interface GoalRef { id: string; title: string; }
+
+// GitHub-style completion heatmap: last ~17 weeks of days, colored by completion.
+function HabitHeatmap({ stats }: { stats: HabitStats }) {
+  const completedDays = new Set(stats.logs.filter(l => l.completed).map(l => l.date));
+  const loggedDays = new Set(stats.logs.map(l => l.date));
+
+  const weeks = 17;
+  const today = new Date();
+  const start = new Date(today);
+  start.setDate(start.getDate() - (weeks * 7 - 1));
+  // align to Sunday
+  start.setDate(start.getDate() - start.getDay());
+
+  const cells: { date: string; state: 'done' | 'miss' | 'none' | 'future' }[] = [];
+  for (let i = 0; i < weeks * 7; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    const iso = d.toISOString().slice(0, 10);
+    let state: 'done' | 'miss' | 'none' | 'future' = 'none';
+    if (d > today) state = 'future';
+    else if (completedDays.has(iso)) state = 'done';
+    else if (loggedDays.has(iso)) state = 'miss';
+    cells.push({ date: iso, state });
+  }
+
+  const DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+  const maxDow = Math.max(1, ...stats.dayOfWeekCompletions);
+
+  return (
+    <div className="karma-heatmap-wrap">
+      <div className="karma-stats-row">
+        <div className="karma-stat-pill"><b>{Math.round(stats.completionRate * 100)}%</b><span>completion</span></div>
+        <div className="karma-stat-pill"><b>{stats.currentStreak}</b><span>current 🔥</span></div>
+        <div className="karma-stat-pill"><b>{stats.bestStreak}</b><span>best</span></div>
+        <div className="karma-stat-pill"><b>{stats.totalCompleted}</b><span>total done</span></div>
+      </div>
+
+      <div className="karma-heatmap">
+        {Array.from({ length: weeks }, (_, w) => (
+          <div key={w} className="karma-heat-col">
+            {Array.from({ length: 7 }, (_, d) => {
+              const cell = cells[w * 7 + d];
+              return <span key={d} className={`karma-heat-cell ${cell.state}`} title={`${cell.date}${cell.state === 'done' ? ' ✓' : cell.state === 'miss' ? ' ✕' : ''}`} />;
+            })}
+          </div>
+        ))}
+      </div>
+
+      <div className="karma-dow">
+        {DOW.map((label, i) => (
+          <div key={i} className="karma-dow-item">
+            <div className="karma-dow-bar" style={{ height: `${(stats.dayOfWeekCompletions[i] / maxDow) * 32 + 2}px` }} />
+            <span>{label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Habits Page ───────────────────────────────────────────────
 function HabitsPage() {
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -93,7 +161,11 @@ function HabitsPage() {
   const [fNotifyTime, setFNotifyTime] = useState('');
   const [fNotifyMsg, setFNotifyMsg] = useState('');
   const [fDays, setFDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
+  const [fGoalId, setFGoalId] = useState('');
   const [fSaving, setFSaving] = useState(false);
+  const [goalOptions, setGoalOptions] = useState<GoalRef[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [statsCache, setStatsCache] = useState<Record<string, HabitStats>>({});
 
   const load = useCallback(async () => {
     try {
@@ -105,6 +177,18 @@ function HabitsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { apiFetch('/api/goals?status=active').then((g: Goal[]) => setGoalOptions(g.map(x => ({ id: x.id, title: x.title })))).catch(() => {}); }, []);
+
+  const openStats = async (habitId: string) => {
+    if (expandedId === habitId) { setExpandedId(null); return; }
+    setExpandedId(habitId);
+    if (!statsCache[habitId]) {
+      try {
+        const s = await apiFetch(`/api/habits/${habitId}/stats?days=180`);
+        setStatsCache(prev => ({ ...prev, [habitId]: s }));
+      } catch { /* ignore */ }
+    }
+  };
 
   if (!loading && err) return <ApiUnreachable name="Karma" port={5600} mc="var(--karma)" onRetry={() => { setLoading(true); load(); }} />;
 
@@ -134,12 +218,12 @@ function HabitsPage() {
         body: JSON.stringify({
           name: fName, emoji: fEmoji, category: fCat,
           notifyTime: fNotifyTime || null, notifyMessage: fNotifyMsg || null,
-          notifyDays: fDays,
+          notifyDays: fDays, goalId: fGoalId || null,
         }),
       });
       setShowForm(false);
       setFName(''); setFEmoji('✅'); setFCat('personal');
-      setFNotifyTime(''); setFNotifyMsg(''); setFDays([0, 1, 2, 3, 4, 5, 6]);
+      setFNotifyTime(''); setFNotifyMsg(''); setFDays([0, 1, 2, 3, 4, 5, 6]); setFGoalId('');
       await load();
     } catch { /* ignore */ }
     finally { setFSaving(false); }
@@ -215,6 +299,13 @@ function HabitsPage() {
               <label className="karma-form-label">Notification Message</label>
               <input className="karma-input" placeholder="Leave blank for default" value={fNotifyMsg} onChange={e => setFNotifyMsg(e.target.value)} />
             </div>
+            <div>
+              <label className="karma-form-label">Link to Goal (optional)</label>
+              <select className="karma-select" value={fGoalId} onChange={e => setFGoalId(e.target.value)}>
+                <option value="">None</option>
+                {goalOptions.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
+              </select>
+            </div>
             <div className="full">
               <label className="karma-form-label">Remind on days</label>
               <div className="karma-day-row">
@@ -245,28 +336,36 @@ function HabitsPage() {
       ) : (
         <div className="habit-list">
           {habits.map(h => (
-            <div key={h.id} className={`habit-card ${h.todayCompleted ? 'completed' : ''}`}>
-              <span className="habit-emoji">{h.emoji}</span>
-              <div className="habit-info">
-                <div className="habit-name">{h.name}</div>
-                <div className="habit-meta">
-                  <span className="habit-cat">{h.category}</span>
-                  <span className="habit-streak">
-                    <span className="habit-streak-fire">{h.currentStreak}</span>
-                    &nbsp;🔥
-                    {h.currentStreak !== h.bestStreak && (
-                      <span style={{ opacity: 0.55 }}>&nbsp;/ {h.bestStreak} best</span>
-                    )}
-                  </span>
+            <div key={h.id}>
+              <div className={`habit-card ${h.todayCompleted ? 'completed' : ''}`}>
+                <span className="habit-emoji">{h.emoji}</span>
+                <div className="habit-info" style={{ cursor: 'pointer' }} onClick={() => openStats(h.id)}>
+                  <div className="habit-name">{h.name}</div>
+                  <div className="habit-meta">
+                    <span className="habit-cat">{h.category}</span>
+                    <span className="habit-streak">
+                      <span className="habit-streak-fire">{h.currentStreak}</span>
+                      &nbsp;🔥
+                      {h.currentStreak !== h.bestStreak && (
+                        <span style={{ opacity: 0.55 }}>&nbsp;/ {h.bestStreak} best</span>
+                      )}
+                    </span>
+                    <span className="karma-stats-toggle">{expandedId === h.id ? '▲ stats' : '▾ stats'}</span>
+                  </div>
                 </div>
+                <button
+                  className={`habit-check ${h.todayCompleted ? 'checked' : ''} ${popping === h.id ? 'pop' : ''}`}
+                  onClick={() => toggle(h)}
+                  title={h.todayCompleted ? 'Mark incomplete' : 'Mark complete'}
+                >
+                  {h.todayCompleted && <CheckIcon />}
+                </button>
               </div>
-              <button
-                className={`habit-check ${h.todayCompleted ? 'checked' : ''} ${popping === h.id ? 'pop' : ''}`}
-                onClick={() => toggle(h)}
-                title={h.todayCompleted ? 'Mark incomplete' : 'Mark complete'}
-              >
-                {h.todayCompleted && <CheckIcon />}
-              </button>
+              {expandedId === h.id && (
+                statsCache[h.id]
+                  ? <HabitHeatmap stats={statsCache[h.id]} />
+                  : <div className="karma-heatmap-wrap" style={{ color: 'var(--text3)', fontSize: '0.8rem' }}>Loading analytics…</div>
+              )}
             </div>
           ))}
         </div>
@@ -297,6 +396,13 @@ function GoalsPage() {
   // inline state per goal
   const [editProgress, setEditProgress] = useState<Record<string, number>>({});
   const [newMilestone, setNewMilestone] = useState<Record<string, string>>({});
+  const [linkedCache, setLinkedCache] = useState<Record<string, LinkedHabit[]>>({});
+
+  useEffect(() => {
+    if (expanded && !linkedCache[expanded]) {
+      apiFetch(`/api/goals/${expanded}/habits`).then((h: LinkedHabit[]) => setLinkedCache(prev => ({ ...prev, [expanded]: h }))).catch(() => {});
+    }
+  }, [expanded, linkedCache]);
 
   const load = useCallback(async () => {
     try { setGoals(await apiFetch('/api/goals')); setErr(false); }
@@ -524,6 +630,24 @@ function GoalsPage() {
                         <button className="btn-secondary" style={{ fontSize: '0.75rem', flexShrink: 0 }} onClick={() => addMilestone(g.id)}>Add</button>
                       </div>
                     </div>
+
+                    {/* Linked habits */}
+                    {linkedCache[g.id] && linkedCache[g.id].length > 0 && (
+                      <>
+                        <div className="goal-section-label">Linked Habits</div>
+                        <div className="goal-linked-habits">
+                          {linkedCache[g.id].map(lh => (
+                            <div key={lh.id} className="goal-linked-habit">
+                              <span className="glh-emoji">{lh.emoji}</span>
+                              <span className="glh-name">{lh.name}</span>
+                              <span className="glh-streak">{lh.currentStreak} 🔥</span>
+                              <div className="glh-rate-bar"><div className="glh-rate-fill" style={{ width: `${Math.round(lh.last7Rate * 100)}%` }} /></div>
+                              <span className="glh-rate">{Math.round(lh.last7Rate * 100)}%</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
 
                     {/* Links */}
                     {g.links.length > 0 && (

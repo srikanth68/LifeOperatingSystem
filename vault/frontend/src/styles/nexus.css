@@ -1,0 +1,315 @@
+/* ── nexus.css — trading desk grid + deep-analysis panel ── */
+
+.nexus-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.6rem 1rem;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  margin-bottom: 1.25rem;
+  font-size: 0.78rem;
+  color: var(--text2);
+  flex-wrap: wrap;
+}
+.nexus-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.nexus-status-dot.open { background: var(--cash); box-shadow: 0 0 8px var(--cash); }
+.nexus-status-dot.closed { background: var(--text3); }
+.nexus-status-item { display: flex; align-items: center; gap: 0.4rem; }
+.nexus-status-item b { color: var(--text); font-weight: 600; }
+.nexus-stale-banner {
+  margin-left: auto;
+  color: var(--debt-l);
+  background: var(--debt-dim);
+  border: 1px solid rgba(232,68,68,0.3);
+  border-radius: var(--r-sm);
+  padding: 0.25rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+/* ── Board / watchlist table ── */
+.nexus-board-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r-md); }
+.nexus-board { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.nexus-board th {
+  text-align: left;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text3);
+  padding: 0.7rem 0.9rem;
+  background: rgba(255,255,255,0.02);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+.nexus-board th:hover { color: var(--text2); }
+.nexus-board th.sorted { color: var(--nexus); }
+.nexus-board td {
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  white-space: nowrap;
+}
+.nexus-board tbody tr { cursor: pointer; transition: background 0.12s; }
+.nexus-board tbody tr:hover { background: rgba(79,158,248,0.05); }
+.nexus-board tbody tr:last-child td { border-bottom: none; }
+.nexus-sym-cell { font-weight: 700; font-family: 'Space Grotesk', sans-serif; letter-spacing: 0.01em; }
+.nexus-price-cell { font-variant-numeric: tabular-nums; font-weight: 600; }
+.nexus-chg.up { color: var(--cash-l); }
+.nexus-chg.down { color: var(--debt-l); }
+.nexus-chg.flat { color: var(--text3); }
+
+.nexus-action-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 5px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+}
+.nexus-action-badge.buy, .nexus-action-badge.accumulate { color: var(--cash-l); background: var(--cash-dim); }
+.nexus-action-badge.hold { color: var(--gold-l); background: var(--gold-glow); }
+.nexus-action-badge.trim, .nexus-action-badge.avoid { color: var(--debt-l); background: var(--debt-dim); }
+
+.nexus-conviction-track {
+  display: inline-flex;
+  gap: 2px;
+  vertical-align: middle;
+}
+.nexus-conviction-pip { width: 5px; height: 12px; border-radius: 1px; background: var(--border2); }
+.nexus-conviction-pip.filled { background: var(--nexus); }
+
+.nexus-freshness-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+}
+.nexus-freshness-badge .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.nexus-freshness-badge.live { color: var(--cash-l); }
+.nexus-freshness-badge.recorded { color: var(--nexus); }
+.nexus-freshness-badge.stale { color: var(--debt-l); }
+
+/* ── Portfolio table ── */
+.nexus-pl.up { color: var(--cash-l); }
+.nexus-pl.down { color: var(--debt-l); }
+
+/* ── Detail overlay (deep analysis) ── */
+.nexus-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(3,7,16,0.72);
+  backdrop-filter: blur(3px);
+  z-index: 60;
+  display: flex;
+  justify-content: flex-end;
+  animation: nexus-fade 0.15s ease-out;
+}
+@keyframes nexus-fade { from { opacity: 0; } to { opacity: 1; } }
+.nexus-panel {
+  width: min(760px, 100%);
+  height: 100%;
+  background: var(--bg2);
+  border-left: 1px solid var(--border2);
+  overflow-y: auto;
+  padding: 1.75rem 1.75rem 3rem;
+  animation: nexus-slide 0.18s ease-out;
+}
+@keyframes nexus-slide { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* Sticky action cluster (PDF + close) in the panel's top-right. */
+.nexus-panel-actions {
+  position: sticky;
+  top: 0;
+  float: right;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 2;
+}
+.nexus-panel-close {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1rem;
+}
+.nexus-panel-close:hover { color: var(--text); border-color: var(--text3); }
+
+.nexus-panel-pdf {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  height: 32px;
+  padding: 0 0.7rem;
+  border-radius: 16px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.nexus-panel-pdf:hover { color: var(--text); border-color: var(--nexus); }
+
+/* ── Print / Save-as-PDF ────────────────────────────────────────────────
+   Show only the open analysis panel, full page width, styling preserved. */
+@media print {
+  body * { visibility: hidden; }
+  .nexus-overlay, .nexus-overlay * { visibility: visible; }
+
+  .nexus-overlay {
+    position: absolute;
+    inset: 0;
+    display: block;
+    background: none;
+    backdrop-filter: none;
+    animation: none;
+    overflow: visible;
+  }
+  .nexus-panel {
+    width: 100%;
+    max-width: none;
+    height: auto;
+    overflow: visible;
+    border: none;
+    padding: 0;
+    animation: none;
+  }
+  /* Controls aren't part of the document. */
+  .nexus-panel-actions { display: none !important; }
+
+  /* Keep the dark theme in the PDF instead of printing as blank boxes. */
+  html, body, .nexus-overlay, .nexus-panel {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  /* Don't split a card across pages. */
+  .nexus-panel .card,
+  .nexus-panel table { break-inside: avoid; page-break-inside: avoid; }
+
+  @page { margin: 12mm; }
+}
+
+.nexus-panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1.25rem; }
+.nexus-panel-sym { font-size: 2.1rem; font-weight: 800; font-family: 'Space Grotesk', sans-serif; line-height: 1; }
+.nexus-panel-co { color: var(--text3); font-size: 0.82rem; margin-top: 0.3rem; }
+.nexus-verdict-tag {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 0.15rem;
+  border: 1.5px solid currentColor;
+  border-radius: var(--r-sm);
+  padding: 0.5rem 0.9rem;
+  flex-shrink: 0;
+}
+.nexus-verdict-tag .act { font-size: 1.1rem; font-weight: 800; }
+.nexus-verdict-tag .conv { font-size: 0.68rem; color: var(--text3); font-family: 'Space Grotesk', sans-serif; }
+
+.nexus-price-panel {
+  background: rgba(0,0,0,0.25);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.nexus-price-row { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.75rem; }
+.nexus-price-big { font-size: 1.7rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.nexus-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px,1fr)); gap: 1px; background: var(--border); border-radius: 6px; overflow: hidden; margin-top: 0.9rem; }
+.nexus-stat { background: rgba(0,0,0,0.3); padding: 0.5rem 0.7rem; }
+.nexus-stat .k { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); }
+.nexus-stat .v { font-size: 0.92rem; font-weight: 700; margin-top: 0.15rem; font-variant-numeric: tabular-nums; }
+
+.nexus-meter { margin-top: 1.1rem; }
+.nexus-meter-track { position: relative; height: 6px; border-radius: 4px; background: linear-gradient(90deg, var(--debt) 0%, var(--gold-d) 45%, var(--cash) 100%); margin: 1.5rem 0 0.4rem; }
+.nexus-meter-pin { position: absolute; top: 50%; width: 2px; height: 16px; transform: translate(-50%,-50%); background: var(--text); }
+.nexus-meter-pin.stop { background: var(--debt-l); }
+.nexus-meter-pin.target { background: var(--cash-l); }
+.nexus-meter-flag { position: absolute; top: -20px; transform: translateX(-50%); font-size: 0.62rem; white-space: nowrap; color: var(--text2); font-family: 'Space Grotesk', sans-serif; }
+.nexus-meter-ends { display: flex; justify-content: space-between; font-size: 0.62rem; color: var(--text3); }
+
+.nexus-section-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text3); margin: 1.5rem 0 0.7rem; }
+
+.nexus-thesis { font-size: 0.88rem; line-height: 1.7; color: var(--text2); background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 0.9rem 1.1rem; }
+
+.nexus-badge-row { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.nexus-mini-badge { font-size: 0.68rem; padding: 0.2rem 0.55rem; border-radius: 99px; border: 1px solid var(--border2); color: var(--text2); background: rgba(255,255,255,0.03); }
+
+.nexus-debate { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; }
+.nexus-debate-side { padding: 0.9rem 1.1rem; }
+.nexus-debate-side.bull { background: rgba(31,200,122,0.05); }
+.nexus-debate-side.bear { background: rgba(232,68,68,0.05); border-left: 1px solid var(--border); }
+.nexus-debate-side h4 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.2rem; }
+.nexus-debate-side.bull h4 { color: var(--cash-l); }
+.nexus-debate-side.bear h4 { color: var(--debt-l); }
+.nexus-debate-strength { font-size: 0.68rem; color: var(--text3); margin-bottom: 0.6rem; font-family: 'Space Grotesk', sans-serif; }
+.nexus-debate-side ul { margin: 0; padding-left: 1.1rem; }
+.nexus-debate-side li { font-size: 0.78rem; margin: 0.3rem 0; color: var(--text2); }
+.nexus-synth { grid-column: 1/-1; border-top: 1px solid var(--border); padding: 0.75rem 1.1rem; font-size: 0.82rem; color: var(--text2); background: rgba(79,158,248,0.04); }
+.nexus-synth b { color: var(--nexus); }
+@media (max-width: 560px) {
+  .nexus-debate { grid-template-columns: 1fr; }
+  .nexus-debate-side.bear { border-left: none; border-top: 1px solid var(--border); }
+}
+
+.nexus-ticket { border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; }
+.nexus-ticket-head { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02); }
+.nexus-ticket-status { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.2rem 0.55rem; border-radius: 4px; font-weight: 700; }
+.nexus-ticket-status.ok { color: #06251a; background: var(--cash-l); }
+.nexus-ticket-status.no { color: #2b1e00; background: var(--gold-l); }
+.nexus-ticket-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px,1fr)); }
+.nexus-ticket-field { padding: 0.7rem 0.9rem; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.nexus-ticket-field .k { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); }
+.nexus-ticket-field .v { font-size: 0.95rem; font-weight: 700; margin-top: 0.2rem; font-variant-numeric: tabular-nums; }
+.nexus-ticket-notes { padding: 0.7rem 1rem; font-size: 0.74rem; color: var(--text3); }
+.nexus-ticket-notes .flag { color: var(--gold-l); }
+
+.nexus-report-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px,1fr)); gap: 0.9rem; }
+.nexus-report-card { border: 1px solid var(--border); border-radius: var(--r-sm); padding: 0.9rem 1rem; background: rgba(255,255,255,0.015); }
+.nexus-report-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+.nexus-report-head h5 { font-size: 0.82rem; color: var(--text); }
+.nexus-pill { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.12rem 0.5rem; border-radius: 99px; border: 1px solid currentColor; }
+.nexus-pill.bullish { color: var(--cash-l); }
+.nexus-pill.bearish { color: var(--debt-l); }
+.nexus-pill.neutral { color: var(--gold-l); }
+.nexus-report-summary { font-size: 0.76rem; color: var(--text2); margin-bottom: 0.5rem; line-height: 1.5; }
+.nexus-signal { margin-top: 0.55rem; }
+.nexus-signal-top { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--text3); font-family: 'Space Grotesk', sans-serif; }
+.nexus-signal-det { font-size: 0.74rem; color: var(--text2); margin-top: 0.1rem; }
+.nexus-gauge { position: relative; height: 4px; background: var(--border); border-radius: 3px; margin-top: 0.3rem; overflow: hidden; }
+.nexus-gauge-fill { position: absolute; top: 0; height: 100%; border-radius: 3px; }
+.nexus-gauge-fill.pos { background: var(--cash); }
+.nexus-gauge-fill.neg { background: var(--debt); }
+
+.nexus-style-box { border: 1px solid var(--border); border-radius: var(--r-md); padding: 1rem 1.15rem; }
+.nexus-style-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.9rem; }
+.nexus-style-rec { font-size: 0.85rem; font-weight: 600; color: var(--text); }
+.nexus-fits { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 1rem; }
+.nexus-fit-label { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--text3); margin-bottom: 0.3rem; }
+.nexus-fit-bar { height: 6px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.nexus-fit-fill { height: 100%; background: var(--nexus); border-radius: 4px; }
+.nexus-fit ul { margin: 0.5rem 0 0; padding-left: 1.1rem; }
+.nexus-fit li { font-size: 0.74rem; color: var(--text2); margin: 0.25rem 0; }
+
+.nexus-day-block { margin-top: 0.9rem; border-top: 1px solid var(--border); padding-top: 0.9rem; }
+.nexus-day-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px,1fr)); gap: 0.6rem; margin-bottom: 0.6rem; }
+.nexus-day-stat { font-size: 0.7rem; color: var(--text3); }
+.nexus-day-stat b { display: block; color: var(--text); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+
+.nexus-source-line { font-size: 0.68rem; color: var(--text3); font-family: 'Space Grotesk', sans-serif; margin-top: 1.5rem; padding-top: 0.9rem; border-top: 1px solid var(--border); }
+
+@media (max-width: 720px) {
+  .nexus-panel { padding: 1.25rem 1.1rem 2.5rem; }
+  .nexus-panel-sym { font-size: 1.6rem; }
+}
