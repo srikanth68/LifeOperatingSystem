@@ -14,6 +14,7 @@ public class Habit
     public string? NotifyMessage { get; set; }
     public string NotifyChannel { get; set; } = "telegram";
     public string NotifyDaysJson { get; set; } = "[0,1,2,3,4,5,6]";
+    public Guid? GoalId { get; set; }   // optional link to a Goal this habit contributes to
     public bool IsActive { get; set; } = true;
     public DateOnly? LastNotificationSentOn { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

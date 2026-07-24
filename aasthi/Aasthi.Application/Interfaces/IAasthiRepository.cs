@@ -24,4 +24,14 @@ public interface IAasthiRepository
     Task<PropertyTask> AddTaskAsync(PropertyTask task);
     Task<bool> UpdateTaskAsync(PropertyTask task);
     Task<bool> DeleteTaskAsync(Guid taskId);
+
+    // Financials
+    Task<List<PropertyFinancialEntry>> GetFinancialsAsync(Guid? propertyId = null);
+    Task<PropertyFinancialEntry> AddFinancialAsync(PropertyFinancialEntry entry);
+    Task<bool> DeleteFinancialAsync(Guid entryId);
+
+    // Maintenance
+    Task<List<MaintenanceLog>> GetMaintenanceAsync(Guid? propertyId = null);
+    Task<MaintenanceLog> AddMaintenanceAsync(MaintenanceLog log);
+    Task<bool> DeleteMaintenanceAsync(Guid logId);
 }

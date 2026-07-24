@@ -530,3 +530,35 @@ h1.module-title  { font-size: 1.35rem; margin-bottom: 0; }
   .vn-search-row { flex-wrap: wrap; }
   .vn-search-input { min-width: 100%; }
 }
+
+/* ── Manual logging forms (workouts, weigh-in, nutrition goals) ── */
+.v-logworkout, .v-goals { margin-bottom: 1rem; }
+.v-log-toggle {
+  background: color-mix(in srgb, var(--vitara) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vitara) 30%, transparent);
+  color: var(--vitara); border-radius: var(--r-sm); padding: 0.45rem 0.9rem;
+  font-size: 0.78rem; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.v-log-toggle:hover { background: color-mix(in srgb, var(--vitara) 18%, transparent); }
+.v-log-form {
+  display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem;
+  padding: 0.75rem; background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border); border-radius: var(--r-md);
+}
+.v-log-form input, .v-log-form select {
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border2);
+  border-radius: var(--r-sm); padding: 0.4rem 0.6rem; color: var(--text);
+  font-size: 0.8rem; font-family: inherit; flex: 1; min-width: 90px;
+}
+.v-log-save {
+  background: var(--vitara); color: #04140f; border: none; border-radius: var(--r-sm);
+  padding: 0.4rem 1rem; font-weight: 700; font-size: 0.8rem; cursor: pointer; flex-shrink: 0;
+}
+.v-log-save:disabled { opacity: 0.5; cursor: default; }
+.v-weighin { display: flex; align-items: flex-end; gap: 1rem; flex-wrap: wrap; }
+.v-weighin-form { display: flex; gap: 0.5rem; align-items: center; }
+.v-weighin-form input {
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border2);
+  border-radius: var(--r-sm); padding: 0.45rem 0.7rem; color: var(--text);
+  font-size: 0.85rem; width: 90px; font-family: inherit;
+}

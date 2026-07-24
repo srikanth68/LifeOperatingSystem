@@ -37,32 +37,54 @@ final class SyncManager {
         syncStatus = .syncing
         lastError = nil
 
-        do {
-            // Gather data from all managers
-            let location = locationManager.toPayload()
-            let events = calendarManager.fetchEvents()
-            let health = await healthManager.fetchTodayData()
+        // Gather data from all managers once, reused for both pushes.
+        let location = locationManager.toPayload()
+        let events = calendarManager.fetchEvents()
+        let health = await healthManager.fetchTodayData()
 
+        var errors: [String] = []
+        var anySucceeded = false
+
+        // ── San context push ──
+        do {
             let request = ContextPushRequest(
                 location: location,
                 calendarEvents: events.isEmpty ? nil : events,
                 health: health,
                 timestamp: .now
             )
-
             let result = try await apiClient.pushContext(request)
-
-            if result.received {
-                syncStatus = .success
-                lastSyncTime = .now
-                lastError = nil
-            } else {
-                syncStatus = .error
-                lastError = result.message
-            }
+            if result.received { anySucceeded = true }
+            else { errors.append("San: \(result.message)") }
         } catch {
+            errors.append("San: \(error.localizedDescription)")
+        }
+
+        // ── Vitara HealthKit push (best-effort, independent of San) ──
+        // Sends the richer bundle (weight, workouts, last-week daily history) so
+        // Vitara backfills days the phone may have missed.
+        if UserDefaults.standard.bool(forKey: "vitaraSyncEnabled") {
+            do {
+                let bundle = await healthManager.fetchRichBundle()
+                let result = try await apiClient.pushHealthKit(bundle)
+                if result.received { anySucceeded = true }
+            } catch {
+                errors.append("Vitara: \(error.localizedDescription)")
+            }
+        }
+
+        if errors.isEmpty {
+            syncStatus = .success
+            lastSyncTime = .now
+            lastError = nil
+        } else if anySucceeded {
+            // Partial success — record the failure but don't nuke the last-sync time.
+            syncStatus = .success
+            lastSyncTime = .now
+            lastError = errors.joined(separator: " · ")
+        } else {
             syncStatus = .error
-            lastError = error.localizedDescription
+            lastError = errors.joined(separator: " · ")
         }
     }
 
@@ -113,6 +135,8 @@ final class SyncManager {
 
         let syncTask = Task {
             await syncManager.syncNow()
+            // Refresh scheduled local notifications from the latest reminders/alerts.
+            await NotificationManager.shared.syncFromStoredAuth()
             task.setTaskCompleted(success: syncManager.syncStatus == .success)
         }
 

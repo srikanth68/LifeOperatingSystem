@@ -40,7 +40,9 @@ public class OuraClient : IOuraClient
             ["redirect_uri"] = _redirectUri, ["client_id"] = _clientId, ["client_secret"] = _clientSecret,
         };
         var resp = await _http.PostAsync("https://api.ouraring.com/oauth/token", new FormUrlEncodedContent(form));
-        resp.EnsureSuccessStatusCode();
+        if (!resp.IsSuccessStatusCode)
+            throw new InvalidOperationException(
+                $"Oura token exchange failed: HTTP {(int)resp.StatusCode} — {await resp.Content.ReadAsStringAsync()}");
         var body = await resp.Content.ReadFromJsonAsync<OuraTokenResponse>(_json)
             ?? throw new InvalidOperationException("Empty token response");
         return JsonSerializer.Serialize(body, _json);
@@ -54,7 +56,11 @@ public class OuraClient : IOuraClient
             ["client_id"] = _clientId, ["client_secret"] = _clientSecret,
         };
         var resp = await _http.PostAsync("https://api.ouraring.com/oauth/token", new FormUrlEncodedContent(form));
-        resp.EnsureSuccessStatusCode();
+        if (!resp.IsSuccessStatusCode)
+            // Oura's error body (e.g. {"error":"invalid_grant"}) is the actual diagnostic —
+            // EnsureSuccessStatusCode() discards it, leaving only a bare "400 Bad Request".
+            throw new InvalidOperationException(
+                $"Oura token refresh failed: HTTP {(int)resp.StatusCode} — {await resp.Content.ReadAsStringAsync()}");
         var body = await resp.Content.ReadFromJsonAsync<OuraTokenResponse>(_json)
             ?? throw new InvalidOperationException("Empty refresh response");
         return JsonSerializer.Serialize(body, _json);
@@ -96,7 +102,7 @@ public class OuraClient : IOuraClient
                 DeepMinutes  = item.TryGet("deep_sleep_duration", out int deep) ? deep / 60 : 0,
                 LightMinutes = item.TryGet("light_sleep_duration", out int light) ? light / 60 : 0,
                 AwakeMinutes = item.TryGet("awake_time", out int awake) ? awake / 60 : 0,
-                Score        = item.TryGetNullable<int>("score"),
+                Score        = item.TryGetNullable<int>("score"), // usually absent on the `sleep` endpoint — filled from daily_sleep below
                 AvgHrv       = item.TryGetNullable<double>("average_hrv"),
                 LowestHr     = item.TryGetNullable<double>("lowest_heart_rate"),
                 AvgBreathingRate = item.TryGetNullable<double>("average_breath"),
@@ -104,6 +110,25 @@ public class OuraClient : IOuraClient
                 SkinTempDeviation = item.TryGetNullable<double>("skin_temp_deviation"),
             });
         }
+
+        // The sleep score lives on Oura's `daily_sleep` endpoint, not `sleep`.
+        // Fetch it and merge the per-day score onto the matching session(s).
+        try
+        {
+            var dailyDoc = await GetCollectionAsync("daily_sleep", accessToken, from, to);
+            var scoreByDay = new Dictionary<DateOnly, int>();
+            foreach (var item in dailyDoc.RootElement.GetProperty("data").EnumerateArray())
+            {
+                if (!item.TryGetProperty("day", out var dayEl)) continue;
+                if (!DateOnly.TryParse(dayEl.GetString(), out var day)) continue;
+                var score = item.TryGetNullable<int>("score");
+                if (score.HasValue) scoreByDay[day] = score.Value;
+            }
+            foreach (var s in sessions)
+                if (s.Score is null && scoreByDay.TryGetValue(s.Day, out var sc)) s.Score = sc;
+        }
+        catch { /* daily_sleep unavailable for this account — leave scores null */ }
+
         return sessions;
     }
 

@@ -22,22 +22,53 @@ public class OuraController(IOuraClient client, IVitaraRepository repo, IConfigu
 
     [AllowAnonymous]
     [HttpGet("callback")]
-    public async Task<IActionResult> Callback([FromQuery] string code)
+    public async Task<IActionResult> Callback([FromQuery] string? code, [FromQuery] string? error)
     {
-        var tokenJson = await client.ExchangeCodeAsync(code);
-        var payload   = JsonSerializer.Deserialize<TokenPayload>(tokenJson, _json)
-            ?? throw new InvalidOperationException("Empty token payload");
+        // Oura can redirect back with ?error=... (e.g. access_denied) and no code.
+        if (!string.IsNullOrEmpty(error))
+            return OuraErrorPage($"Oura returned an authorization error: {error}");
+        if (string.IsNullOrEmpty(code))
+            return OuraErrorPage("Oura didn't return an authorization code.");
 
-        await repo.SaveTokenAsync(new OuraToken
+        try
         {
-            AccessToken  = payload.AccessToken,
-            RefreshToken = payload.RefreshToken,
-            ExpiresAt    = DateTime.UtcNow.AddSeconds(payload.ExpiresIn),
-            LinkedAt     = DateTime.UtcNow,
-        });
+            var tokenJson = await client.ExchangeCodeAsync(code);
+            var payload   = JsonSerializer.Deserialize<TokenPayload>(tokenJson, _json)
+                ?? throw new InvalidOperationException("Empty token payload");
 
-        return Content("<html><body style='font-family:sans-serif;text-align:center;padding:4rem'>" +
-            "<h2>Oura linked ✓</h2><p>You can close this tab.</p></body></html>", "text/html");
+            await repo.SaveTokenAsync(new OuraToken
+            {
+                AccessToken  = payload.AccessToken,
+                RefreshToken = payload.RefreshToken,
+                ExpiresAt    = DateTime.UtcNow.AddSeconds(payload.ExpiresIn),
+                LinkedAt     = DateTime.UtcNow,
+            });
+
+            return Content("<html><body style='font-family:sans-serif;text-align:center;padding:4rem'>" +
+                "<h2>Oura linked ✓</h2><p>You can close this tab.</p></body></html>", "text/html");
+        }
+        catch (Exception ex)
+        {
+            // Turn the old opaque 500 into a page that names the actual cause —
+            // almost always a redirect-URI mismatch with the Oura developer app.
+            return OuraErrorPage(ex.Message);
+        }
+    }
+
+    private ContentResult OuraErrorPage(string detail)
+    {
+        var redirect     = cfg["Oura:RedirectUri"] ?? "(unset)";
+        var safeDetail   = System.Net.WebUtility.HtmlEncode(detail);
+        var safeRedirect = System.Net.WebUtility.HtmlEncode(redirect);
+        return Content(
+            "<html><body style='font-family:sans-serif;max-width:42rem;margin:4rem auto;padding:0 1rem;line-height:1.5'>" +
+            "<h2>Oura link failed</h2>" +
+            $"<p style='color:#b00020'><b>{safeDetail}</b></p>" +
+            "<p>The most common cause is a <b>redirect URI mismatch</b>. This app sent Oura:</p>" +
+            $"<pre style='background:#f4f4f4;padding:.75rem;border-radius:6px'>{safeRedirect}</pre>" +
+            "<p>That <i>exact</i> string (scheme, host, port, path — no trailing slash) must be listed " +
+            "under <b>Redirect URIs</b> for your app at cloud.ouraring.com. If it isn't, add it there and try again.</p>" +
+            "</body></html>", "text/html");
     }
 
     [HttpGet("status")]
@@ -45,7 +76,7 @@ public class OuraController(IOuraClient client, IVitaraRepository repo, IConfigu
     {
         var token = await repo.GetTokenAsync();
         if (token is null) return Ok(new { linked = false });
-        return Ok(new { linked = true, expired = token.IsExpired, linkedAt = token.LinkedAt });
+        return Ok(new { linked = true, expired = token.IsExpired, linkedAt = token.LinkedAt, lastSyncedAt = token.LastSyncedAt });
     }
 
     [HttpPost("sync")]
@@ -75,7 +106,11 @@ public class OuraController(IOuraClient client, IVitaraRepository repo, IConfigu
         await repo.UpsertReadinessAsync(readiness);
         await repo.UpsertActivityAsync(activity);
 
-        return Ok(new { sleep = sleep.Count, readiness = readiness.Count, activity = activity.Count, syncedAt = DateTime.UtcNow });
+        var syncedAt = DateTime.UtcNow;
+        token.LastSyncedAt = syncedAt;
+        await repo.SaveTokenAsync(token);
+
+        return Ok(new { sleep = sleep.Count, readiness = readiness.Count, activity = activity.Count, syncedAt });
     }
 
     [HttpDelete("unlink")]

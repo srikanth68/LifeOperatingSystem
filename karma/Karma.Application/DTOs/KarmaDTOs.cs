@@ -9,7 +9,8 @@ public record HabitRequest(
     string? NotifyTime,
     string? NotifyMessage,
     string? NotifyChannel,
-    int[]? NotifyDays
+    int[]? NotifyDays,
+    Guid? GoalId
 );
 
 public record HabitLogRequest(DateOnly? Date, bool Completed, string? Note);
@@ -28,10 +29,32 @@ public record HabitResult(
     int CurrentStreak,
     int BestStreak,
     bool? TodayCompleted,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    Guid? GoalId
 );
 
 public record HabitLogResult(Guid Id, Guid HabitId, DateOnly Date, bool Completed, string? Note, DateTime LoggedAt);
+
+// Analytics for the heatmap / stats view
+public record HabitStatsResult(
+    Guid HabitId,
+    int TotalLogged,
+    int TotalCompleted,
+    double CompletionRate,     // 0..1 over the window
+    int CurrentStreak,
+    int BestStreak,
+    int[] DayOfWeekCompletions, // index 0=Sunday..6=Saturday
+    List<HabitLogResult> Logs
+);
+
+// Linked-habit summary shown on a Goal
+public record LinkedHabitResult(
+    Guid Id,
+    string Name,
+    string Emoji,
+    int CurrentStreak,
+    double Last7Rate           // 0..1 completion over the last 7 days
+);
 
 // ── Goals ────────────────────────────────────────────────────
 public record GoalLink(string Label, string Url);

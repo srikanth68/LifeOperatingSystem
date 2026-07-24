@@ -1,0 +1,139 @@
+# Maaya OS — full stack in Docker.
+#   docker compose up -d --build
+#
+# Layout:
+#   - One shared backend image (see ./Dockerfile); each service picks its dll.
+#   - working_dir /data/<module>/run makes every module's "../<module>.db" and
+#     "../storage" convention land inside the ./deploy/data bind mount.
+#   - Secrets/config per module: ./deploy/env/<module>.env  (gitignored).
+#   - llama.cpp (Gemma) and Sentinel run on the HOST → host.docker.internal.
+
+x-backend: &backend
+  image: maaya-backend
+  restart: unless-stopped
+  volumes:
+    - ./deploy/data:/data
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+services:
+  vault:
+    <<: *backend
+    build: .
+    command: ["dotnet", "/app/vault-api/Vault.API.dll"]
+    working_dir: /data/vault/run
+    env_file: ./deploy/env/vault.env
+    ports: ["5000:5000"]
+
+  vault-worker:
+    <<: *backend
+    command: ["dotnet", "/app/vault-worker/Vault.Worker.dll"]
+    working_dir: /data/vault/run
+    env_file: ./deploy/env/vault.env
+    depends_on: [vault]
+
+  vitara:
+    <<: *backend
+    command: ["dotnet", "/app/vitara-api/Vitara.API.dll"]
+    working_dir: /data/vitara/run
+    env_file: ./deploy/env/vitara.env
+    ports: ["5100:5100"]
+
+  vitara-worker:
+    <<: *backend
+    command: ["dotnet", "/app/vitara-worker/Vitara.Worker.dll"]
+    working_dir: /data/vitara/run
+    env_file: ./deploy/env/vitara.env
+    depends_on: [vitara]
+
+  aasthi:
+    <<: *backend
+    command: ["dotnet", "/app/aasthi-api/Aasthi.API.dll"]
+    working_dir: /data/aasthi/run
+    env_file: ./deploy/env/aasthi.env
+    ports: ["5200:5200"]
+
+  san:
+    <<: *backend
+    command: ["dotnet", "/app/san-api/San.API.dll"]
+    working_dir: /data/san/run
+    env_file: ./deploy/env/san.env
+    ports: ["5300:5300"]
+
+  san-worker:
+    <<: *backend
+    command: ["dotnet", "/app/san-worker/San.Worker.dll"]
+    working_dir: /data/san/run
+    env_file: ./deploy/env/san.env
+    depends_on: [san]
+
+  sutra:
+    <<: *backend
+    command: ["dotnet", "/app/sutra-api/Sutra.API.dll"]
+    working_dir: /data/sutra/run
+    env_file: ./deploy/env/sutra.env
+    ports: ["5400:5400"]
+
+  northstar:
+    <<: *backend
+    command: ["dotnet", "/app/northstar-api/NorthStar.API.dll"]
+    working_dir: /data/northstar/run
+    env_file: ./deploy/env/northstar.env
+    ports: ["5500:5500"]
+
+  karma:
+    <<: *backend
+    command: ["dotnet", "/app/karma-api/Karma.API.dll"]
+    working_dir: /data/karma/run
+    env_file: ./deploy/env/karma.env
+    ports: ["5600:5600"]
+
+  nexus:
+    <<: *backend
+    command: ["dotnet", "/app/nexus-api/Nexus.API.dll"]
+    working_dir: /data/nexus/run
+    env_file: ./deploy/env/nexus.env
+    ports: ["5700:5700"]
+
+  mcp:
+    <<: *backend
+    command: ["dotnet", "/app/mcp-gateway/Maaya.Mcp.dll"]
+    working_dir: /data/mcp/run
+    env_file: ./deploy/env/mcp.env
+    ports: ["5900:5900"]
+    depends_on: [northstar]
+
+  frontend:
+    build: ./vault/frontend
+    image: maaya-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"    # http://<host>:3000  (mic works on localhost)
+      - "3443:443"   # https://<host>:3443 (mic works over Meshnet/.nord)
+    depends_on: [vault]
+
+  # ── Voice (San's Whisper STT + Piper TTS proxy) ──
+  # Own containers on the same compose network, so San reaches them at
+  # http://whisper:8000 / http://piper:8000 — no host.docker.internal needed.
+  whisper:
+    image: fedirz/faster-whisper-server:latest-cpu
+    restart: unless-stopped
+    ports: ["9000:8000"]   # host port for manual testing; San uses the service name
+
+  # Kokoro (82M) — noticeably more natural than Piper, and its CPU image is built
+  # for arm64 so it actually runs on Apple Silicon (unlike XTTS). OpenAI-compatible,
+  # so San needs no code change — just TTS_SERVICE_URL. This is the active TTS.
+  kokoro:
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
+    restart: unless-stopped
+    ports: ["8880:8880"]
+
+  # Piper — kept as a lightweight fallback. Point TTS_SERVICE_URL at
+  # http://piper:8000 in san.env to switch back.
+  piper:
+    image: ghcr.io/matatonic/openedai-speech-min:latest
+    restart: unless-stopped
+    ports: ["8001:8000"]   # host port for manual testing; San uses the service name
+    volumes:
+      - ./deploy/data/piper/voices:/app/voices
+      - ./deploy/data/piper/config:/app/config

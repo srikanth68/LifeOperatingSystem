@@ -87,20 +87,21 @@ struct HealthCard: View {
             Image(systemName: icon)
                 .font(.title)
                 .foregroundStyle(color)
+                .shadow(color: color.opacity(0.5), radius: 6)
 
             Text(value)
                 .font(.title2)
                 .fontWeight(.bold)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
+                .foregroundStyle(.primary)
 
             Text(title)
                 .font(.caption)
+                .textCase(.uppercase)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding()
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .glassCard(accent: color)
     }
 }

@@ -26,7 +26,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:3000", "http://localhost:5173")
+        policy.WithOrigins(MaayaCors.Origins("http://localhost:3000", "http://localhost:5173"))
               .AllowAnyMethod()
               .AllowAnyHeader();
     });
@@ -57,4 +57,6 @@ app.UseCors("AllowFrontend");
 app.UseMaayaAuth();
 app.MapControllers();
 
-app.Run();
+// Default: launchSettings port (dev). BIND_URL=http://0.0.0.0:5000 in containers.
+var bindUrl = Environment.GetEnvironmentVariable("BIND_URL");
+if (bindUrl is not null) app.Run(bindUrl); else app.Run();

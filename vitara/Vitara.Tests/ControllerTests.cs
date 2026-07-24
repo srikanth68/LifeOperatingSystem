@@ -70,6 +70,23 @@ public class FakeRepo : IVitaraRepository
     public Task<List<Workout>> GetWorkoutsAsync(DateOnly from, DateOnly to) =>
         Task.FromResult(WorkoutData.Where(w => w.Day >= from && w.Day <= to).OrderByDescending(w => w.StartTime).ToList());
 
+    public List<DailyNutrition> NutritionData { get; } = [];
+    public Task UpsertNutritionAsync(IEnumerable<DailyNutrition> entries) { NutritionData.AddRange(entries); return Task.CompletedTask; }
+    public Task<List<DailyNutrition>> GetNutritionAsync(DateOnly from, DateOnly to) =>
+        Task.FromResult(NutritionData.Where(n => n.Day >= from && n.Day <= to).OrderBy(n => n.Day).ToList());
+
+    public List<MealEntry> MealData { get; } = [];
+    public Task<MealEntry> AddMealAsync(MealEntry meal) { MealData.Add(meal); return Task.FromResult(meal); }
+    public Task<MealEntry?> GetMealAsync(Guid id) => Task.FromResult(MealData.FirstOrDefault(m => m.Id == id));
+    public Task<List<MealEntry>> GetMealsAsync(DateOnly day) => Task.FromResult(MealData.Where(m => m.Day == day).ToList());
+    public Task<MealEntry?> UpdateMealAsync(MealEntry meal) => Task.FromResult<MealEntry?>(meal);
+    public Task<bool> DeleteMealAsync(Guid id) => Task.FromResult(true);
+
+    public List<WeighIn> WeighInData { get; } = [];
+    public Task UpsertWeighInAsync(WeighIn weighIn) { WeighInData.RemoveAll(w => w.Id == weighIn.Id); WeighInData.Add(weighIn); return Task.CompletedTask; }
+    public Task<List<WeighIn>> GetWeighInsAsync(DateOnly from, DateOnly to) =>
+        Task.FromResult(WeighInData.Where(w => w.Day >= from && w.Day <= to).OrderBy(w => w.Day).ToList());
+
     public Task<DateOnly?> GetLatestDayAsync() => Task.FromResult<DateOnly?>(null);
 }
 

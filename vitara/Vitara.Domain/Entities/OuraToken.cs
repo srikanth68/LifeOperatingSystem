@@ -7,5 +7,6 @@ public class OuraToken
     public string RefreshToken { get; set; } = "";
     public DateTime ExpiresAt { get; set; }
     public DateTime LinkedAt { get; set; }
+    public DateTime? LastSyncedAt { get; set; }
     public bool IsExpired => DateTime.UtcNow >= ExpiresAt;
 }

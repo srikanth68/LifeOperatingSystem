@@ -1,7 +1,9 @@
+using Maaya.Auth;
 using Microsoft.EntityFrameworkCore;
 using San.Application.Interfaces;
 using San.Infrastructure.Data;
 using San.Infrastructure.Google;
+using San.Infrastructure.Llm;
 using San.Infrastructure.ModuleClients;
 using San.Infrastructure.Notifications;
 using San.Worker;
@@ -18,23 +20,55 @@ if (File.Exists(envFile))
     }
 }
 
-var vaultUrl  = Environment.GetEnvironmentVariable("VAULT_API_URL")  ?? "http://localhost:5000";
-var vitaraUrl = Environment.GetEnvironmentVariable("VITARA_API_URL") ?? "http://localhost:5100";
-var aasthiUrl = Environment.GetEnvironmentVariable("AASTHI_API_URL") ?? "http://localhost:5200";
+var vaultUrl     = Environment.GetEnvironmentVariable("VAULT_API_URL")     ?? "http://localhost:5000";
+var vitaraUrl    = Environment.GetEnvironmentVariable("VITARA_API_URL")    ?? "http://localhost:5100";
+var aasthiUrl    = Environment.GetEnvironmentVariable("AASTHI_API_URL")    ?? "http://localhost:5200";
+var northstarUrl = Environment.GetEnvironmentVariable("NORTHSTAR_API_URL") ?? "http://localhost:5500";
 
 var builder = Host.CreateApplicationBuilder(args);
+
+builder.Configuration["Llm:Provider"] = Environment.GetEnvironmentVariable("LLM_PROVIDER") ?? "gemini";
+builder.Configuration["Llm:Model"]    = Environment.GetEnvironmentVariable("LLM_MODEL") ?? "gemini-2.0-flash";
 
 builder.Services.AddDbContext<SanDbContext>(o =>
     o.UseSqlite($"Data Source={Path.Combine(Directory.GetCurrentDirectory(), "..", "san.db")}"));
 builder.Services.AddScoped<ISanRepository, SanRepository>();
 builder.Services.AddScoped<IModuleContextService, ModuleContextService>();
 builder.Services.AddHttpClient<ITelegramNotifier, TelegramNotifier>();
-builder.Services.AddHttpClient("vault",  c => c.BaseAddress = new Uri(vaultUrl));
-builder.Services.AddHttpClient("vitara", c => c.BaseAddress = new Uri(vitaraUrl));
-builder.Services.AddHttpClient("aasthi", c => c.BaseAddress = new Uri(aasthiUrl));
+
+// TokenService (for minting the service JWT sibling modules require) — same shared
+// secret as every module. Registered via AddMaayaAuth; the auth middleware bits it
+// also wires up are harmless in a worker (no HTTP pipeline uses them).
+builder.Services.AddMaayaAuth();
+
+// LLM provider — mirrors San.API so the memory-distillation worker can call the
+// same model the chat uses. Config-driven; add a case to support another provider.
+switch (builder.Configuration["Llm:Provider"])
+{
+    case "gemini":
+        builder.Services.AddHttpClient<IChatProvider, GeminiChatProvider>();
+        break;
+    case "ollama":
+        builder.Services.AddHttpClient<IChatProvider, OllamaChatProvider>();
+        break;
+    case "llamacpp":
+    case "openai-compatible":
+        builder.Services.AddHttpClient<IChatProvider, LlamaCppChatProvider>();
+        break;
+    case "anthropic":
+    default:
+        builder.Services.AddHttpClient<IChatProvider, AnthropicChatProvider>();
+        break;
+}
+
+builder.Services.AddHttpClient("vault",     c => c.BaseAddress = new Uri(vaultUrl));
+builder.Services.AddHttpClient("vitara",    c => c.BaseAddress = new Uri(vitaraUrl));
+builder.Services.AddHttpClient("aasthi",    c => c.BaseAddress = new Uri(aasthiUrl));
+builder.Services.AddHttpClient("northstar", c => c.BaseAddress = new Uri(northstarUrl));
 builder.Services.AddSingleton<IGoogleCalendarService, GoogleCalendarService>();
 builder.Services.AddHostedService<NotificationWorker>();
 builder.Services.AddHostedService<CalendarSyncWorker>();
+builder.Services.AddHostedService<MemoryDistillationWorker>();
 
 var host = builder.Build();
 

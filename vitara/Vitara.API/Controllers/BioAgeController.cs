@@ -114,4 +114,24 @@ public class BioAgeController(IVitaraRepository repo) : ControllerBase
             ageSource = profile?.Age != null ? "oura" : "config",
         });
     }
+
+    // Time-series history for the VO2max / cardiovascular-age trend chart.
+    [HttpGet("history")]
+    public async Task<IActionResult> History([FromQuery] int days = 90)
+    {
+        var to   = DateOnly.FromDateTime(DateTime.UtcNow);
+        var from = to.AddDays(-days);
+        var cvAge = await repo.GetCardiovascularAgeAsync(from, to);
+        var vo2   = await repo.GetVo2MaxAsync(from, to);
+        var chrono = (await repo.GetProfileAsync())?.Age;
+
+        return Ok(new
+        {
+            chronologicalAge = chrono,
+            cardiovascularAge = cvAge.Where(c => c.VascularAge.HasValue)
+                .Select(c => new { day = c.Day.ToString("yyyy-MM-dd"), value = c.VascularAge }),
+            vo2Max = vo2.Where(v => v.Vo2Max.HasValue)
+                .Select(v => new { day = v.Day.ToString("yyyy-MM-dd"), value = v.Vo2Max }),
+        });
+    }
 }

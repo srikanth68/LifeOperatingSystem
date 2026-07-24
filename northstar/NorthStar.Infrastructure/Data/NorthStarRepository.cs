@@ -43,6 +43,23 @@ public class NorthStarRepository(NorthStarDbContext db) : INorthStarRepository
         return await q.CountAsync();
     }
 
+    public async Task<KnowledgeEntry> UpsertDailyEntryAsync(string source, string topic, string summary, string rawJson, DateOnly day)
+    {
+        var existing = await db.Entries.FirstOrDefaultAsync(e => e.Source == source && e.Topic == topic && e.Day == day);
+        if (existing is not null)
+        {
+            existing.Summary = summary;
+            existing.RawJson = rawJson;
+            existing.CreatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return existing;
+        }
+        var entry = new KnowledgeEntry { Source = source, Topic = topic, Summary = summary, RawJson = rawJson, Day = day, CreatedAt = DateTime.UtcNow };
+        db.Entries.Add(entry);
+        await db.SaveChangesAsync();
+        return entry;
+    }
+
     // ── Insights ──
     public async Task<Insight> AddInsightAsync(Insight insight)
     {
@@ -169,5 +186,116 @@ public class NorthStarRepository(NorthStarDbContext db) : INorthStarRepository
         db.Facts.Remove(f);
         await db.SaveChangesAsync();
         return true;
+    }
+
+    // ── Activity events (append-only, event-level) ──
+    public async Task<bool> AddEventIfNewAsync(ActivityEvent ev)
+    {
+        if (string.IsNullOrWhiteSpace(ev.EventKey))
+            ev.EventKey = $"{ev.Source}:{ev.Kind}:{ev.Id}"; // last-resort unique key
+        if (await db.Events.AnyAsync(e => e.EventKey == ev.EventKey))
+            return false;
+        ev.RecordedAt = DateTime.UtcNow;
+        db.Events.Add(ev);
+        try
+        {
+            await db.SaveChangesAsync();
+            return true;
+        }
+        catch (DbUpdateException)
+        {
+            // Lost a race to another producer inserting the same EventKey — the unique
+            // index rejected it. That's the idempotency guarantee doing its job.
+            db.Entry(ev).State = EntityState.Detached;
+            return false;
+        }
+    }
+
+    public async Task<int> AddEventsIfNewAsync(IEnumerable<ActivityEvent> evs)
+    {
+        var inserted = 0;
+        foreach (var ev in evs)
+            if (await AddEventIfNewAsync(ev)) inserted++;
+        return inserted;
+    }
+
+    public async Task<List<ActivityEvent>> GetEventsSinceAsync(DateTime sinceUtc, string? source, int limit)
+    {
+        var q = db.Events.Where(e => e.OccurredAt > sinceUtc);
+        if (source is not null) q = q.Where(e => e.Source == source);
+        return await q.OrderByDescending(e => e.OccurredAt).Take(limit).AsNoTracking().ToListAsync();
+    }
+
+    // ── Agent memory (FTS5) ──
+    public async Task<MemoryEntry> SaveMemoryAsync(MemoryEntry memory)
+    {
+        db.Memories.Add(memory);
+        await db.SaveChangesAsync();
+        return memory;
+    }
+
+    public async Task<List<MemoryEntry>> RecallMemoriesAsync(string query, string? kind, int limit)
+    {
+        // Sanitize into quoted FTS5 tokens joined by OR — broad recall, immune to
+        // MATCH syntax errors from user input. bm25 ascending = best match first.
+        var tokens = query.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(t => "\"" + t.Replace("\"", "\"\"") + "\"")
+            .ToArray();
+        if (tokens.Length == 0) return [];
+        var match = string.Join(" OR ", tokens);
+
+        var results = await db.Memories.FromSqlRaw("""
+            SELECT m.* FROM Memories m
+            JOIN MemoryFts ON m.rowid = MemoryFts.rowid
+            WHERE MemoryFts MATCH {0} AND ({1} IS NULL OR m.Kind = {1})
+            ORDER BY bm25(MemoryFts), m.Importance DESC
+            LIMIT {2}
+            """, match, kind!, limit).AsNoTracking().ToListAsync();
+
+        // Fallback when FTS misses (e.g. partial words): plain substring scan.
+        if (results.Count == 0)
+        {
+            var lower = query.ToLowerInvariant();
+            var q = db.Memories.Where(m => m.Content.ToLower().Contains(lower) || m.Tags.ToLower().Contains(lower));
+            if (kind is not null) q = q.Where(m => m.Kind == kind);
+            results = await q.OrderByDescending(m => m.Importance)
+                .ThenByDescending(m => m.CreatedAt)
+                .Take(limit).AsNoTracking().ToListAsync();
+        }
+
+        // Reinforcement: recalled memories get touched, so "hot" memories are observable.
+        if (results.Count > 0)
+        {
+            var ids = results.Select(r => r.Id).ToList();
+            await db.Memories.Where(m => ids.Contains(m.Id))
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(m => m.LastAccessedAt, DateTime.UtcNow)
+                    .SetProperty(m => m.AccessCount, m => m.AccessCount + 1));
+        }
+        return results;
+    }
+
+    public async Task<List<MemoryEntry>> GetRecentMemoriesAsync(int limit, string? kind)
+    {
+        var q = db.Memories.AsQueryable();
+        if (kind is not null) q = q.Where(m => m.Kind == kind);
+        return await q.OrderByDescending(m => m.CreatedAt).Take(limit).AsNoTracking().ToListAsync();
+    }
+
+    public async Task<bool> DeleteMemoryAsync(Guid id)
+    {
+        var m = await db.Memories.FindAsync(id);
+        if (m is null) return false;
+        db.Memories.Remove(m);
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<(int Total, Dictionary<string, int> ByKind)> GetMemoryStatsAsync()
+    {
+        var byKind = await db.Memories.GroupBy(m => m.Kind)
+            .Select(g => new { Kind = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Kind, x => x.Count);
+        return (byKind.Values.Sum(), byKind);
     }
 }

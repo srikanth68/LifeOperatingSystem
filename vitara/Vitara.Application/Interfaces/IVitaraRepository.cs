@@ -64,6 +64,10 @@ public interface IVitaraRepository
     Task<MealEntry?> UpdateMealAsync(MealEntry meal);
     Task<bool> DeleteMealAsync(Guid id);
 
+    // Weigh-ins
+    Task UpsertWeighInAsync(WeighIn weighIn);
+    Task<List<WeighIn>> GetWeighInsAsync(DateOnly from, DateOnly to);
+
     // Sync tracking
     Task<DateOnly?> GetLatestDayAsync();
 }

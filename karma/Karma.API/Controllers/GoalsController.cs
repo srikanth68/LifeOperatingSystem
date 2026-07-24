@@ -2,6 +2,7 @@ using System.Text.Json;
 using Karma.Application.DTOs;
 using Karma.Application.Interfaces;
 using Karma.Domain.Entities;
+using Karma.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Karma.API.Controllers;
@@ -105,6 +106,7 @@ public class GoalsController(IKarmaRepository repo) : ControllerBase
         if (goal is null) return NotFound("Goal not found.");
         var m = new GoalMilestone { GoalId = goalId, Title = req.Title.Trim(), TargetDate = req.TargetDate };
         var saved = await repo.AddMilestoneAsync(m);
+        await RecomputeProgressFromMilestonesAsync(goalId);
         return Ok(ToMilestone(saved));
     }
 
@@ -116,12 +118,51 @@ public class GoalsController(IKarmaRepository repo) : ControllerBase
             m.Completed = completed;
             m.CompletedAt = completed ? DateTime.UtcNow : null;
         });
-        return updated is null ? NotFound() : Ok(ToMilestone(updated));
+        if (updated is null) return NotFound();
+        await RecomputeProgressFromMilestonesAsync(goalId);
+        return Ok(ToMilestone(updated));
     }
 
     [HttpDelete("{goalId:guid}/milestones/{milestoneId:guid}")]
-    public async Task<IActionResult> DeleteMilestone(Guid goalId, Guid milestoneId) =>
-        await repo.DeleteMilestoneAsync(milestoneId) ? NoContent() : NotFound();
+    public async Task<IActionResult> DeleteMilestone(Guid goalId, Guid milestoneId)
+    {
+        if (!await repo.DeleteMilestoneAsync(milestoneId)) return NotFound();
+        await RecomputeProgressFromMilestonesAsync(goalId);
+        return NoContent();
+    }
+
+    // Habits linked to this goal, with their recent completion rate (informational —
+    // does NOT feed Goal.Progress, which is derived from milestones).
+    [HttpGet("{goalId:guid}/habits")]
+    public async Task<IActionResult> LinkedHabits(Guid goalId)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var habits = (await repo.GetHabitsAsync()).Where(h => h.GoalId == goalId).ToList();
+        var results = new List<LinkedHabitResult>();
+        foreach (var h in habits)
+        {
+            var logs = await repo.GetHabitLogsAsync(h.Id, today.AddDays(-365), today);
+            var (cur, _) = KarmaRepository.ComputeStreaks(logs, today);
+            var last7 = logs.Where(l => l.Date > today.AddDays(-7)).ToList();
+            var rate = last7.Count > 0 ? (double)last7.Count(l => l.Completed) / 7 : 0;
+            results.Add(new LinkedHabitResult(h.Id, h.Name, h.Emoji, cur, rate));
+        }
+        return Ok(results);
+    }
+
+    // When a goal has milestones, its Progress is the % of milestones completed.
+    private async Task RecomputeProgressFromMilestonesAsync(Guid goalId)
+    {
+        var milestones = await repo.GetMilestonesAsync(goalId);
+        if (milestones.Count == 0) return;   // manual progress preserved for milestone-free goals
+        var pct = (int)Math.Round((double)milestones.Count(m => m.Completed) / milestones.Count * 100);
+        await repo.UpdateGoalAsync(goalId, g =>
+        {
+            g.Progress = pct;
+            if (pct == 100 && g.Status == "active") { g.Status = "completed"; g.CompletedAt = DateTime.UtcNow; }
+            else if (pct < 100 && g.Status == "completed") { g.Status = "active"; g.CompletedAt = null; }
+        });
+    }
 
     private static List<GoalLink> ParseLinks(string? json) =>
         string.IsNullOrWhiteSpace(json)

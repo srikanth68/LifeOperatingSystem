@@ -227,3 +227,44 @@
   .aasthi-property-top { flex-direction: column; }
   .aasthi-property-stats { width: 100%; justify-content: space-between; }
 }
+
+/* ── Financials & Maintenance ── */
+.aasthi-inline-select {
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border2);
+  border-radius: var(--r-sm); padding: 0.4rem 0.7rem; color: var(--text);
+  font-size: 0.8rem; font-family: inherit;
+}
+.aasthi-cashflow-list { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+.aasthi-cashflow-row {
+  display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap;
+  padding: 0.7rem 1rem; background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+}
+.aasthi-cf-addr { font-weight: 600; font-size: 0.82rem; color: var(--text); flex: 1; min-width: 140px; }
+.aasthi-cf-stat { display: flex; flex-direction: column; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+.aasthi-cf-stat .cf-k { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); }
+
+.aasthi-fin-row, .aasthi-maint-row {
+  display: flex; align-items: center; gap: 0.875rem;
+  padding: 0.65rem 0.9rem; background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border); border-radius: var(--r-sm); margin-bottom: 0.45rem;
+}
+.aasthi-fin-badge, .aasthi-maint-badge {
+  font-size: 0.58rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 0.15rem 0.45rem; border-radius: 4px; flex-shrink: 0; min-width: 62px; text-align: center;
+}
+.aasthi-fin-badge.income   { background: rgba(31,200,122,0.12); color: var(--cash); }
+.aasthi-fin-badge.expense  { background: rgba(232,68,68,0.12); color: var(--debt-l); }
+.aasthi-fin-badge.mortgage { background: rgba(240,160,48,0.12); color: var(--aasthi); }
+.aasthi-maint-badge.repair      { background: rgba(232,68,68,0.12); color: var(--debt-l); }
+.aasthi-maint-badge.improvement { background: rgba(31,200,122,0.12); color: var(--cash); }
+.aasthi-maint-badge.inspection  { background: rgba(79,158,248,0.12); color: #4f9ef8; }
+.aasthi-maint-badge.other       { background: rgba(148,163,184,0.12); color: var(--text2); }
+.aasthi-fin-body, .aasthi-maint-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.aasthi-fin-cat { font-size: 0.82rem; color: var(--text); text-transform: capitalize; }
+.aasthi-fin-notes, .aasthi-maint-desc { font-size: 0.7rem; color: var(--text3); }
+.aasthi-maint-title { font-size: 0.82rem; color: var(--text); font-weight: 600; }
+.aasthi-maint-meta { display: flex; gap: 0.75rem; font-size: 0.68rem; color: var(--text3); margin-top: 0.15rem; flex-wrap: wrap; }
+.aasthi-fin-date { font-size: 0.7rem; color: var(--text3); flex-shrink: 0; }
+.aasthi-fin-amount, .aasthi-maint-cost { font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.aasthi-maint-cost { color: var(--text); }

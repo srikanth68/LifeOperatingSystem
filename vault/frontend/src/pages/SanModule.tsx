@@ -2,10 +2,13 @@ import { useState, useRef, useEffect } from 'react';
 import { QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { makeModuleQueryClient } from '../services/moduleQuery';
 import { authHeaders } from '../services/auth';
+import { moduleApi } from '../services/apiHost';
+import { useTimezone, formatInTz, localInputToUtcIso, utcIsoToLocalInput } from '../services/timezone';
+import { getVoiceStatus, startRecording, speak, stopSpeaking, type Recorder, type VoiceStatus } from '../services/voice';
 import '../styles/modules.css';
 import '../styles/san.css';
 
-const API = 'http://localhost:5300';
+const API = moduleApi(5300);
 const MC = 'var(--san)';
 const style = { '--mc': MC } as React.CSSProperties;
 
@@ -37,12 +40,11 @@ interface CalendarEvent {
 interface NowNextResult { current?: CalendarEvent; upcoming: CalendarEvent[]; asOf: string }
 interface ContextResult { location?: { latitude: number; longitude: number; address?: string; timestamp: string }; recentActivity: unknown[] }
 
-const fmtDateTime = (d: string | null) => d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
-const toLocalInputValue = (iso: string) => {
-  const d = new Date(iso);
-  const pad = (n: number) => n.toString().padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
+// Always formats/parses in the system-wide configured timezone (see
+// services/timezone.ts) — NOT the viewing device's own clock, so a reminder
+// means the same real-world time regardless of which browser created it.
+const fmtDateTime = (d: string | null) => formatInTz(d);
+const toLocalInputValue = (iso: string) => utcIsoToLocalInput(iso);
 
 const ALERT_TYPES = [
   { id: 'spending_threshold', label: 'Spending Threshold' },
@@ -90,11 +92,78 @@ function ApiError({ port }: { port: number }) {
   );
 }
 
+/* ── System Prompt Editor (separate window) ── */
+interface SystemPromptDto { prompt: string; isDefault: boolean; defaultPrompt: string }
+function SystemPromptEditor({ onClose }: { onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [text, setText] = useState<string | null>(null);
+  const promptQ = useQuery<SystemPromptDto>({ queryKey: ['san-system-prompt'], queryFn: () => get(`${API}/api/chat/system-prompt`) });
+
+  useEffect(() => { if (promptQ.data && text === null) setText(promptQ.data.prompt); }, [promptQ.data, text]);
+
+  const saveMut = useMutation({
+    mutationFn: (prompt: string) => send(`${API}/api/chat/system-prompt`, 'PUT', { prompt }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['san-system-prompt'] }); onClose(); },
+  });
+
+  return (
+    <div className="sp-overlay" onClick={onClose}>
+      <div className="sp-modal" onClick={e => e.stopPropagation()}>
+        <div className="sp-head">
+          <h3>San — System Prompt</h3>
+          <button className="sp-x" onClick={onClose}>✕</button>
+        </div>
+        <p className="sp-hint">
+          This is the base instruction San runs with. A live snapshot of your modules is appended automatically after it.
+        </p>
+        {promptQ.isLoading || text === null ? (
+          <div className="sp-body" style={{ color: 'var(--text3)' }}>Loading…</div>
+        ) : (
+          <textarea
+            className="sp-body"
+            value={text}
+            onChange={e => setText(e.target.value)}
+            placeholder="Enter the system prompt San should use…"
+            spellCheck={false}
+          />
+        )}
+        <div className="sp-foot">
+          <button
+            className="btn-ghost"
+            onClick={() => promptQ.data && setText(promptQ.data.defaultPrompt)}
+            disabled={!promptQ.data}
+          >Reset to default</button>
+          <div style={{ flex: 1 }} />
+          <button className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button
+            className="btn-primary"
+            onClick={() => text !== null && saveMut.mutate(text)}
+            disabled={text === null || saveMut.isPending}
+          >{saveMut.isPending ? 'Saving…' : 'Save'}</button>
+        </div>
+        {saveMut.isError && <div className="sp-err">Couldn't save — is San (5300) running?</div>}
+      </div>
+    </div>
+  );
+}
+
 /* ── Assistant ── */
 function Assistant() {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState('');
+  const [showPrompt, setShowPrompt] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Voice: mic (STT) + speaker (TTS). Buttons only appear if the respective
+  // service is configured on the backend (see /api/voice/status).
+  const [voice, setVoice] = useState<VoiceStatus>({ sttReady: false, ttsReady: false });
+  const [recording, setRecording] = useState(false);
+  const [voiceErr, setVoiceErr] = useState<string | null>(null);
+  const [ttsOn, setTtsOn] = useState(() => localStorage.getItem('san_tts_on') === '1');
+  const recorderRef = useRef<Recorder | null>(null);
+  const lastSpokenId = useRef<string | null>(null);
+
+  useEffect(() => { getVoiceStatus().then(setVoice); }, []);
 
   const messagesQ = useQuery<ChatMsg[]>({ queryKey: ['san-messages'], queryFn: () => get(`${API}/api/chat/messages`) });
   const sendMut = useMutation({
@@ -105,6 +174,42 @@ function Assistant() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messagesQ.data, sendMut.isPending]);
+
+  // Speak newly-arrived assistant replies when TTS is on. Guards against
+  // re-speaking on every re-render by tracking the last spoken message id.
+  useEffect(() => {
+    if (!ttsOn || !voice.ttsReady) return;
+    const msgs = messagesQ.data ?? [];
+    const last = msgs[msgs.length - 1];
+    if (last && last.role === 'assistant' && last.id !== lastSpokenId.current) {
+      lastSpokenId.current = last.id;
+      speak(last.content).catch(e => setVoiceErr(e.message));
+    }
+  }, [messagesQ.data, ttsOn, voice.ttsReady]);
+
+  const toggleTts = () => {
+    const next = !ttsOn;
+    setTtsOn(next);
+    localStorage.setItem('san_tts_on', next ? '1' : '0');
+    if (!next) stopSpeaking();
+  };
+
+  const toggleMic = async () => {
+    setVoiceErr(null);
+    if (recording) {
+      try {
+        const text = await recorderRef.current!.stop();
+        recorderRef.current = null;
+        setRecording(false);
+        if (text) sendMut.mutate(text); // dictate → send straight to San
+      } catch (e) { setRecording(false); setVoiceErr((e as Error).message); }
+    } else {
+      try {
+        recorderRef.current = await startRecording();
+        setRecording(true);
+      } catch (e) { setVoiceErr('Microphone unavailable: ' + (e as Error).message); }
+    }
+  };
 
   if (messagesQ.isError) return <ApiError port={5300} />;
 
@@ -118,6 +223,10 @@ function Assistant() {
 
   return (
     <div style={style}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.6rem' }}>
+        <button className="btn-ghost" onClick={() => setShowPrompt(true)}>⚙ Edit System Prompt</button>
+      </div>
+      {showPrompt && <SystemPromptEditor onClose={() => setShowPrompt(false)} />}
       <div className="chat-shell" style={{ marginBottom: '1.5rem' }}>
         <div className="chat-messages" ref={scrollRef}>
           {messages.length === 0 && !messagesQ.isLoading && (
@@ -143,15 +252,33 @@ function Assistant() {
           )}
         </div>
         <div className="chat-bar">
+          {voice.ttsReady && (
+            <button
+              className="chat-voice-btn"
+              onClick={toggleTts}
+              title={ttsOn ? 'San speaks replies aloud (on)' : 'Speak replies aloud'}
+              style={ttsOn ? { color: 'var(--san)' } : undefined}
+            >{ttsOn ? '🔊' : '🔈'}</button>
+          )}
           <input
-            placeholder="Ask San anything about your life data…"
+            placeholder={recording ? 'Listening…' : 'Ask San anything about your life data…'}
             value={draft}
             onChange={e => setDraft(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') submit(); }}
-            disabled={sendMut.isPending}
+            disabled={sendMut.isPending || recording}
           />
+          {voice.sttReady && (
+            <button
+              className="chat-voice-btn"
+              onClick={toggleMic}
+              disabled={sendMut.isPending}
+              title={recording ? 'Stop & send' : 'Speak to San'}
+              style={recording ? { color: 'var(--debt, #e5484d)' } : undefined}
+            >{recording ? '⏹' : '🎤'}</button>
+          )}
           <button className="chat-send" onClick={submit} disabled={sendMut.isPending || !draft.trim()}><SendIcon /></button>
         </div>
+        {voiceErr && <div style={{ color: 'var(--debt, #e5484d)', fontSize: '0.75rem', padding: '0.4rem 0.6rem' }}>{voiceErr}</div>}
       </div>
       <div className="card">
         <h3>What San can do</h3>
@@ -196,6 +323,7 @@ function ReminderForm({ initial, onSubmit, onCancel, submitting }: {
 }
 
 function Reminders() {
+  useTimezone(); // populates the shared timezone cache used by the helpers below
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -204,12 +332,12 @@ function Reminders() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['san-reminders'] });
   const createMut = useMutation({
-    mutationFn: (f: ReminderFormState) => send(`${API}/api/reminders`, 'POST', { text: f.text, dueAt: new Date(f.dueAt).toISOString(), notifyTelegram: f.notifyTelegram }),
+    mutationFn: (f: ReminderFormState) => send(`${API}/api/reminders`, 'POST', { text: f.text, dueAt: localInputToUtcIso(f.dueAt), notifyTelegram: f.notifyTelegram }),
     onSuccess: () => { invalidate(); setAdding(false); },
   });
   const updateMut = useMutation({
     mutationFn: ({ id, f }: { id: string; f: ReminderFormState }) =>
-      send(`${API}/api/reminders/${id}`, 'PUT', { text: f.text, dueAt: new Date(f.dueAt).toISOString(), notifyTelegram: f.notifyTelegram }),
+      send(`${API}/api/reminders/${id}`, 'PUT', { text: f.text, dueAt: localInputToUtcIso(f.dueAt), notifyTelegram: f.notifyTelegram }),
     onSuccess: () => { invalidate(); setEditingId(null); },
   });
   const toggleDoneMut = useMutation({
@@ -319,6 +447,7 @@ function AlertForm({ initial, onSubmit, onCancel, submitting }: {
 }
 
 function Alerts() {
+  useTimezone(); // populates the shared timezone cache used by the helpers below
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -329,7 +458,7 @@ function Alerts() {
   const toBody = (f: AlertFormState) => ({
     type: f.type, title: f.title, description: f.description,
     thresholdValue: f.type === 'spending_threshold' && f.thresholdValue ? Number(f.thresholdValue) : null,
-    triggerAt: f.type !== 'spending_threshold' && f.triggerAt ? new Date(f.triggerAt).toISOString() : null,
+    triggerAt: f.type !== 'spending_threshold' && f.triggerAt ? localInputToUtcIso(f.triggerAt) : null,
     active: f.active, notifyTelegram: f.notifyTelegram,
   });
 
@@ -473,6 +602,8 @@ function NowNext() {
   const location = contextQ.data?.location;
   const currentTime = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
+  if (nowNextQ.isError) return <ApiError port={5300} />;
+
   return (
     <div className="san-now-next" style={style}>
       <div className="san-now-next-header">
@@ -588,6 +719,8 @@ function Calendar() {
 
   const selectedEvents = selectedDay ? (eventsByDay.get(selectedDay) ?? []) : [];
 
+  if (eventsQ.isError) return <ApiError port={5300} />;
+
   return (
     <div className="san-calendar" style={style}>
       {/* Actions bar */}
@@ -688,7 +821,8 @@ const REL_ICON: Record<string, string> = { family: '👨‍👩‍👧', friend:
 
 function People() {
   const queryClient = useQueryClient();
-  const { data: people } = useQuery<PersonItem[]>({ queryKey: ['people'], queryFn: () => get(`${API}/api/people`) });
+  const peopleQ = useQuery<PersonItem[]>({ queryKey: ['people'], queryFn: () => get(`${API}/api/people`) });
+  const { data: people } = peopleQ;
   const { data: birthdays } = useQuery<PersonItem[]>({ queryKey: ['birthdays'], queryFn: () => get(`${API}/api/people/birthdays?days=30`) });
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState('');
@@ -730,6 +864,8 @@ function People() {
   };
 
   const relCounts = people?.reduce((acc, p) => { acc[p.relationship] = (acc[p.relationship] ?? 0) + 1; return acc; }, {} as Record<string, number>) ?? {};
+
+  if (peopleQ.isError) return <ApiError port={5300} />;
 
   return (
     <div className="sp" style={style}>

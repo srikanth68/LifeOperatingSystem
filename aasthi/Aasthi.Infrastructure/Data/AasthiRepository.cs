@@ -155,4 +155,52 @@ public class AasthiRepository(AasthiDbContext db) : IAasthiRepository
         await db.SaveChangesAsync();
         return true;
     }
+
+    // ── Financials ──
+    public async Task<List<PropertyFinancialEntry>> GetFinancialsAsync(Guid? propertyId = null)
+    {
+        var q = db.FinancialEntries.AsQueryable();
+        if (propertyId.HasValue) q = q.Where(f => f.PropertyId == propertyId.Value);
+        return await q.OrderByDescending(f => f.Date).ThenByDescending(f => f.CreatedAt).ToListAsync();
+    }
+
+    public async Task<PropertyFinancialEntry> AddFinancialAsync(PropertyFinancialEntry entry)
+    {
+        db.FinancialEntries.Add(entry);
+        await db.SaveChangesAsync();
+        return entry;
+    }
+
+    public async Task<bool> DeleteFinancialAsync(Guid entryId)
+    {
+        var existing = await db.FinancialEntries.FirstOrDefaultAsync(f => f.Id == entryId);
+        if (existing is null) return false;
+        db.FinancialEntries.Remove(existing);
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    // ── Maintenance ──
+    public async Task<List<MaintenanceLog>> GetMaintenanceAsync(Guid? propertyId = null)
+    {
+        var q = db.MaintenanceLogs.AsQueryable();
+        if (propertyId.HasValue) q = q.Where(m => m.PropertyId == propertyId.Value);
+        return await q.OrderByDescending(m => m.CompletedDate).ThenByDescending(m => m.CreatedAt).ToListAsync();
+    }
+
+    public async Task<MaintenanceLog> AddMaintenanceAsync(MaintenanceLog log)
+    {
+        db.MaintenanceLogs.Add(log);
+        await db.SaveChangesAsync();
+        return log;
+    }
+
+    public async Task<bool> DeleteMaintenanceAsync(Guid logId)
+    {
+        var existing = await db.MaintenanceLogs.FirstOrDefaultAsync(m => m.Id == logId);
+        if (existing is null) return false;
+        db.MaintenanceLogs.Remove(existing);
+        await db.SaveChangesAsync();
+        return true;
+    }
 }

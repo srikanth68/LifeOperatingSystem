@@ -118,8 +118,25 @@ public class DocumentsController(ISutraRepository repo, IDocumentStorage storage
         _ => $"{bytes / (1024.0 * 1024 * 1024):F2} GB",
     };
 
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateMetadataRequest req)
+    {
+        var updated = await repo.UpdateAsync(id, d =>
+        {
+            if (req.Category != null) d.Category = req.Category.ToLower();
+            if (req.Tags != null) d.Tags = string.IsNullOrWhiteSpace(req.Tags) ? null : req.Tags;
+            if (req.Notes != null) d.Notes = string.IsNullOrWhiteSpace(req.Notes) ? null : req.Notes;
+            if (req.ClearExpiry) d.ExpiresAt = null;
+            else if (!string.IsNullOrWhiteSpace(req.ExpiresAt) && DateTime.TryParse(req.ExpiresAt, out var dt))
+                d.ExpiresAt = dt.ToUniversalTime();
+        });
+        return updated is null ? NotFound() : Ok(ToResult(updated));
+    }
+
     private static DocumentResult ToResult(Document d) => new(
         d.Id, d.FileName, d.ContentType, d.SizeBytes, d.Category,
         d.Tags, d.SourceModule, d.SourceRefId, d.ExpiresAt, d.Notes, d.UploadedAt
     );
 }
+
+public record UpdateMetadataRequest(string? Category, string? Tags, string? Notes, string? ExpiresAt, bool ClearExpiry = false);

@@ -3,13 +3,14 @@ import { QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tan
 import { makeModuleQueryClient } from '../services/moduleQuery';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
-  Area, AreaChart,
+  Area, AreaChart, LineChart, Line,
 } from 'recharts';
 import { authHeaders } from '../services/auth';
+import { moduleApi } from '../services/apiHost';
 import '../styles/modules.css';
 import '../styles/vitara.css';
 
-const API = 'http://localhost:5100';
+const API = moduleApi(5100);
 const qc  = makeModuleQueryClient(5 * 60_000);
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -51,7 +52,22 @@ interface WorkoutItem {
   id: string; day: string; activity: string; startTime?: string; endTime?: string;
   calories?: number; distance?: number; intensity?: string; label?: string;
 }
-interface OuraStatus { linked: boolean; expired?: boolean; linkedAt?: string; }
+interface OuraStatus { linked: boolean; expired?: boolean; linkedAt?: string; lastSyncedAt?: string; }
+
+function relTime(iso?: string): string {
+  if (!iso) return 'never';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return 'never';
+  const secs = Math.round((Date.now() - then) / 1000);
+  if (secs < 45) return 'just now';
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 interface ProtocolResult {
   name: string; icon: string; target: string; desc: string;
   status: 'on-track' | 'behind' | 'suggested' | 'manual';
@@ -130,7 +146,23 @@ function NotLinked() {
       </div>
       <h2>Connect Oura Ring</h2>
       <p>Link your Oura Ring to unlock sleep architecture, readiness scores, cardiovascular age, stress tracking, and biological age intelligence.</p>
-      <a href="http://localhost:5100/api/oura/auth" target="_blank" rel="noreferrer" className="btn-primary">Link Oura Ring</a>
+      <a href={`${API}/api/oura/auth`} target="_blank" rel="noreferrer" className="btn-primary">Link Oura Ring</a>
+    </div>
+  );
+}
+
+// Shown when a token row exists but is expired / can't refresh. Without this, a
+// broken token leaves status.linked=true so NotLinked never renders — and there
+// was no other way to re-trigger the OAuth flow from the UI.
+function OuraExpiredBanner() {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem',
+      flexWrap: 'wrap', padding: '0.75rem 1rem', marginBottom: '1rem', borderRadius: 8,
+      background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)',
+    }}>
+      <span style={{ fontSize: '0.9rem' }}>Your Oura session expired or couldn't refresh. Re-link to resume syncing.</span>
+      <a href={`${API}/api/oura/auth`} target="_blank" rel="noreferrer" className="btn-primary">Re-link Oura</a>
     </div>
   );
 }
@@ -171,7 +203,9 @@ function TodayPage({ status }: { status: OuraStatus }) {
       <div className="v-status-bar">
         <span className="v-ring-dot"/>
         <span className="v-status-text">Oura Ring Connected</span>
-        {status.linkedAt && <span className="v-status-since">since {new Date(status.linkedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
+        <span className="v-status-since" title={status.lastSyncedAt ? new Date(status.lastSyncedAt).toLocaleString() : undefined}>
+          updated {relTime(status.lastSyncedAt)}
+        </span>
         <button className={`v-sync-btn ${sync.isPending ? 'syncing' : ''}`} onClick={() => sync.mutate()} disabled={sync.isPending}>
           {sync.isPending ? 'Syncing...' : sync.isSuccess ? 'Synced' : 'Sync Now'}
         </button>
@@ -415,14 +449,52 @@ function SleepTooltip({ active, payload }: { active?: boolean; payload?: { paylo
 
 // ── BODY ──────────────────────────────────────────────────────────────────────
 
+interface WeighInItem { id: string; day: string; weightKg: number; }
+
+// Weight is stored in kg (canonical — BMI + HealthKit sync depend on it) but the
+// dashboard shows and accepts pounds.
+const kgToLb = (kg: number) => kg * 2.20462;
+const lbToKg = (lb: number) => lb / 2.20462;
+interface AgeHistory {
+  chronologicalAge: number | null;
+  cardiovascularAge: { day: string; value: number }[];
+  vo2Max: { day: string; value: number }[];
+}
+
 function BodyPage() {
+  const qClient = useQueryClient();
   const { data: bio } = useQuery<{ bioAge?: number; chronologicalAge: number; delta?: number; cardiovascularAge?: number; vo2Max?: number; factors: { hrvScore?: number; restingHrScore?: number; sleepScore?: number; readinessScore?: number; recoveryTrend?: number }; dataQuality: string; ageSource: string }>({
     queryKey: ['bioage'], queryFn: () => get(`${API}/api/bioage`),
   });
   const { data: sleep } = useQuery<Sleep[]>({ queryKey: ['sleep', 30], queryFn: () => get(`${API}/api/sleep?days=30`) });
+  const { data: profile } = useQuery<{ synced: boolean; height?: number }>({ queryKey: ['profile'], queryFn: () => get(`${API}/api/profile`) });
+  const { data: weighIns } = useQuery<WeighInItem[]>({ queryKey: ['weighins'], queryFn: () => get(`${API}/api/weighins?days=180`) });
+  const { data: ageHist } = useQuery<AgeHistory>({ queryKey: ['age-history'], queryFn: () => get(`${API}/api/bioage/history?days=90`) });
+
+  // Weight is entered and shown in POUNDS, but stored as kilograms — kg stays the
+  // canonical unit so BMI math and the iPhone HealthKit sync keep working unchanged.
+  const [weight, setWeight] = useState('');
+  const logWeight = useMutation({
+    mutationFn: () => send(`${API}/api/weighins`, 'POST', { weightKg: lbToKg(parseFloat(weight)) }),
+    onSuccess: () => { setWeight(''); qClient.invalidateQueries({ queryKey: ['weighins'] }); },
+  });
 
   const younger = (bio?.delta ?? 0) < 0;
   const hrvTrend = sleep?.filter(s => s.avgHrv != null).map(s => ({ day: dayLabel(s.day), hrv: s.avgHrv!, rhr: s.lowestHr ?? 0 })) ?? [];
+
+  const heightM = profile?.height;
+  const bmiOf = (kg: number) => heightM && heightM > 0 ? kg / (heightM * heightM) : null;
+  const weightChart = (weighIns ?? []).map(w => ({ day: dayLabel(w.day), weight: +kgToLb(w.weightKg).toFixed(1), bmi: bmiOf(w.weightKg) != null ? +bmiOf(w.weightKg)!.toFixed(1) : undefined }));
+  const latestWeight = weighIns && weighIns.length > 0 ? weighIns[weighIns.length - 1] : null;
+  const latestBmi = latestWeight ? bmiOf(latestWeight.weightKg) : null;
+
+  // Merge cardio-age + vo2max histories by day for a dual-line chart.
+  const ageDays = Array.from(new Set([...(ageHist?.cardiovascularAge ?? []).map(c => c.day), ...(ageHist?.vo2Max ?? []).map(v => v.day)])).sort();
+  const ageChart = ageDays.map(d => ({
+    day: dayLabel(d),
+    cardio: ageHist?.cardiovascularAge.find(c => c.day === d)?.value,
+    vo2: ageHist?.vo2Max.find(v => v.day === d)?.value,
+  }));
 
   return (
     <div>
@@ -473,24 +545,109 @@ function BodyPage() {
           </div>
         </>
       )}
+
+      {/* Weight & BMI */}
+      <div className="v-section">Weight &amp; BMI<span className="v-section-line"/></div>
+      <div className="v-weighin">
+        <div className="v-metrics" style={{ flex: 1 }}>
+          <Metric label="Latest Weight" value={latestWeight ? kgToLb(latestWeight.weightKg).toFixed(1) : undefined} unit="lb"/>
+          <Metric label="BMI" value={latestBmi != null ? latestBmi.toFixed(1) : undefined} color={latestBmi != null && latestBmi >= 18.5 && latestBmi < 25 ? 'var(--vitara)' : 'var(--gold)'} sub={heightM ? undefined : 'set height in profile'}/>
+        </div>
+        <div className="v-weighin-form">
+          <input type="number" step="0.1" placeholder="lb" value={weight} onChange={e => setWeight(e.target.value)} onKeyDown={e => e.key === 'Enter' && weight && logWeight.mutate()}/>
+          <button className="v-log-save" disabled={!weight || logWeight.isPending} onClick={() => logWeight.mutate()}>{logWeight.isPending ? '…' : 'Log'}</button>
+        </div>
+      </div>
+      {weightChart.length > 1 && (
+        <div className="v-chart">
+          <ResponsiveContainer width="100%" height={160}>
+            <LineChart data={weightChart} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+              <CartesianGrid {...GRID}/>
+              <XAxis dataKey="day" tick={AX} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(weightChart.length / 6))}/>
+              <YAxis tick={AX} tickLine={false} axisLine={false} width={36} domain={['dataMin - 2', 'dataMax + 2']}/>
+              <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle}/>
+              <Line type="monotone" dataKey="weight" stroke="var(--vitara)" strokeWidth={2} dot={false} name="Weight (lb)"/>
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* VO2max & Cardiovascular Age history */}
+      {ageChart.length > 1 && (
+        <>
+          <div className="v-section">VO2max &amp; Cardiovascular Age (90d)<span className="v-section-line"/></div>
+          <div className="v-chart">
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={ageChart} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid {...GRID}/>
+                <XAxis dataKey="day" tick={AX} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(ageChart.length / 6))}/>
+                <YAxis yAxisId="left" tick={AX} tickLine={false} axisLine={false} width={32}/>
+                <YAxis yAxisId="right" orientation="right" tick={AX} tickLine={false} axisLine={false} width={32}/>
+                <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle}/>
+                <Line yAxisId="left" type="monotone" dataKey="vo2" stroke="var(--vitara)" strokeWidth={2} dot={false} name="VO2max" connectNulls/>
+                <Line yAxisId="right" type="monotone" dataKey="cardio" stroke="var(--gold)" strokeWidth={2} dot={false} name="Cardio Age" connectNulls/>
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 // ── ACTIVITY ──────────────────────────────────────────────────────────────────
 
+const WORKOUT_TYPES = ['strength', 'running', 'cycling', 'walking', 'swimming', 'yoga', 'hiit', 'other'];
+
+function LogWorkoutForm() {
+  const qClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ activity: 'strength', day: new Date().toISOString().slice(0, 10), calories: '', intensity: 'moderate', label: '' });
+
+  const log = useMutation({
+    mutationFn: () => send(`${API}/api/workouts`, 'POST', {
+      day: f.day, activity: f.activity, intensity: f.intensity,
+      calories: f.calories ? parseInt(f.calories) : null,
+      label: f.label || null,
+    }),
+    onSuccess: () => { setF(s => ({ ...s, calories: '', label: '' })); setOpen(false); qClient.invalidateQueries({ queryKey: ['workouts'] }); },
+  });
+
+  return (
+    <div className="v-logworkout">
+      <button className="v-log-toggle" onClick={() => setOpen(o => !o)}>{open ? 'Cancel' : '+ Log Workout'}</button>
+      {open && (
+        <div className="v-log-form">
+          <select value={f.activity} onChange={e => setF(s => ({ ...s, activity: e.target.value }))}>
+            {WORKOUT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <input type="date" value={f.day} onChange={e => setF(s => ({ ...s, day: e.target.value }))}/>
+          <input type="number" placeholder="Calories" value={f.calories} onChange={e => setF(s => ({ ...s, calories: e.target.value }))}/>
+          <select value={f.intensity} onChange={e => setF(s => ({ ...s, intensity: e.target.value }))}>
+            <option value="easy">easy</option><option value="moderate">moderate</option><option value="hard">hard</option>
+          </select>
+          <input placeholder="Label (optional)" value={f.label} onChange={e => setF(s => ({ ...s, label: e.target.value }))}/>
+          <button className="v-log-save" disabled={log.isPending} onClick={() => log.mutate()}>{log.isPending ? 'Saving…' : 'Save'}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ActivityPage() {
   const { data, isPending } = useQuery<Activity[]>({ queryKey: ['activity', 14], queryFn: () => get(`${API}/api/activity?days=14`) });
   const { data: workouts } = useQuery<WorkoutItem[]>({ queryKey: ['workouts'], queryFn: () => get(`${API}/api/workouts?days=30`) });
 
   if (isPending) return <Skel h={200}/>;
-  if (!data?.length) return <div className="v-empty">No activity data</div>;
+  if (!data?.length) return <div className="v-empty"><LogWorkoutForm/><div style={{ marginTop: '1rem' }}>No activity data yet — log a workout above.</div></div>;
 
   const a = { steps: avg(data.map(d => d.steps)), cal: avg(data.map(d => d.activeCalories)), score: avg(data.map(d => d.score)), highMin: avg(data.map(d => d.highActivityMinutes)) };
   const stepsChart = data.map(d => ({ day: shortDay(d.day), steps: d.steps, cal: d.activeCalories }));
 
   return (
     <div>
+      <LogWorkoutForm/>
+
       <div className="v-metrics">
         <Metric label="Avg Steps" value={a.steps != null ? Math.round(a.steps).toLocaleString() : undefined}/>
         <Metric label="Active Cal" value={a.cal?.toFixed(0)} unit="kcal"/>
@@ -641,6 +798,7 @@ function Metric({ label, value, unit, color, sub }: { label: string; value?: str
 interface FoodResult { fdcId: number; name: string; brand: string | null; nutrients: { calories: number | null; protein: number | null; carbs: number | null; fat: number | null; fiber: number | null }; servingSize: number | null; servingUnit: string | null }
 interface MealItem { id: string; foodName: string; fdcId: number | null; servingQty: number; servingUnit: string | null; calories: number; protein: number; carbs: number; fat: number; fiber: number | null; loggedAt: string }
 interface MealsDay { day: string; totals: { calories: number; protein: number; carbs: number; fat: number; fiber: number | null }; meals: Record<string, MealItem[]> }
+interface NutritionRow { day: string; calories: number; protein: number; carbs: number; fat: number; fiber: number | null; sugar: number | null; sodium: number | null; calorieGoal: number | null; proteinGoal: number | null; carbGoal: number | null; fatGoal: number | null; mealsJson: string | null }
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
 const MEAL_ICON: Record<string, string> = { breakfast: '🌅', lunch: '☀️', dinner: '🌙', snack: '🍎' };
@@ -680,8 +838,26 @@ function NutritionPage() {
   const { data: history } = useQuery<{ day: string; calories: number; protein: number; carbs: number; fat: number }[]>({
     queryKey: ['nutrition-history'], queryFn: () => get(`${API}/api/nutrition?days=14`)
   });
+  const { data: nutritionRows } = useQuery<NutritionRow[]>({ queryKey: ['nutrition-rows'], queryFn: () => get(`${API}/api/nutrition?days=1`) });
+  const todayRow = nutritionRows?.find(n => n.day === today);
 
-  const invalidate = () => { qClient.invalidateQueries({ queryKey: ['meals', day] }); qClient.invalidateQueries({ queryKey: ['nutrition-history'] }); };
+  const [goalsOpen, setGoalsOpen] = useState(false);
+  const [goals, setGoals] = useState({ cal: '', protein: '', carbs: '', fat: '' });
+  const saveGoals = useMutation({
+    mutationFn: () => send(`${API}/api/nutrition`, 'POST', [{
+      day: today,
+      calories: todayRow?.calories ?? 0, protein: todayRow?.protein ?? 0, carbs: todayRow?.carbs ?? 0, fat: todayRow?.fat ?? 0,
+      fiber: todayRow?.fiber ?? null, sugar: todayRow?.sugar ?? null, sodium: todayRow?.sodium ?? null,
+      calorieGoal: goals.cal ? parseInt(goals.cal) : (todayRow?.calorieGoal ?? null),
+      proteinGoal: goals.protein ? parseFloat(goals.protein) : (todayRow?.proteinGoal ?? null),
+      carbGoal: goals.carbs ? parseFloat(goals.carbs) : (todayRow?.carbGoal ?? null),
+      fatGoal: goals.fat ? parseFloat(goals.fat) : (todayRow?.fatGoal ?? null),
+      mealsJson: todayRow?.mealsJson ?? null,
+    }]),
+    onSuccess: () => { setGoalsOpen(false); qClient.invalidateQueries({ queryKey: ['nutrition-rows'] }); },
+  });
+
+  const invalidate = () => { qClient.invalidateQueries({ queryKey: ['meals', day] }); qClient.invalidateQueries({ queryKey: ['nutrition-history'] }); qClient.invalidateQueries({ queryKey: ['nutrition-rows'] }); };
 
   const doSearch = async () => {
     if (!search.trim()) return;
@@ -762,20 +938,40 @@ function NutritionPage() {
       <div className="vn-macros">
         <div className="vn-macro vn-macro--cal">
           <div className="vn-macro-val">{Math.round(t?.calories ?? 0)}</div>
-          <div className="vn-macro-label">kcal</div>
+          <div className="vn-macro-label">kcal{todayRow?.calorieGoal ? ` / ${todayRow.calorieGoal}` : ''}</div>
         </div>
         <div className="vn-macro vn-macro--protein">
           <div className="vn-macro-val">{Math.round(t?.protein ?? 0)}g</div>
-          <div className="vn-macro-label">Protein</div>
+          <div className="vn-macro-label">Protein{todayRow?.proteinGoal ? ` / ${Math.round(todayRow.proteinGoal)}g` : ''}</div>
         </div>
         <div className="vn-macro vn-macro--carbs">
           <div className="vn-macro-val">{Math.round(t?.carbs ?? 0)}g</div>
-          <div className="vn-macro-label">Carbs</div>
+          <div className="vn-macro-label">Carbs{todayRow?.carbGoal ? ` / ${Math.round(todayRow.carbGoal)}g` : ''}</div>
         </div>
         <div className="vn-macro vn-macro--fat">
           <div className="vn-macro-val">{Math.round(t?.fat ?? 0)}g</div>
-          <div className="vn-macro-label">Fat</div>
+          <div className="vn-macro-label">Fat{todayRow?.fatGoal ? ` / ${Math.round(todayRow.fatGoal)}g` : ''}</div>
         </div>
+      </div>
+
+      {/* ── Goals editor ── */}
+      <div className="vn-goals">
+        <button className="v-log-toggle" onClick={() => {
+          if (!goalsOpen && todayRow) setGoals({
+            cal: todayRow.calorieGoal?.toString() ?? '', protein: todayRow.proteinGoal?.toString() ?? '',
+            carbs: todayRow.carbGoal?.toString() ?? '', fat: todayRow.fatGoal?.toString() ?? '',
+          });
+          setGoalsOpen(o => !o);
+        }}>{goalsOpen ? 'Cancel' : '⚙ Set Daily Goals'}</button>
+        {goalsOpen && (
+          <div className="v-log-form">
+            <input type="number" placeholder="kcal goal" value={goals.cal} onChange={e => setGoals(g => ({ ...g, cal: e.target.value }))}/>
+            <input type="number" placeholder="protein g" value={goals.protein} onChange={e => setGoals(g => ({ ...g, protein: e.target.value }))}/>
+            <input type="number" placeholder="carbs g" value={goals.carbs} onChange={e => setGoals(g => ({ ...g, carbs: e.target.value }))}/>
+            <input type="number" placeholder="fat g" value={goals.fat} onChange={e => setGoals(g => ({ ...g, fat: e.target.value }))}/>
+            <button className="v-log-save" disabled={saveGoals.isPending} onClick={() => saveGoals.mutate()}>{saveGoals.isPending ? '…' : 'Save Goals'}</button>
+          </div>
+        )}
       </div>
 
       {/* ── Log controls ── */}
@@ -955,6 +1151,7 @@ function VitaraInner() {
       {!isPending && !isError && status && !status.linked && <NotLinked/>}
       {!isPending && !isError && status?.linked && (
         <>
+          {status.expired && <OuraExpiredBanner/>}
           <nav className="module-subnav" style={MC}>
             {PAGES.map(p => (
               <button key={p.id} className={`module-tab ${page === p.id ? 'active' : ''}`} onClick={() => setPage(p.id)}>{p.label}</button>

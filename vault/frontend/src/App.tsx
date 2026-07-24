@@ -13,8 +13,9 @@ import Login           from './pages/Login';
 import PinPad          from './pages/PinPad';
 import CommandPalette  from './components/CommandPalette';
 import ArcReactor      from './components/ArcReactor';
-import { auth }        from './services/auth';
+import { auth, installSessionExpiryInterceptor, onSessionExpired } from './services/auth';
 import type { ProbeResult } from './services/auth';
+import { useSystemStatus } from './services/systemStatus';
 import './styles/index.css';
 
 export type ModuleId = 'home' | 'vault' | 'vitara' | 'nexus' | 'aasthi' | 'san' | 'northstar' | 'karma' | 'sutra' | 'settings';
@@ -82,8 +83,22 @@ function Icon({ name }: { name: string }) {
   }
 }
 
-/* ── Maaya dharma-wheel logo ── */
+/* ── Maaya sigil (gold stallion). Falls back to the dharma-wheel mark until
+   /sigil.png is present in public/. ── */
 function MaayaLogo({ size = 24 }: { size?: number }) {
+  const [failed, setFailed] = useState(false);
+  if (!failed) {
+    return (
+      <img
+        src="/sigil.png"
+        width={size}
+        height={size}
+        alt="Maaya"
+        className="maaya-sigil"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round">
       <circle cx="12" cy="12" r="9.5" strokeWidth="1.75"/>
@@ -108,6 +123,26 @@ const GROWTH_MODULES: { id: ModuleId; label: string; color: string }[] = [
   { id: 'karma', label: 'Karma', color: 'var(--karma)' },
   { id: 'sutra', label: 'Sutra', color: 'var(--sutra)' },
 ];
+
+function SystemStatusBadge() {
+  const s = useSystemStatus();
+  const state = s.loading ? 'loading' : s.offline.length === 0 ? 'ok' : s.online === 0 ? 'down' : 'degraded';
+  const value =
+    state === 'loading'  ? 'Checking modules…'
+    : state === 'ok'     ? 'All Systems Operational'
+    : state === 'down'   ? 'All Modules Offline'
+    :                      `${s.online}/${s.total} Modules Online`;
+  const title = s.offline.length ? `Offline: ${s.offline.join(', ')}` : 'All modules reachable';
+  return (
+    <div className={`sidebar-status sidebar-status--${state}`} title={title}>
+      <span className="sidebar-status-dot"><span className="ping" /><span className="core" /></span>
+      <span className="sidebar-status-text">
+        <span className="sidebar-status-label">System Status</span>
+        <span className="sidebar-status-value">{value}</span>
+      </span>
+    </div>
+  );
+}
 
 function SidebarItem({ id, label, color, active, onClick }: {
   id: string; label: string; color: string; active: boolean; onClick: () => void;
@@ -146,7 +181,7 @@ function Sidebar({ active, onSelect, onOpenPalette, onLogout }: {
   return (
     <aside className="sidebar">
       <button className="sidebar-logo" onClick={() => onSelect('home')}>
-        <MaayaLogo />
+        <MaayaLogo size={54} />
         <span className="sidebar-logo-text">MAAYA</span>
       </button>
 
@@ -182,6 +217,7 @@ function Sidebar({ active, onSelect, onOpenPalette, onLogout }: {
       </div>
 
       <div className="sidebar-bottom">
+        <SystemStatusBadge />
         <SidebarItem id="settings" label="Settings" color="var(--text2)" active={active === 'settings'} onClick={() => onSelect('settings')} />
         <button className="sidebar-item sidebar-logout" onClick={onLogout} title="Sign out">
           <span className="sidebar-icon">
@@ -211,6 +247,18 @@ export default function App() {
       setAuthState(p.trusted && p.method === 'pin' ? 'pin' : 'login');
     });
   }, [authState]);
+
+  // Any module's API call hitting a 401 (session expired/invalidated — e.g.
+  // came back after the backend restarted while away) drops straight back to
+  // the login/PIN screen instead of every module silently looking "offline."
+  useEffect(() => {
+    installSessionExpiryInterceptor();
+    onSessionExpired(() => {
+      setProbe(null);
+      setActive('home');
+      setAuthState('probing');
+    });
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

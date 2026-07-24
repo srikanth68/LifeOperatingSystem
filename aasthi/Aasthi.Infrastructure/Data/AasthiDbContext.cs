@@ -15,6 +15,8 @@ public class AasthiDbContext(DbContextOptions<AasthiDbContext> options) : DbCont
     public DbSet<PropertyContact> Contacts => Set<PropertyContact>();
     public DbSet<PropertyDocument> Documents => Set<PropertyDocument>();
     public DbSet<PropertyTask> Tasks => Set<PropertyTask>();
+    public DbSet<PropertyFinancialEntry> FinancialEntries => Set<PropertyFinancialEntry>();
+    public DbSet<MaintenanceLog> MaintenanceLogs => Set<MaintenanceLog>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -47,6 +49,28 @@ public class AasthiDbContext(DbContextOptions<AasthiDbContext> options) : DbCont
                 s => string.IsNullOrEmpty(s) ? null : DateOnly.ParseExact(s, DateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None));
             t.HasOne(x => x.Property).WithMany().HasForeignKey(x => x.PropertyId).OnDelete(DeleteBehavior.Cascade);
             t.HasIndex(x => new { x.PropertyId, x.Status });
+        });
+
+        b.Entity<PropertyFinancialEntry>(f =>
+        {
+            f.HasKey(x => x.Id);
+            f.Property(x => x.Amount).HasColumnType("decimal(18,2)");
+            f.Property(x => x.Date).HasConversion(
+                d => d.ToString(DateFormat, CultureInfo.InvariantCulture),
+                s => DateOnly.ParseExact(s, DateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None));
+            f.HasOne(x => x.Property).WithMany().HasForeignKey(x => x.PropertyId).OnDelete(DeleteBehavior.Cascade);
+            f.HasIndex(x => new { x.PropertyId, x.Type });
+        });
+
+        b.Entity<MaintenanceLog>(m =>
+        {
+            m.HasKey(x => x.Id);
+            m.Property(x => x.Cost).HasColumnType("decimal(18,2)");
+            m.Property(x => x.CompletedDate).HasConversion(
+                d => d.HasValue ? d.Value.ToString(DateFormat, CultureInfo.InvariantCulture) : null,
+                s => string.IsNullOrEmpty(s) ? null : DateOnly.ParseExact(s, DateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None));
+            m.HasOne(x => x.Property).WithMany().HasForeignKey(x => x.PropertyId).OnDelete(DeleteBehavior.Cascade);
+            m.HasIndex(x => new { x.PropertyId, x.Category });
         });
     }
 }

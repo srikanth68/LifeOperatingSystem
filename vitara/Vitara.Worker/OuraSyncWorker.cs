@@ -85,6 +85,9 @@ public class OuraSyncWorker(IServiceProvider services, ILogger<OuraSyncWorker> l
             if (workouts?.Count > 0)   await repo.UpsertWorkoutsAsync(workouts);
             if (heartRate?.Count > 0)  await repo.UpsertHeartRateAsync(heartRate);
 
+            token.LastSyncedAt = DateTime.UtcNow;
+            await repo.SaveTokenAsync(token);
+
             logger.LogInformation("Sync complete — sleep:{s} readiness:{r} activity:{a} stress:{st} resilience:{re} cvAge:{cv} spo2:{sp} vo2:{v2} workouts:{w} hr:{hr}",
                 sleep?.Count ?? 0, readiness?.Count ?? 0, activity?.Count ?? 0,
                 stress?.Count ?? 0, resilience?.Count ?? 0, cvAge?.Count ?? 0,

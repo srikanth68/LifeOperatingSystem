@@ -1,5 +1,6 @@
 using Maaya.Auth;
 using Microsoft.EntityFrameworkCore;
+using NorthStar.API.Services;
 using NorthStar.Application.Interfaces;
 using NorthStar.Infrastructure.Data;
 
@@ -22,9 +23,11 @@ builder.Services.AddDbContext<NorthStarDbContext>(o =>
     o.UseSqlite($"Data Source={Path.Combine(Directory.GetCurrentDirectory(), "..", "northstar.db")}"));
 builder.Services.AddScoped<INorthStarRepository, NorthStarRepository>();
 builder.Services.AddHttpClient();
+builder.Services.AddScoped<ModuleSyncService>();
+builder.Services.AddHostedService<NorthStarSyncWorker>();
 
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
-    p.WithOrigins("http://localhost:3000", "http://localhost:3001", "http://localhost:5173").AllowAnyHeader().AllowAnyMethod()));
+    p.WithOrigins(MaayaCors.Origins("http://localhost:3000", "http://localhost:3001", "http://localhost:5173")).AllowAnyHeader().AllowAnyMethod()));
 
 var app = builder.Build();
 
@@ -51,6 +54,45 @@ using (var scope = app.Services.CreateScope())
             Key TEXT PRIMARY KEY, Value TEXT NOT NULL DEFAULT '',
             Source TEXT NOT NULL DEFAULT 'manual', UpdatedAt TEXT NOT NULL DEFAULT '0001-01-01'
         );
+        CREATE TABLE IF NOT EXISTS Events (
+            Id TEXT PRIMARY KEY,
+            Source TEXT NOT NULL DEFAULT '',
+            Kind TEXT NOT NULL DEFAULT '',
+            Title TEXT NOT NULL DEFAULT '',
+            Detail TEXT,
+            OccurredAt TEXT NOT NULL DEFAULT '0001-01-01',
+            RecordedAt TEXT NOT NULL DEFAULT '0001-01-01',
+            EventKey TEXT NOT NULL DEFAULT '',
+            RawJson TEXT
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS IX_Events_EventKey ON Events(EventKey);
+        CREATE INDEX IF NOT EXISTS IX_Events_OccurredAt ON Events(OccurredAt);
+        CREATE INDEX IF NOT EXISTS IX_Events_Source ON Events(Source);
+        CREATE TABLE IF NOT EXISTS Memories (
+            Id TEXT PRIMARY KEY,
+            Content TEXT NOT NULL DEFAULT '',
+            Kind TEXT NOT NULL DEFAULT 'observation',
+            Source TEXT NOT NULL DEFAULT 'agent',
+            Tags TEXT NOT NULL DEFAULT '',
+            Importance INTEGER NOT NULL DEFAULT 3,
+            CreatedAt TEXT NOT NULL DEFAULT '0001-01-01',
+            LastAccessedAt TEXT,
+            AccessCount INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS IX_Memories_Kind ON Memories(Kind);
+        CREATE INDEX IF NOT EXISTS IX_Memories_CreatedAt ON Memories(CreatedAt);
+        CREATE INDEX IF NOT EXISTS IX_Memories_Importance ON Memories(Importance);
+        CREATE VIRTUAL TABLE IF NOT EXISTS MemoryFts USING fts5(Content, Tags, content='Memories', content_rowid='rowid');
+        CREATE TRIGGER IF NOT EXISTS Memories_ai AFTER INSERT ON Memories BEGIN
+            INSERT INTO MemoryFts(rowid, Content, Tags) VALUES (new.rowid, new.Content, new.Tags);
+        END;
+        CREATE TRIGGER IF NOT EXISTS Memories_ad AFTER DELETE ON Memories BEGIN
+            INSERT INTO MemoryFts(MemoryFts, rowid, Content, Tags) VALUES ('delete', old.rowid, old.Content, old.Tags);
+        END;
+        CREATE TRIGGER IF NOT EXISTS Memories_au AFTER UPDATE OF Content, Tags ON Memories BEGIN
+            INSERT INTO MemoryFts(MemoryFts, rowid, Content, Tags) VALUES ('delete', old.rowid, old.Content, old.Tags);
+            INSERT INTO MemoryFts(rowid, Content, Tags) VALUES (new.rowid, new.Content, new.Tags);
+        END;
     ";
     await cmd.ExecuteNonQueryAsync();
 }
@@ -58,4 +100,6 @@ using (var scope = app.Services.CreateScope())
 app.UseCors();
 app.UseMaayaAuth();
 app.MapControllers();
-app.Run("http://localhost:5500");
+// Default localhost; set NORTHSTAR_BIND=http://0.0.0.0:5500 when agents on other
+// machines (e.g. Hermes on Everest over Meshnet) need to reach the brain directly.
+app.Run(Environment.GetEnvironmentVariable("NORTHSTAR_BIND") ?? "http://localhost:5500");

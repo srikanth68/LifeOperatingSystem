@@ -70,6 +70,26 @@
   font-family: 'Inter', system-ui, sans-serif;
 }
 
+/* ─── Light theme ─── */
+/* Overriding the core tokens flips text, surfaces, and borders app-wide since
+   most components consume these variables. Prominent hardcoded-dark surfaces
+   (.card, glass panels, sidebar, inputs) are re-skinned explicitly below. */
+:root[data-theme="light"] {
+  --bg:        #eef2f9;
+  --bg2:       #e5ebf5;
+  --surface:   #ffffff;
+  --surface2:  #f5f8fd;
+  --surface3:  #eaf0f9;
+  --border:    #d7e0ee;
+  --border2:   #c4d1e6;
+
+  --gold-glow: rgba(212,168,67,0.18);
+
+  --text:      #16233d;
+  --text2:     #4a6188;
+  --text3:     #8497b5;
+}
+
 html, body { height: 100%; overflow: hidden; scroll-behavior: smooth; }
 body {
   background: var(--bg);
@@ -78,6 +98,38 @@ body {
   background-image: radial-gradient(circle, rgba(30,58,96,0.4) 1px, transparent 1px);
   background-size: 28px 28px;
 }
+:root[data-theme="light"] body {
+  background-image: radial-gradient(circle, rgba(40,70,120,0.08) 1px, transparent 1px);
+}
+
+/* ─── Light-theme surface re-skins ─── */
+:root[data-theme="light"] .card {
+  background: linear-gradient(160deg, #ffffff 0%, #f6f9fd 100%);
+}
+:root[data-theme="light"] input,
+:root[data-theme="light"] select,
+:root[data-theme="light"] textarea,
+:root[data-theme="light"] .btn-ghost {
+  background: #ffffff;
+}
+:root[data-theme="light"] input:focus,
+:root[data-theme="light"] select:focus,
+:root[data-theme="light"] textarea:focus {
+  background: #ffffff;
+}
+:root[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); }
+:root[data-theme="light"] .sidebar { background: rgba(248,250,253,0.92); }
+:root[data-theme="light"] .sidebar-item:hover { background: rgba(0,0,0,0.04); }
+/* Maaya dashboard glass materials — invert the translucent tint to light */
+:root[data-theme="light"] .glass-panel {
+  background: linear-gradient(180deg, rgba(255,255,255,0.75) 0%, rgba(244,248,253,0.75) 100%);
+}
+:root[data-theme="light"] .glass-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.7) 0%, rgba(244,248,253,0.7) 100%);
+}
+/* Elevation overlays that read as near-invisible white on light surfaces */
+:root[data-theme="light"] .activity-row:hover,
+:root[data-theme="light"] .sidebar-search-btn:hover { background: rgba(0,0,0,0.03); }
 
 /* ─── Typography ─── */
 h1 { font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
@@ -171,7 +223,9 @@ select option { background: var(--surface2); }
   flex-shrink: 0;
   height: 100vh;
   overflow-y: auto;
-  background: rgba(4,9,20,0.98);
+  background: rgba(4,9,20,0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-right: 1px solid rgba(26,47,82,0.7);
   display: flex;
   flex-direction: column;
@@ -202,13 +256,59 @@ select option { background: var(--surface2); }
   transition: filter 0.2s;
 }
 .sidebar-logo:hover svg { filter: drop-shadow(0 0 10px rgba(212,168,67,0.7)); }
+.maaya-sigil {
+  object-fit: contain;
+  flex-shrink: 0;
+  /* PNG has an opaque black background; screen blend drops it on the dark sidebar. */
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 9px rgba(212,168,67,0.6)) drop-shadow(0 0 18px rgba(212,168,67,0.3));
+  transition: filter 0.2s;
+}
+.sidebar-logo:hover .maaya-sigil { filter: drop-shadow(0 0 13px rgba(212,168,67,0.85)) drop-shadow(0 0 24px rgba(212,168,67,0.45)); }
 .sidebar-logo-text {
   font-family: 'Space Grotesk', sans-serif;
   font-size: 1rem;
   font-weight: 700;
-  color: var(--gold);
   letter-spacing: 0.16em;
+  background: linear-gradient(90deg, var(--gold), var(--gold-l));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 6px var(--gold-glow));
 }
+
+.sidebar-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  margin: 0 0.5rem 0.75rem;
+  border-radius: var(--r-sm);
+  background: rgba(0,0,0,0.2);
+  border: 1px solid var(--border);
+}
+.sidebar-status-dot { position: relative; width: 7px; height: 7px; flex-shrink: 0; }
+.sidebar-status-dot .ping {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: var(--cash); opacity: 0.6;
+  animation: sidebar-status-ping 2s cubic-bezier(0,0,0.2,1) infinite;
+}
+.sidebar-status-dot .core { position: relative; width: 7px; height: 7px; border-radius: 50%; background: var(--cash); }
+@keyframes sidebar-status-ping { 75%, 100% { transform: scale(2.2); opacity: 0; } }
+.sidebar-status-text { display: flex; flex-direction: column; }
+.sidebar-status-label { font-size: 0.56rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text3); }
+.sidebar-status-value { font-size: 0.66rem; color: var(--text2); }
+
+/* Real health states for the system-status badge */
+.sidebar-status--degraded .sidebar-status-dot .ping,
+.sidebar-status--degraded .sidebar-status-dot .core { background: var(--gold, #d4a843); }
+.sidebar-status--degraded .sidebar-status-value { color: var(--gold, #d4a843); }
+.sidebar-status--down .sidebar-status-dot .ping,
+.sidebar-status--down .sidebar-status-dot .core { background: #ef4444; }
+.sidebar-status--down .sidebar-status-value { color: #ef4444; }
+.sidebar-status--down .sidebar-status-dot .ping { animation: none; }
+.sidebar-status--loading .sidebar-status-dot .ping,
+.sidebar-status--loading .sidebar-status-dot .core { background: var(--text3); }
 
 .sidebar-section {
   padding: 0 0.5rem;
@@ -256,6 +356,18 @@ select option { background: var(--surface2); }
   width: 2px;
   border-radius: 0 2px 2px 0;
   background: var(--mc, var(--gold));
+  box-shadow: 0 0 6px var(--mc, var(--gold));
+}
+.sidebar-item:not(.active):hover::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 32%;
+  bottom: 32%;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--mc, var(--gold));
+  opacity: 0.55;
   box-shadow: 0 0 6px var(--mc, var(--gold));
 }
 .sidebar-icon {

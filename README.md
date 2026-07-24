@@ -35,9 +35,13 @@ No cloud vendor lock-in. No monthly subscriptions. Your data stays on your machi
 | **San** | AI Assistant — model-agnostic chat, reminders, alerts, cross-module activity feed | `5300` |
 | **Sutra** | Document vault — upload, categorize, expiry tracking, cross-module document links | `5400` |
 | **NorthStar** | Knowledge hub — cross-module aggregation, insights, search, agent-ready | `5500` |
+| **Karma** | Habits & goals — streak tracking, Telegram check-in reminders | `5600` |
+| **Nexus** | Trading desk — read-only view onto Sentinel's committee verdicts (watchlist + deep analysis) | `5700` |
+| **MCP** | Agent gateway — MCP server exposing all modules + NorthStar memory as tools for any agent harness (Hermes, Claude, custom) | `5900` |
 | **Frontend** | Unified React dashboard for all modules | `5173` |
 
-> **Coming soon:** Nexus (social network & contacts), Karma (habits & goals)
+> Nexus is read-only: [Sentinel](../sentinel) (a separate Python engine) evaluates tickers and writes
+> `sentinel.db`; Nexus.API only ever opens it in `Mode=ReadOnly` and serves it to the React frontend.
 
 ---
 
@@ -188,10 +192,7 @@ That's it. One command spins up all APIs, workers, and the frontend.
 
 ## Roadmap
 
-- [ ] **Nexus** — Social network, contact management, relationship tracking
-- [ ] **NorthStar** — Obsidian-like knowledge hub for notes, goals, and planning
-- [ ] **Karma** — Habit tracking, goal setting, streaks
-- [ ] **Sutra** — Journaling, reflection, mood tracking
+- [ ] **Nexus** — Order history, price/volume alerts, per-ticker notes (contract only defines read endpoints today)
 - [ ] **SAN → Aasthi task automation** — SAN creates property tasks from emails, calendar events, and context data
 - [ ] **Vitara AI Reasoning** — Claude-powered biological age scoring, weekly briefs, cross-signal correlation engine
 - [ ] Raspberry Pi deployment with external access
