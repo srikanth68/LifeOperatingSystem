@@ -37,7 +37,7 @@ No cloud vendor lock-in. No monthly subscriptions. Your data stays on your machi
 | **NorthStar** | Knowledge hub — cross-module aggregation, insights, search, agent-ready | `5500` |
 | **Karma** | Habits & goals — streak tracking, Telegram check-in reminders | `5600` |
 | **Nexus** | Trading desk — read-only view onto Sentinel's committee verdicts (watchlist + deep analysis) | `5700` |
-| **MCP** | Agent gateway — MCP server exposing all modules + NorthStar memory as tools for any agent harness (Hermes, Claude, custom) | `5900` |
+| **MCP** | Agent gateway — MCP server exposing all modules + NorthStar memory as tools for any agent harness (Claude, custom) | `5900` |
 | **Frontend** | Unified React dashboard for all modules | `5173` |
 
 > Nexus is read-only: [Sentinel](../sentinel) (a separate Python engine) evaluates tickers and writes

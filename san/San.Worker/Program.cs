@@ -55,6 +55,13 @@ switch (builder.Configuration["Llm:Provider"])
     case "openai-compatible":
         builder.Services.AddHttpClient<IChatProvider, LlamaCppChatProvider>();
         break;
+    case "llamacpp-agent":
+        // Worker only ever calls plain CompleteAsync — the provider's tool loop
+        // simply isn't engaged. Registered so this mode doesn't fall to the cloud
+        // default below (an unknown provider name silently gets the Anthropic
+        // CLOUD provider — that's how chat history nearly left the machine once).
+        builder.Services.AddHttpClient<IChatProvider, LlamaCppAgentChatProvider>();
+        break;
     case "anthropic":
     default:
         builder.Services.AddHttpClient<IChatProvider, AnthropicChatProvider>();

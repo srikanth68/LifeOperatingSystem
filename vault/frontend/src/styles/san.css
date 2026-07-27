@@ -604,3 +604,85 @@
   padding: 0.9rem 1.2rem; border-top: 1px solid var(--border);
 }
 .sp-err { padding: 0 1.2rem 1rem; color: #ef4444; font-size: 0.82rem; }
+
+/* ── Voice call overlay (hands-free "call mode") ── */
+.call-overlay {
+  position: fixed; inset: 0; z-index: 1100;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex; align-items: center; justify-content: center;
+  padding: 1.5rem; backdrop-filter: blur(6px);
+}
+.call-panel {
+  width: min(460px, 100%);
+  display: flex; flex-direction: column; align-items: center; gap: 0.9rem;
+  padding: 2rem 1.6rem 1.6rem;
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 18px; box-shadow: 0 28px 70px rgba(0, 0, 0, 0.55);
+  text-align: center;
+}
+
+/* The orb carries the call's state: colour says which phase, animation says
+   whether we're waiting on the user (pulse) or on the machine (breathe). */
+.call-orb {
+  width: 96px; height: 96px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2rem; font-weight: 600; color: #fff;
+  background: var(--san); border: 3px solid transparent;
+  transition: background 0.25s ease, box-shadow 0.25s ease;
+}
+.call-orb.calibrating { background: var(--text3); }
+.call-orb.listening   { background: var(--san);  animation: call-pulse 2s ease-in-out infinite; }
+.call-orb.capturing   { background: #1fc87a;     animation: call-pulse 0.9s ease-in-out infinite; }
+.call-orb.transcribing,
+.call-orb.thinking    { background: #d4a843;     animation: call-breathe 1.6s ease-in-out infinite; }
+.call-orb.speaking    { background: var(--san);  animation: call-pulse 1.2s ease-in-out infinite; }
+
+@keyframes call-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.28); }
+  50%      { box-shadow: 0 0 0 18px rgba(255, 255, 255, 0); }
+}
+@keyframes call-breathe {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+
+.call-state { font-size: 1rem; font-weight: 600; color: var(--text); }
+
+.call-line {
+  width: 100%; display: flex; gap: 0.55rem; align-items: baseline;
+  text-align: left; font-size: 0.86rem; line-height: 1.45;
+}
+.call-who {
+  flex: none; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text3); padding-top: 0.15rem;
+}
+.call-who.san { color: var(--san); }
+.call-said { color: var(--text2); }
+
+.call-err { width: 100%; color: #ef4444; font-size: 0.8rem; text-align: left; }
+.call-hint { margin: 0.2rem 0 0; color: var(--text3); font-size: 0.76rem; line-height: 1.5; }
+
+.call-hangup {
+  margin-top: 0.3rem; padding: 0.6rem 1.6rem;
+  background: #e5484d; color: #fff;
+  border: none; border-radius: 999px; cursor: pointer;
+  font-size: 0.9rem; font-weight: 600;
+}
+.call-hangup:hover { background: #cf3b40; }
+
+@media (prefers-reduced-motion: reduce) {
+  .call-orb { animation: none !important; }
+}
+
+/* ── System Prompt personality presets ── */
+.sp-presets {
+  display: flex; flex-wrap: wrap; gap: 0.45rem;
+  padding: 0.65rem 1.2rem 0;
+}
+.sp-preset {
+  padding: 0.35rem 0.75rem;
+  background: var(--surface2); color: var(--text2);
+  border: 1px solid var(--border2); border-radius: 999px;
+  font-size: 0.78rem; cursor: pointer;
+}
+.sp-preset:hover { border-color: var(--san); color: var(--text); }

@@ -3,7 +3,7 @@ using San.Application.Interfaces;
 
 namespace San.Infrastructure.Agent;
 
-public class AgentToolExecutor(IHttpClientFactory httpFactory, ITelegramNotifier telegram)
+public class AgentToolExecutor(IHttpClientFactory httpFactory, ITelegramNotifier telegram, IChatActionService actions)
 {
     public async Task<string> ExecuteAsync(ToolCall call, CancellationToken ct)
     {
@@ -11,6 +11,10 @@ public class AgentToolExecutor(IHttpClientFactory httpFactory, ITelegramNotifier
         {
             return call.Name switch
             {
+                // San's own actions share the prose-path implementation (validation,
+                // timezone conversion) via the action service.
+                "create_reminder" or "create_alert" or "create_calendar_event"
+                    => await actions.ExecuteToolCallAsync(call, ct),
                 "get_health_summary" => await GetJson("vitara", "/api/dashboard", ct),
                 "get_budget_summary" => await GetJson("vault", "/api/summary", ct),
                 "get_property_tasks" => await GetJson("aasthi", "/api/tasks" + QueryString(call, "status"), ct),

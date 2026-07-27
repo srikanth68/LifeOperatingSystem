@@ -5,7 +5,7 @@ using ModelContextProtocol.Server;
 
 namespace Maaya.Mcp.Tools;
 
-// Write/action tools — the "hands" of any agent harness (Hermes, Claude, custom)
+// Write/action tools — the "hands" of any agent harness (San's own agent loop, Claude, custom)
 // driving Maaya. Without these the gateway is read-only, and an agent asked to
 // "remind me at 4pm" correctly concludes Maaya can't do it and either falls back to
 // something else (Apple Reminders) or dumps it in NorthStar's action queue.

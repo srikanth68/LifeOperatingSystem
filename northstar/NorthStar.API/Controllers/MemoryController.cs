@@ -4,7 +4,7 @@ using NorthStar.Domain.Entities;
 
 namespace NorthStar.API.Controllers;
 
-// Agent memory API — the store any agent harness (Hermes, openclaw, custom) persists to.
+// Agent memory API — the store any agent harness (San's agent loop, openclaw, custom) persists to.
 [ApiController, Route("api/memory")]
 public class MemoryController(INorthStarRepository repo) : ControllerBase
 {

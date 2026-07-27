@@ -21,4 +21,10 @@ public interface IChatActionService
     // confirmation is expected to already be part of the model's reply text).
     // On failure, appends a short caveat rather than silently dropping the action.
     Task<string> ProcessAsync(string replyText, CancellationToken ct = default);
+
+    // Second funnel into the same actions, for providers with real function
+    // calling (LLM_PROVIDER=llamacpp-agent): executes one named tool call from
+    // an arguments dictionary and returns a short result string for the model.
+    // Same validation and timezone handling as the prose path.
+    Task<string> ExecuteToolCallAsync(ToolCall call, CancellationToken ct = default);
 }

@@ -5,6 +5,7 @@ import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
 import { useTimezone, formatInTz, localInputToUtcIso, utcIsoToLocalInput } from '../services/timezone';
 import { getVoiceStatus, startRecording, speak, stopSpeaking, type Recorder, type VoiceStatus } from '../services/voice';
+import { VoiceCall, CALL_STATE_LABEL, type CallState } from '../services/voiceSession';
 import '../styles/modules.css';
 import '../styles/san.css';
 
@@ -92,8 +93,96 @@ function ApiError({ port }: { port: number }) {
   );
 }
 
+/* ── Voice call overlay ── */
+interface CallOverlayProps {
+  state: CallState;
+  userText: string;
+  sanText: string;
+  error: string | null;
+  onHangUp: () => void;
+}
+function CallOverlay({ state, userText, sanText, error, onHangUp }: CallOverlayProps) {
+  // Esc hangs up — a call holds the mic, so there must be an obvious way out.
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onHangUp(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [onHangUp]);
+
+  return (
+    <div className="call-overlay">
+      <div className="call-panel">
+        <div className={`call-orb ${state}`}><span>S</span></div>
+        <div className="call-state">{CALL_STATE_LABEL[state]}</div>
+
+        {userText && (
+          <div className="call-line">
+            <span className="call-who">You</span>
+            <span className="call-said">{userText}</span>
+          </div>
+        )}
+        {sanText && (
+          <div className="call-line">
+            <span className="call-who san">San</span>
+            <span className="call-said">{sanText}</span>
+          </div>
+        )}
+        {error && <div className="call-err">{error}</div>}
+
+        <p className="call-hint">
+          Just talk — San answers when you pause. Speak over them to cut in. Esc or Hang up to end.
+        </p>
+        <button className="call-hangup" onClick={onHangUp}>Hang up</button>
+      </div>
+    </div>
+  );
+}
+
 /* ── System Prompt Editor (separate window) ── */
 interface SystemPromptDto { prompt: string; isDefault: boolean; defaultPrompt: string }
+
+// One-click personality presets. Each REPLACES only the persona paragraph — the
+// live module snapshot, memory, and time context are appended by the backend
+// regardless, so switching personality never loses San's actual capabilities.
+const PERSONALITIES: { label: string; prompt: string }[] = [
+  {
+    label: '🎩 JARVIS',
+    prompt:
+      'You are San, the AI majordomo of Maaya OS — in the mold of JARVIS: unflappable, dryly witty, quietly ' +
+      'brilliant. Address the user with polished, understated courtesy ("sir" sparingly, never obsequious). ' +
+      'Deliver real numbers from their modules with effortless precision, anticipate the follow-up question, ' +
+      'and permit yourself one wry aside when the moment invites it. Your long-term memory is NorthStar — what ' +
+      'you remember about the user is surfaced below; treat it as things you genuinely know. Use your tools to ' +
+      'actually do what is asked; confirm crisply once done. If a module is unreachable, report it plainly.',
+  },
+  {
+    label: '⚡ Concise',
+    prompt:
+      'You are San, the assistant inside Maaya OS. Be maximally concise: answer first, no filler, no preamble, ' +
+      'bullets over paragraphs. Use real numbers from the module snapshot below. Your long-term memory is ' +
+      'NorthStar — treat remembered facts as things you know. Use your tools to take the actions asked of you, ' +
+      'confirm in one short sentence. If a module is unreachable, say so in five words or fewer.',
+  },
+  {
+    label: '🏋️ Coach',
+    prompt:
+      'You are San, the user\'s personal coach inside Maaya OS. Be direct, energetic, and accountable — track ' +
+      'their health scores, habits, goals, and spending like a coach reads game film: name what improved, what ' +
+      'slipped, and the single next action. Push them, kindly. Ground every claim in the real numbers from the ' +
+      'module snapshot below, and use NorthStar memories to connect today to their longer arc. Use your tools ' +
+      'to log, schedule, and remind without being asked twice.',
+  },
+  {
+    label: '🧘 Warm',
+    prompt:
+      'You are San, the personal life-assistant inside Maaya OS — warm, calm, and genuinely attentive. Speak ' +
+      'like a trusted friend who happens to have perfect recall: reference what you remember (NorthStar ' +
+      'memories below) naturally, notice patterns gently, and never lecture. Use the real numbers from the ' +
+      'module snapshot when they help. Use your tools to quietly take care of things the user asks for, and ' +
+      'confirm softly. If a module is unreachable, mention it without drama.',
+  },
+];
+
 function SystemPromptEditor({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
   const [text, setText] = useState<string | null>(null);
@@ -116,6 +205,13 @@ function SystemPromptEditor({ onClose }: { onClose: () => void }) {
         <p className="sp-hint">
           This is the base instruction San runs with. A live snapshot of your modules is appended automatically after it.
         </p>
+        <div className="sp-presets">
+          {PERSONALITIES.map(p => (
+            <button key={p.label} className="sp-preset" onClick={() => setText(p.prompt)} title="Replaces the prompt below — review, then Save">
+              {p.label}
+            </button>
+          ))}
+        </div>
         {promptQ.isLoading || text === null ? (
           <div className="sp-body" style={{ color: 'var(--text3)' }}>Loading…</div>
         ) : (
@@ -158,16 +254,32 @@ function Assistant() {
   // service is configured on the backend (see /api/voice/status).
   const [voice, setVoice] = useState<VoiceStatus>({ sttReady: false, ttsReady: false });
   const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [voiceErr, setVoiceErr] = useState<string | null>(null);
   const [ttsOn, setTtsOn] = useState(() => localStorage.getItem('san_tts_on') === '1');
   const recorderRef = useRef<Recorder | null>(null);
   const lastSpokenId = useRef<string | null>(null);
 
+  // Hands-free call mode (services/voiceSession.ts) — needs both STT and TTS.
+  const [callState, setCallState] = useState<CallState>('idle');
+  const [callUser, setCallUser] = useState('');
+  const [callSan, setCallSan] = useState('');
+  const callRef = useRef<VoiceCall | null>(null);
+  const inCall = callState !== 'idle';
+
   useEffect(() => { getVoiceStatus().then(setVoice); }, []);
+
+  // A call holds the mic and an AudioContext — make sure navigating away or
+  // unmounting tears it down rather than leaving the mic light on.
+  useEffect(() => () => callRef.current?.hangUp(), []);
 
   const messagesQ = useQuery<ChatMsg[]>({ queryKey: ['san-messages'], queryFn: () => get(`${API}/api/chat/messages`) });
   const sendMut = useMutation({
     mutationFn: (content: string) => send(`${API}/api/chat/messages`, 'POST', { content }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['san-messages'] }),
+  });
+  const clearMut = useMutation({
+    mutationFn: () => send(`${API}/api/chat/messages`, 'DELETE'),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['san-messages'] }),
   });
 
@@ -181,11 +293,45 @@ function Assistant() {
     if (!ttsOn || !voice.ttsReady) return;
     const msgs = messagesQ.data ?? [];
     const last = msgs[msgs.length - 1];
+    // In a call the session speaks replies itself — mark them seen so hanging
+    // up doesn't make this effect suddenly re-speak the last one.
+    if (inCall) { if (last) lastSpokenId.current = last.id; return; }
     if (last && last.role === 'assistant' && last.id !== lastSpokenId.current) {
       lastSpokenId.current = last.id;
       speak(last.content).catch(e => setVoiceErr(e.message));
     }
-  }, [messagesQ.data, ttsOn, voice.ttsReady]);
+  }, [messagesQ.data, ttsOn, voice.ttsReady, inCall]);
+
+  const startCall = async () => {
+    setVoiceErr(null);
+    setCallUser(''); setCallSan('');
+    stopSpeaking(); // don't let a push-to-talk reply overlap the call
+    const call = new VoiceCall({
+      onState: setCallState,
+      onUserText: setCallUser,
+      onSanText: setCallSan,
+      onError: setVoiceErr,
+      sendToSan: async (text: string) => {
+        const res = await send(`${API}/api/chat/messages`, 'POST', { content: text });
+        queryClient.invalidateQueries({ queryKey: ['san-messages'] });
+        return res?.assistantMessage?.content ?? '';
+      },
+    });
+    callRef.current = call;
+    try {
+      await call.start();
+    } catch (e) {
+      callRef.current = null;
+      setCallState('idle');
+      setVoiceErr((e as Error).message);
+    }
+  };
+
+  const endCall = () => {
+    callRef.current?.hangUp();
+    callRef.current = null;
+    setCallState('idle');
+  };
 
   const toggleTts = () => {
     const next = !ttsOn;
@@ -197,12 +343,18 @@ function Assistant() {
   const toggleMic = async () => {
     setVoiceErr(null);
     if (recording) {
+      // The mic itself stops instantly on click — flip the button back right
+      // away and show a separate "transcribing" state for the Whisper
+      // round-trip, instead of leaving the red stop button stuck for it.
+      const recorder = recorderRef.current;
+      recorderRef.current = null;
+      setRecording(false);
+      setTranscribing(true);
       try {
-        const text = await recorderRef.current!.stop();
-        recorderRef.current = null;
-        setRecording(false);
+        const text = await recorder!.stop();
         if (text) sendMut.mutate(text); // dictate → send straight to San
-      } catch (e) { setRecording(false); setVoiceErr((e as Error).message); }
+      } catch (e) { setVoiceErr((e as Error).message); }
+      finally { setTranscribing(false); }
     } else {
       try {
         recorderRef.current = await startRecording();
@@ -223,7 +375,14 @@ function Assistant() {
 
   return (
     <div style={style}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.6rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginBottom: '0.6rem' }}>
+        <button
+          className="btn-ghost"
+          disabled={clearMut.isPending || messages.length === 0}
+          onClick={() => { if (confirm('Clear San\'s entire chat history? This cannot be undone.')) clearMut.mutate(); }}
+        >
+          🗑 Clear Chat
+        </button>
         <button className="btn-ghost" onClick={() => setShowPrompt(true)}>⚙ Edit System Prompt</button>
       </div>
       {showPrompt && <SystemPromptEditor onClose={() => setShowPrompt(false)} />}
@@ -261,25 +420,43 @@ function Assistant() {
             >{ttsOn ? '🔊' : '🔈'}</button>
           )}
           <input
-            placeholder={recording ? 'Listening…' : 'Ask San anything about your life data…'}
+            placeholder={recording ? 'Listening…' : transcribing ? 'Transcribing…' : 'Ask San anything about your life data…'}
             value={draft}
             onChange={e => setDraft(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') submit(); }}
-            disabled={sendMut.isPending || recording}
+            disabled={sendMut.isPending || recording || transcribing}
           />
           {voice.sttReady && (
             <button
               className="chat-voice-btn"
               onClick={toggleMic}
-              disabled={sendMut.isPending}
-              title={recording ? 'Stop & send' : 'Speak to San'}
+              disabled={sendMut.isPending || transcribing}
+              title={recording ? 'Stop & send' : transcribing ? 'Transcribing…' : 'Speak to San'}
               style={recording ? { color: 'var(--debt, #e5484d)' } : undefined}
-            >{recording ? '⏹' : '🎤'}</button>
+            >{recording ? '⏹' : transcribing ? '⏳' : '🎤'}</button>
+          )}
+          {/* Hands-free call needs both directions — mic to hear, speaker to answer. */}
+          {voice.sttReady && voice.ttsReady && (
+            <button
+              className="chat-voice-btn"
+              onClick={startCall}
+              disabled={sendMut.isPending || recording || transcribing}
+              title="Start a hands-free voice call with San"
+            >📞</button>
           )}
           <button className="chat-send" onClick={submit} disabled={sendMut.isPending || !draft.trim()}><SendIcon /></button>
         </div>
         {voiceErr && <div style={{ color: 'var(--debt, #e5484d)', fontSize: '0.75rem', padding: '0.4rem 0.6rem' }}>{voiceErr}</div>}
       </div>
+      {inCall && (
+        <CallOverlay
+          state={callState}
+          userText={callUser}
+          sanText={callSan}
+          error={voiceErr}
+          onHangUp={endCall}
+        />
+      )}
       <div className="card">
         <h3>What San can do</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', marginTop: '0.5rem' }}>

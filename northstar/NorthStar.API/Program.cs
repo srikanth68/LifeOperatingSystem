@@ -101,5 +101,5 @@ app.UseCors();
 app.UseMaayaAuth();
 app.MapControllers();
 // Default localhost; set NORTHSTAR_BIND=http://0.0.0.0:5500 when agents on other
-// machines (e.g. Hermes on Everest over Meshnet) need to reach the brain directly.
+// machines (e.g. an external agent over Meshnet) need to reach the brain directly.
 app.Run(Environment.GetEnvironmentVariable("NORTHSTAR_BIND") ?? "http://localhost:5500");

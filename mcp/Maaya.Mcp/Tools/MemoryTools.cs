@@ -4,7 +4,7 @@ using ModelContextProtocol.Server;
 namespace Maaya.Mcp.Tools;
 
 // Brain tools — NorthStar is the canonical long-term memory for ANY agent harness
-// (Hermes, openclaw, custom). Tool descriptions deliberately steer the agent to
+// (San's own agent loop, openclaw, custom). Tool descriptions deliberately steer the agent to
 // persist durable knowledge HERE instead of its own private store.
 [McpServerToolType]
 public sealed class MemoryTools(ModuleGateway gw)

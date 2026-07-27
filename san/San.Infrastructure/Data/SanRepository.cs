@@ -18,6 +18,12 @@ public class SanRepository(SanDbContext db) : ISanRepository
         return message;
     }
 
+    public async Task ClearChatHistoryAsync()
+    {
+        db.ChatMessages.RemoveRange(db.ChatMessages);
+        await db.SaveChangesAsync();
+    }
+
     // ── Reminders ──
     public async Task<List<Reminder>> GetRemindersAsync() =>
         await db.Reminders.OrderBy(r => r.Done).ThenBy(r => r.DueAt).ToListAsync();

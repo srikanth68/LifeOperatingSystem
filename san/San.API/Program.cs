@@ -60,9 +60,10 @@ switch (builder.Configuration["Llm:Provider"])
     case "openai-compatible":
         builder.Services.AddHttpClient<IChatProvider, LlamaCppChatProvider>();
         break;
-    case "hermes":
-        // Agent gateway — a full tool-calling loop runs per request, so give it room.
-        builder.Services.AddHttpClient<IChatProvider, HermesChatProvider>(c => c.Timeout = TimeSpan.FromMinutes(5));
+    case "llamacpp-agent":
+        // Native tool calling against llama.cpp — San runs the agent loop itself
+        // (a turn can chain several model calls + tool executions, so give it room).
+        builder.Services.AddHttpClient<IChatProvider, LlamaCppAgentChatProvider>(c => c.Timeout = TimeSpan.FromMinutes(5));
         break;
     case "anthropic":
     default:
@@ -86,6 +87,10 @@ builder.Services.AddHttpClient("whisper", c => c.Timeout = TimeSpan.FromSeconds(
 builder.Services.AddHttpClient("piper",   c => c.Timeout = TimeSpan.FromSeconds(120));
 
 builder.Services.AddScoped<AgentToolExecutor>();
+// MCP gateway client — hands San's agent loop the full Maaya.Mcp tool catalog.
+// Generous timeout: a tools/call fans out to a module API which may cold-start.
+builder.Services.AddHttpClient<McpToolClient>(c => c.Timeout = TimeSpan.FromSeconds(90));
+builder.Services.AddScoped<AgentToolRouter>();
 
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
     p.WithOrigins(MaayaCors.Origins("http://localhost:3000", "http://localhost:5173")).AllowAnyHeader().AllowAnyMethod()));
