@@ -2,11 +2,12 @@ using Microsoft.AspNetCore.Mvc;
 using San.Application.DTOs;
 using San.Application.Interfaces;
 using San.Domain.Entities;
+using San.Infrastructure.Agent;
 
 namespace San.API.Controllers;
 
 [ApiController, Route("api/chat")]
-public class ChatController(ISanRepository repo, IChatProvider chat, IModuleContextService moduleContext, IChatActionService actions, ILogger<ChatController> logger) : ControllerBase
+public class ChatController(ISanRepository repo, IChatProvider chat, IModuleContextService moduleContext, IChatActionService actions, AgentToolRouter toolRouter, ILogger<ChatController> logger) : ControllerBase
 {
     private const string SystemPromptKey = "chat.system_prompt";
 
@@ -26,6 +27,15 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
     {
         var messages = await repo.GetChatHistoryAsync();
         return Ok(messages.Select(ToResult));
+    }
+
+    // Clears San's chat history — also shrinks every future turn's prompt to the
+    // LLM, since GetChatHistoryAsync resends the last 50 messages each turn.
+    [HttpDelete("messages")]
+    public async Task<IActionResult> ClearMessages()
+    {
+        await repo.ClearChatHistoryAsync();
+        return NoContent();
     }
 
     // The editable system prompt, surfaced to the "Edit System Prompt" window.
@@ -73,8 +83,8 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         var memoryBlock = string.IsNullOrWhiteSpace(memories) ? null
             : $"From your long-term memory (NorthStar):\n{memories}";
 
-        // An agent backend (Hermes) runs its own tool-calling loop, so it neither needs
-        // San's prose action-block instructions nor should its reply be scraped for one.
+        // A provider with native tool calling (llamacpp-agent) neither needs San's
+        // prose action-block instructions nor should its reply be scraped for one.
         // The in-San prose-JSON path is only for plain LLM providers.
         var toolInstructions = chat.HandlesToolsNatively ? null : actions.ToolInstructions;
 
@@ -84,7 +94,13 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
             new[] { basePrompt, memoryBlock, timeContext, context, ownContext, toolInstructions }
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
 
-        var rawReply = await chat.CompleteAsync(systemPrompt, turns);
+        // One call covers every provider shape: llamacpp-agent overrides
+        // CompleteWithToolsAsync and runs a native tool loop with these tools;
+        // plain LLM providers use the interface's default, which ignores the
+        // tools and falls through to plain CompleteAsync. The router serves the
+        // full Maaya.Mcp catalog when the gateway is up, built-ins otherwise.
+        var (tools, executor) = await toolRouter.ResolveAsync(HttpContext.RequestAborted);
+        var rawReply = await chat.CompleteWithToolsAsync(systemPrompt, turns, tools, executor);
         logger.LogInformation("San raw reply via {Provider} ({Length} chars): {Preview}",
             chat.ProviderName, rawReply.Length, rawReply.Length > 800 ? rawReply[..800] + "…" : rawReply);
 

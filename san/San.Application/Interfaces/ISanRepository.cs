@@ -7,6 +7,7 @@ public interface ISanRepository
     // Chat
     Task<List<ChatMessage>> GetChatHistoryAsync(int take = 50);
     Task<ChatMessage> AddChatMessageAsync(ChatMessage message);
+    Task ClearChatHistoryAsync();
 
     // Reminders
     Task<List<Reminder>> GetRemindersAsync();

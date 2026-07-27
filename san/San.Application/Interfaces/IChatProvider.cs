@@ -12,7 +12,7 @@ public interface IChatProvider
     string ProviderName { get; }
     string ModelName { get; }
 
-    // True for agent backends (e.g. Hermes) that run their own tool-calling loop and
+    // True for providers with native tool calling (e.g. llamacpp-agent) that run a real tool loop and
     // execute actions themselves. When true, San must NOT append its prose "emit a JSON
     // action block" instructions, nor post-process the reply looking for one — the agent
     // already did the real work via its own (MCP) tools.

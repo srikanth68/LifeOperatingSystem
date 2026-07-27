@@ -7,7 +7,7 @@ llama.cpp (Gemma, `:8080`) and Sentinel (`:8787`) already run **on the host**.
 ```
 Browser (any Meshnet device) ──► :3000 frontend (nginx)
                                  :5000-5700 module APIs
-Hermes / any MCP agent ────────► :5900 MCP gateway ──► modules + NorthStar memory
+Any MCP agent (Claude, …) ────► :5900 MCP gateway ──► modules + NorthStar memory
 containers ──► host.docker.internal ──► llama.cpp :8080, Sentinel :8787
 ```
 
@@ -17,24 +17,25 @@ containers ──► host.docker.internal ──► llama.cpp :8080, Sentinel :8
 2. `.\deploy\collect-data.ps1` — copies live DBs + Sutra storage into `deploy/data/`.
 3. Transfer the repo **including `deploy/env/` and `deploy/data/`** to Everest
    (both are gitignored — git alone won't carry them):
-   `scp -r maaya srp6888@100.126.41.41:~/maaya` (or rsync/AirDrop).
+   `scp -r maaya srp6888@100.126.41.41:~/Documents/maaya` (or rsync/AirDrop).
 
 ## Run (on Everest)
 
 ```bash
-cd ~/maaya
+cd ~/Documents/maaya             # the live checkout on Everest lives under Documents
 docker compose up -d --build     # first build ≈ 5-10 min
 docker compose ps                # everything should be "running"
 ```
 
 Open **http://100.126.41.41:3000** from any Meshnet device.
 
-## Point Hermes at the gateway
+## Point an external MCP agent at the gateway
 
-Hermes runs on Everest itself, so:
+For any MCP-capable agent (Claude, custom) that should drive Maaya's tools:
 - MCP endpoint: `http://localhost:5900`  (from other machines: `http://100.126.41.41:5900`)
 - Header: `X-API-Key: <MCP_API_KEY from deploy/env/mcp.env>`
-- Gemma stays at `http://localhost:8080/v1` (host-level, unchanged).
+- San's own chat needs none of this — its agent loop (`LLM_PROVIDER=llamacpp-agent`)
+  calls the module APIs directly. Gemma stays at `http://localhost:8080/v1` (host-level).
 
 ## Config
 
@@ -63,5 +64,66 @@ Hermes runs on Everest itself, so:
 - **Nexus + llama.cpp reachability**: Sentinel and Gemma must listen on
   `0.0.0.0` (or at least the Docker bridge) on the host — `127.0.0.1`-only
   binds are NOT reachable via `host.docker.internal` on macOS.
+- **Services "flip-flopping"** (TTS down, then Whisper down, then the LLM down,
+  each recovering on retry) is almost always **host RAM pressure, not the
+  services**. Everest has 16 GB; check `Activity Monitor → Memory` for swap use
+  and `docker stats` for the containers. The usual hog is host-level
+  `llama-server`: KV cache scales with `--ctx-size`, so a 64K context on a 4B
+  model costs ~10 GB. Quantize the cache — `--cache-type-k q8_0
+  --cache-type-v q8_0` halves it (~10.5 GB → ~6.5 GB) at negligible quality
+  cost. With San's own agent loop (`LLM_PROVIDER=llamacpp-agent`) a 32K
+  context is plenty — prompts run ~5-6K tokens — so
+  `--ctx-size 32768 --cache-type-k q8_0 --cache-type-v q8_0` is the sweet spot
+  (~3.4 GB total).
+  Raising Docker Desktop's memory limit in this situation makes it *worse* —
+  there's no headroom to give.
+- **"No space left on device" while Docker Desktop shows a healthy Mac disk** —
+  Docker's VM has its own virtual disk, sized independently of the host's free
+  space. `docker system df`, then `docker system prune -a` (add `--volumes`
+  only if you're sure; module data lives in `deploy/data/` bind mounts, not
+  Docker volumes, so it survives either way).
 - Logs: `docker compose logs -f san` (any service name from docker-compose.yml).
 - Update after a git pull: `docker compose up -d --build`.
+
+## Trusting the dashboard certificate (stop the HTTPS warning)
+
+The dashboard's HTTPS cert (port 3443) is self-signed, so browsers show
+"Your connection is not private" every visit. The cert now carries a proper
+Subject Alternative Name for `100.126.41.41`, `srp6888everest.nord`, and
+`localhost`, which makes it **trustable** — do this once per device and the
+warning disappears for good.
+
+**If your Meshnet IP is not `100.126.41.41`**, rebuild the frontend with your IP
+first, then re-deploy:
+```bash
+docker compose build --build-arg TLS_SAN="IP:<your-ip>,DNS:srp6888everest.nord,DNS:localhost" frontend
+docker compose up -d frontend
+```
+
+**Export the cert** from the running container (on Everest):
+```bash
+docker cp maaya-frontend-1:/etc/nginx/certs/maaya.crt ~/maaya.crt
+```
+Copy `~/maaya.crt` to each device you browse from.
+
+**Windows (Chrome/Edge use the OS store):**
+1. Double-click `maaya.crt` → **Install Certificate**
+2. **Local Machine** → **Place all certificates in the following store** →
+   **Trusted Root Certification Authorities**
+3. Finish, then fully restart the browser.
+
+**macOS:** double-click → add to **login** keychain → open it → **Trust** →
+"When using this certificate: **Always Trust**".
+
+**iPhone:** AirDrop/email `maaya.crt` to the phone → install the profile
+(Settings → Profile Downloaded) → then **Settings → General → About → Certificate
+Trust Settings** → enable full trust for it.
+
+After trusting, visit `https://100.126.41.41:3443` (or the `.nord` name) — no
+warning. Note it's bound to those exact hostnames, so browse by one of them, not
+a different IP.
+
+> Alternative with zero cert-install: **Tailscale** instead of NordVPN Meshnet.
+> `tailscale serve` issues a real Let's Encrypt cert for your `*.ts.net` name,
+> which every device already trusts — no warning, nothing to import. Only worth
+> it if you're open to switching mesh VPNs.

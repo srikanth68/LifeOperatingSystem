@@ -87,8 +87,33 @@ public partial class ChatActionService(ISanRepository repo, IModuleContextServic
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         if (!root.TryGetProperty("tool", out var toolEl)) return "the action was missing a tool name.";
-        var tool = toolEl.GetString();
+        return await ExecuteCoreAsync(toolEl.GetString(), root, ct);
+    }
 
+    // Native function-calling funnel: adapts an OpenAI-style arguments dict into
+    // the same JSON shape the prose path parses, so both share ExecuteCoreAsync.
+    public async Task<string> ExecuteToolCallAsync(ToolCall call, CancellationToken ct = default)
+    {
+        var obj = new Dictionary<string, object?>();
+        foreach (var (k, v) in call.Arguments)
+            // thresholdValue is validated as a JSON number downstream; everything else is a string.
+            obj[k] = k == "thresholdValue" && decimal.TryParse(v, CultureInfo.InvariantCulture, out var d) ? d : v;
+
+        string? error;
+        try
+        {
+            using var doc = JsonDocument.Parse(JsonSerializer.Serialize(obj));
+            error = await ExecuteCoreAsync(call.Name, doc.RootElement, ct);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        return error is null ? $"{call.Name}: done." : $"{call.Name} failed — {error}";
+    }
+
+    private async Task<string?> ExecuteCoreAsync(string? tool, JsonElement root, CancellationToken ct)
+    {
         var tz = await moduleContext.ResolveTimeZoneAsync(ct);
 
         switch (tool)
