@@ -5,7 +5,7 @@ import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
 import { useTimezone, formatInTz, localInputToUtcIso, utcIsoToLocalInput } from '../services/timezone';
 import { getVoiceStatus, startRecording, speak, stopSpeaking, type Recorder, type VoiceStatus } from '../services/voice';
-import { VoiceCall, CALL_STATE_LABEL, type CallState } from '../services/voiceSession';
+import { useVoiceCallContext } from '../services/voiceCallContext';
 import '../styles/modules.css';
 import '../styles/san.css';
 
@@ -89,51 +89,6 @@ function ApiError({ port }: { port: number }) {
       <div className="module-empty-icon"><Icon /></div>
       <h2>Can't reach San API</h2>
       <p>Make sure the San backend is running on port {port} (<code>san/start.ps1</code>).</p>
-    </div>
-  );
-}
-
-/* ── Voice call overlay ── */
-interface CallOverlayProps {
-  state: CallState;
-  userText: string;
-  sanText: string;
-  error: string | null;
-  onHangUp: () => void;
-}
-function CallOverlay({ state, userText, sanText, error, onHangUp }: CallOverlayProps) {
-  // Esc hangs up — a call holds the mic, so there must be an obvious way out.
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onHangUp(); };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [onHangUp]);
-
-  return (
-    <div className="call-overlay">
-      <div className="call-panel">
-        <div className={`call-orb ${state}`}><span>S</span></div>
-        <div className="call-state">{CALL_STATE_LABEL[state]}</div>
-
-        {userText && (
-          <div className="call-line">
-            <span className="call-who">You</span>
-            <span className="call-said">{userText}</span>
-          </div>
-        )}
-        {sanText && (
-          <div className="call-line">
-            <span className="call-who san">San</span>
-            <span className="call-said">{sanText}</span>
-          </div>
-        )}
-        {error && <div className="call-err">{error}</div>}
-
-        <p className="call-hint">
-          Just talk — San answers when you pause. Speak over them to cut in. Esc or Hang up to end.
-        </p>
-        <button className="call-hangup" onClick={onHangUp}>Hang up</button>
-      </div>
     </div>
   );
 }
@@ -260,18 +215,12 @@ function Assistant() {
   const recorderRef = useRef<Recorder | null>(null);
   const lastSpokenId = useRef<string | null>(null);
 
-  // Hands-free call mode (services/voiceSession.ts) — needs both STT and TTS.
-  const [callState, setCallState] = useState<CallState>('idle');
-  const [callUser, setCallUser] = useState('');
-  const [callSan, setCallSan] = useState('');
-  const callRef = useRef<VoiceCall | null>(null);
-  const inCall = callState !== 'idle';
+  // Hands-free call mode now lives at the App root (services/voiceCallContext.tsx)
+  // so it's reachable — and survives — switching away from this tab. This page
+  // only needs to know whether one is active, to silence its own auto-speak.
+  const { inCall, startCall } = useVoiceCallContext();
 
   useEffect(() => { getVoiceStatus().then(setVoice); }, []);
-
-  // A call holds the mic and an AudioContext — make sure navigating away or
-  // unmounting tears it down rather than leaving the mic light on.
-  useEffect(() => () => callRef.current?.hangUp(), []);
 
   const messagesQ = useQuery<ChatMsg[]>({ queryKey: ['san-messages'], queryFn: () => get(`${API}/api/chat/messages`) });
   const sendMut = useMutation({
@@ -301,37 +250,6 @@ function Assistant() {
       speak(last.content).catch(e => setVoiceErr(e.message));
     }
   }, [messagesQ.data, ttsOn, voice.ttsReady, inCall]);
-
-  const startCall = async () => {
-    setVoiceErr(null);
-    setCallUser(''); setCallSan('');
-    stopSpeaking(); // don't let a push-to-talk reply overlap the call
-    const call = new VoiceCall({
-      onState: setCallState,
-      onUserText: setCallUser,
-      onSanText: setCallSan,
-      onError: setVoiceErr,
-      sendToSan: async (text: string) => {
-        const res = await send(`${API}/api/chat/messages`, 'POST', { content: text });
-        queryClient.invalidateQueries({ queryKey: ['san-messages'] });
-        return res?.assistantMessage?.content ?? '';
-      },
-    });
-    callRef.current = call;
-    try {
-      await call.start();
-    } catch (e) {
-      callRef.current = null;
-      setCallState('idle');
-      setVoiceErr((e as Error).message);
-    }
-  };
-
-  const endCall = () => {
-    callRef.current?.hangUp();
-    callRef.current = null;
-    setCallState('idle');
-  };
 
   const toggleTts = () => {
     const next = !ttsOn;
@@ -448,15 +366,8 @@ function Assistant() {
         </div>
         {voiceErr && <div style={{ color: 'var(--debt, #e5484d)', fontSize: '0.75rem', padding: '0.4rem 0.6rem' }}>{voiceErr}</div>}
       </div>
-      {inCall && (
-        <CallOverlay
-          state={callState}
-          userText={callUser}
-          sanText={callSan}
-          error={voiceErr}
-          onHangUp={endCall}
-        />
-      )}
+      {/* The call overlay itself now renders at the App root (services/voiceCallContext.tsx
+          + components/VoiceCallUI.tsx) so it's reachable from every module, not just here. */}
       <div className="card">
         <h3>What San can do</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', marginTop: '0.5rem' }}>

@@ -1,0 +1,24 @@
+{
+  "name": "Maaya OS",
+  "short_name": "Maaya",
+  "description": "Maaya OS — personal life-operating-system dashboard",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0c1830",
+  "theme_color": "#0c1830",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/sigil.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
+    { "src": "/sigil.png", "sizes": "1024x1024", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Call San",
+      "short_name": "Call San",
+      "description": "Open Maaya straight into a hands-free voice call with San",
+      "url": "/?call=san",
+      "icons": [{ "src": "/sigil.png", "sizes": "1024x1024", "type": "image/png" }]
+    }
+  ]
+}
