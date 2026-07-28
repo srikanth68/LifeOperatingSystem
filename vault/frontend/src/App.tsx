@@ -13,6 +13,8 @@ import Login           from './pages/Login';
 import PinPad          from './pages/PinPad';
 import CommandPalette  from './components/CommandPalette';
 import ArcReactor      from './components/ArcReactor';
+import { CallFab, CallOverlay } from './components/VoiceCallUI';
+import { VoiceCallProvider } from './services/voiceCallContext';
 import { auth, installSessionExpiryInterceptor, onSessionExpired } from './services/auth';
 import type { ProbeResult } from './services/auth';
 import { useSystemStatus } from './services/systemStatus';
@@ -319,12 +321,18 @@ export default function App() {
   };
 
   return (
-    <div className="app">
-      <Sidebar active={active} onSelect={setActive} onOpenPalette={() => setPalette(true)} onLogout={handleLogout} />
-      <main className="main">
-        <div className="container">{renderModule()}</div>
-      </main>
-      <CommandPalette open={palette} onClose={() => setPalette(false)} onNavigate={navigate} />
-    </div>
+    <VoiceCallProvider>
+      <div className="app">
+        <Sidebar active={active} onSelect={setActive} onOpenPalette={() => setPalette(true)} onLogout={handleLogout} />
+        <main className="main">
+          <div className="container">{renderModule()}</div>
+        </main>
+        <CommandPalette open={palette} onClose={() => setPalette(false)} onNavigate={navigate} />
+        {/* Outside the per-module switch: reachable from every tab, survives
+            switching tabs mid-call. */}
+        <CallFab />
+        <CallOverlay />
+      </div>
+    </VoiceCallProvider>
   );
 }

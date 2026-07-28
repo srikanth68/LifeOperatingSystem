@@ -25,6 +25,19 @@ Click 📞 and just talk. San answers when you pause, then listens again — no
 button pressing between turns. Speak over San to cut them off mid-answer.
 Esc or **Hang up** ends the call.
 
+**Reachable from anywhere, not just San's tab.** A floating 📞 button sits at the
+App root (`components/VoiceCallUI.tsx` + `services/voiceCallContext.tsx`,
+mounted in `App.tsx` outside the per-module switch) — visible on every module,
+and switching tabs mid-call doesn't hang up.
+
+**Home-screen shortcut → straight into a call.** The dashboard is a minimal PWA
+(`public/manifest.webmanifest`) with a "Call San" shortcut. On a phone: open the
+dashboard once over HTTPS (`https://<host>:3443`), "Add to Home Screen", then
+long-press the resulting icon → **Call San**. That opens `/?call=san`, which
+`voiceCallContext.tsx` detects on load and auto-starts the call once voice
+status confirms ready — one tap from the home screen to a live call, no
+navigating the dashboard first.
+
 The overlay names the phase it's in — *Listening → Hearing you → Making out what
 you said → San is thinking → San is speaking* — because on a local stack a turn
 genuinely can take 20-30s (Whisper cold-load + the agent tool loop + TTS). A
