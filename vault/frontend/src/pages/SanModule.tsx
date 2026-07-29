@@ -40,6 +40,7 @@ interface CalendarEvent {
 }
 interface NowNextResult { current?: CalendarEvent; upcoming: CalendarEvent[]; asOf: string }
 interface ContextResult { location?: { latitude: number; longitude: number; address?: string; timestamp: string }; recentActivity: unknown[] }
+interface EmailAccount { id: string; provider: 'google' | 'microsoft'; emailAddress: string; active: boolean; lastCheckedAt: string | null; createdAt: string }
 
 // Always formats/parses in the system-wide configured timezone (see
 // services/timezone.ts) — NOT the viewing device's own clock, so a reminder
@@ -58,7 +59,7 @@ const ALERT_TYPE_COLOR: Record<string, string> = {
 };
 const MODULE_COLOR: Record<string, string> = { Vault: '#4f9ef8', Vitara: '#e8527c', Aasthi: '#d4a843' };
 
-type Page = 'assistant' | 'reminders' | 'alerts' | 'feed' | 'calendar' | 'people';
+type Page = 'assistant' | 'reminders' | 'alerts' | 'feed' | 'calendar' | 'people' | 'email';
 const TABS: { id: Page; label: string }[] = [
   { id: 'assistant', label: 'Assistant' },
   { id: 'reminders', label: 'Reminders' },
@@ -66,6 +67,12 @@ const TABS: { id: Page; label: string }[] = [
   { id: 'feed',      label: 'Activity Feed' },
   { id: 'calendar',  label: 'Calendar' },
   { id: 'people',    label: 'People' },
+  { id: 'email',     label: 'Email' },
+];
+
+const EMAIL_PROVIDERS: { id: 'google' | 'microsoft'; label: string; icon: string }[] = [
+  { id: 'google', label: 'Gmail', icon: '✉️' },
+  { id: 'microsoft', label: 'Outlook', icon: '📧' },
 ];
 
 function Icon() {
@@ -611,6 +618,81 @@ function Alerts() {
   );
 }
 
+/* ── Email ── */
+function Email() {
+  useTimezone();
+  const queryClient = useQueryClient();
+  const [connecting, setConnecting] = useState<'google' | 'microsoft' | null>(null);
+
+  const accountsQ = useQuery<EmailAccount[]>({ queryKey: ['san-email-accounts'], queryFn: () => get(`${API}/api/email/accounts`) });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['san-email-accounts'] });
+
+  const deleteMut = useMutation({ mutationFn: (id: string) => send(`${API}/api/email/accounts/${id}`, 'DELETE'), onSuccess: invalidate });
+
+  const connect = async (provider: 'google' | 'microsoft') => {
+    setConnecting(provider);
+    try {
+      const { url } = await get(`${API}/api/email/auth/${provider}`);
+      // Full-page navigation, not fetch — OAuth consent has to happen in a real
+      // top-level browser navigation to Google/Microsoft's own login page.
+      window.location.href = url;
+    } catch {
+      setConnecting(null);
+    }
+  };
+
+  if (accountsQ.isError) return <ApiError port={5300} />;
+  const accounts = accountsQ.data ?? [];
+
+  return (
+    <div style={style}>
+      <div className="san-toolbar">
+        <h3 style={{ margin: 0 }}>Email Triage</h3>
+      </div>
+      <p className="text-dim" style={{ fontSize: '0.82rem', marginTop: '-0.5rem' }}>
+        San checks connected inboxes every 15 minutes, summarizes what's worth your attention, and can
+        create reminders, alerts, calendar events, or property tasks from what it finds.
+      </p>
+
+      <div className="san-toolbar" style={{ marginTop: '1rem' }}>
+        {EMAIL_PROVIDERS.map(p => (
+          <button key={p.id} className="btn-primary" disabled={connecting === p.id} onClick={() => connect(p.id)}>
+            {connecting === p.id ? 'Redirecting…' : `${p.icon} Connect ${p.label}`}
+          </button>
+        ))}
+      </div>
+
+      {accounts.length === 0 && !accountsQ.isLoading && (
+        <p className="text-dim" style={{ textAlign: 'center', marginTop: '1.5rem' }}>No email accounts connected yet.</p>
+      )}
+      <div className="san-alert-list" style={{ marginTop: '1rem' }}>
+        {accounts.map(a => {
+          const meta = EMAIL_PROVIDERS.find(p => p.id === a.provider);
+          return (
+            <div key={a.id} className="card san-alert-card">
+              <div className="san-alert-top">
+                <div>
+                  <span className="san-type-badge" style={{ background: 'color-mix(in srgb, var(--san) 18%, transparent)', color: 'var(--san)' }}>
+                    {meta?.icon} {meta?.label ?? a.provider}
+                  </span>
+                  <div className="san-alert-title">{a.emailAddress}</div>
+                </div>
+                <div className="san-alert-actions">
+                  {!a.active && <span className="text-dim" style={{ fontSize: '0.7rem' }}>inactive</span>}
+                  <button className="btn-danger-ghost" style={{ fontSize: '0.72rem' }} onClick={() => deleteMut.mutate(a.id)}>Disconnect</button>
+                </div>
+              </div>
+              <div className="san-alert-meta">
+                <span>{a.lastCheckedAt ? `Last checked ${fmtDateTime(a.lastCheckedAt)}` : 'Not checked yet'}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ── Activity Feed ── */
 function Feed() {
   const feedQ = useQuery<FeedResult>({ queryKey: ['san-feed'], queryFn: () => get(`${API}/api/feed`) });
@@ -1098,6 +1180,7 @@ function SanModuleInner() {
       {page === 'feed'      && <Feed />}
       {page === 'calendar'  && <Calendar />}
       {page === 'people'    && <People />}
+      {page === 'email'     && <Email />}
     </div>
   );
 }

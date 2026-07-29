@@ -224,4 +224,50 @@ public class SanRepository(SanDbContext db) : ISanRepository
             existing.Value = value;
         await db.SaveChangesAsync();
     }
+
+    // ── Email accounts ──
+    public Task<List<EmailAccount>> GetEmailAccountsAsync() =>
+        db.EmailAccounts.OrderBy(a => a.EmailAddress).ToListAsync();
+
+    public Task<EmailAccount?> GetEmailAccountAsync(Guid id) =>
+        db.EmailAccounts.FirstOrDefaultAsync(a => a.Id == id);
+
+    // Keyed by (Provider, EmailAddress) — reconnecting an already-connected mailbox
+    // (e.g. re-authorizing after a revoked token) refreshes its tokens in place
+    // rather than creating a duplicate row.
+    public async Task<EmailAccount> UpsertEmailAccountAsync(string provider, string emailAddress, string tokenJson)
+    {
+        var existing = await db.EmailAccounts
+            .FirstOrDefaultAsync(a => a.Provider == provider && a.EmailAddress == emailAddress);
+        if (existing is not null)
+        {
+            existing.TokenJson = tokenJson;
+            existing.Active = true;
+            await db.SaveChangesAsync();
+            return existing;
+        }
+
+        var account = new EmailAccount { Provider = provider, EmailAddress = emailAddress, TokenJson = tokenJson };
+        db.EmailAccounts.Add(account);
+        await db.SaveChangesAsync();
+        return account;
+    }
+
+    public async Task<EmailAccount?> UpdateEmailAccountAsync(Guid id, Action<EmailAccount> apply)
+    {
+        var a = await db.EmailAccounts.FirstOrDefaultAsync(x => x.Id == id);
+        if (a is null) return null;
+        apply(a);
+        await db.SaveChangesAsync();
+        return a;
+    }
+
+    public async Task<bool> DeleteEmailAccountAsync(Guid id)
+    {
+        var a = await db.EmailAccounts.FirstOrDefaultAsync(x => x.Id == id);
+        if (a is null) return false;
+        db.EmailAccounts.Remove(a);
+        await db.SaveChangesAsync();
+        return true;
+    }
 }

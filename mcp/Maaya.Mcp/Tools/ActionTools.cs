@@ -333,6 +333,16 @@ public sealed class ActionTools(ModuleGateway gw)
         gw.SendAsync("aasthi", HttpMethod.Post, $"/api/properties/{propertyId}/financials",
             new { type, category, amount, date, notes });
 
+    [McpServerTool(Name = "property_task_create")]
+    [Description("Create a maintenance/to-do task against one of the user's Maaya/Aasthi properties — e.g. after spotting a property-related item in email or chat. Call aasthi_properties first to get the property id.")]
+    public Task<string> PropertyTaskCreate(
+        [Description("Property GUID from aasthi_properties.")] string propertyId,
+        [Description("Task title, e.g. 'Fix leaking faucet'.")] string title,
+        [Description("Due date as yyyy-MM-dd, if any.")] string? dueDate = null,
+        [Description("low, medium, high, or urgent (default medium).")] string priority = "medium") =>
+        gw.SendAsync("aasthi", HttpMethod.Post, "/api/tasks",
+            new { propertyId, title, dueDate, priority });
+
     // ── NorthStar: keep the brain current ──
 
     [McpServerTool(Name = "northstar_sync")]

@@ -9,16 +9,38 @@ namespace Vitara.Worker;
 
 public class OuraSyncWorker(IServiceProvider services, ILogger<OuraSyncWorker> logger) : BackgroundService
 {
-    private static readonly TimeSpan SyncInterval = TimeSpan.FromHours(6);
+    // Same daily-at-configurable-time pattern as Vault.Worker/Jobs/ScheduledSyncWorker.cs.
+    private readonly TimeSpan _syncTime = ParseSyncTime(Environment.GetEnvironmentVariable("SYNC_TIME") ?? "10:00");
+
+    private static TimeSpan ParseSyncTime(string s)
+    {
+        var parts = s.Split(':');
+        return new TimeSpan(int.Parse(parts[0]), int.Parse(parts[1]), 0);
+    }
+
+    private DateTime GetNextRunTime(DateTime now)
+    {
+        var nextRun = now.Date.Add(_syncTime);
+        if (nextRun <= now) nextRun = nextRun.AddDays(1);
+        return nextRun;
+    }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        logger.LogInformation("Vitara sync worker started. Interval: {h}h", SyncInterval.TotalHours);
-        await SyncAsync(ct);
+        logger.LogInformation("Vitara sync worker started. Sync time set to {t:hh\\:mm}", _syncTime);
 
-        using var timer = new PeriodicTimer(SyncInterval);
-        while (await timer.WaitForNextTickAsync(ct))
+        while (!ct.IsCancellationRequested)
+        {
+            var now = DateTime.Now;
+            var nextRunTime = GetNextRunTime(now);
+            logger.LogInformation("Next Oura sync scheduled for {next:yyyy-MM-dd HH:mm:ss} (in {h:F1}h)",
+                nextRunTime, (nextRunTime - now).TotalHours);
+
+            try { await Task.Delay(nextRunTime - now, ct); }
+            catch (OperationCanceledException) { break; }
+
             await SyncAsync(ct);
+        }
     }
 
     private async Task SyncAsync(CancellationToken ct)

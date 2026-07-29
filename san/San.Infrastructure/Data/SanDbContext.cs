@@ -32,6 +32,7 @@ public class SanDbContext(DbContextOptions<SanDbContext> options) : DbContext(op
     public DbSet<ActivitySnapshot> ActivitySnapshots => Set<ActivitySnapshot>();
     public DbSet<Person> People => Set<Person>();
     public DbSet<AppSetting> Settings => Set<AppSetting>();
+    public DbSet<EmailAccount> EmailAccounts => Set<EmailAccount>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -79,6 +80,12 @@ public class SanDbContext(DbContextOptions<SanDbContext> options) : DbContext(op
             e.HasKey(p => p.Id);
             e.HasIndex(p => p.Name);
             e.HasIndex(p => p.Birthday);
+        });
+
+        b.Entity<EmailAccount>(e =>
+        {
+            e.HasKey(a => a.Id);
+            e.HasIndex(a => new { a.Provider, a.EmailAddress }).IsUnique();
         });
     }
 }
