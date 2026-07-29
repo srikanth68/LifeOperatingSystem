@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Aasthi.Domain.Entities;
 
 namespace Aasthi.Infrastructure.Data;
@@ -10,6 +11,23 @@ public class AasthiDbContext(DbContextOptions<AasthiDbContext> options) : DbCont
     // the bug this avoids: culture-default DateOnly.ToString() omits leading zeros, which
     // breaks lexicographic range comparisons.
     public const string DateFormat = "yyyy-MM-dd";
+
+    // Separate bug: SQLite has no timezone-aware column type, so every DateTime (not
+    // DateOnly — those are handled above) loses its Kind on round-trip and comes back
+    // Unspecified, which System.Text.Json then serializes without a 'Z' suffix, causing
+    // frontend clients to misparse UTC instants as local time. CreatedAt/UploadedAt/etc.
+    // below are UTC instants — re-tag Kind=Utc on read.
+    private sealed class UtcDateTimeConverter() : ValueConverter<DateTime, DateTime>(
+        v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+    private sealed class UtcNullableDateTimeConverter() : ValueConverter<DateTime?, DateTime?>(
+        v => v, v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+        configurationBuilder.Properties<DateTime?>().HaveConversion<UtcNullableDateTimeConverter>();
+    }
 
     public DbSet<Property> Properties => Set<Property>();
     public DbSet<PropertyContact> Contacts => Set<PropertyContact>();

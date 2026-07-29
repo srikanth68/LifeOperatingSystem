@@ -1,10 +1,29 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using San.Domain.Entities;
 
 namespace San.Infrastructure.Data;
 
 public class SanDbContext(DbContextOptions<SanDbContext> options) : DbContext(options)
 {
+    // SQLite has no timezone-aware column type — every DateTime loses its Kind on
+    // round-trip and comes back Unspecified. System.Text.Json then serializes it
+    // without a 'Z' suffix, so the frontend's `new Date(iso)` silently misparses it
+    // as browser-local time instead of UTC (manifested as reminders displaying hours
+    // off — exactly the local UTC offset). All DateTime columns here are UTC instants
+    // (DueAt, CreatedAt, etc.), so re-tag Kind=Utc on every read.
+    private sealed class UtcDateTimeConverter() : ValueConverter<DateTime, DateTime>(
+        v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+    private sealed class UtcNullableDateTimeConverter() : ValueConverter<DateTime?, DateTime?>(
+        v => v, v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+        configurationBuilder.Properties<DateTime?>().HaveConversion<UtcNullableDateTimeConverter>();
+    }
+
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<Reminder> Reminders => Set<Reminder>();
     public DbSet<Alert> Alerts => Set<Alert>();
