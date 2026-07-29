@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Vitara.Domain.Entities;
 
 namespace Vitara.Infrastructure.Data;
@@ -7,6 +8,24 @@ namespace Vitara.Infrastructure.Data;
 public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbContext(options)
 {
     public const string DayFormat = "yyyy-MM-dd";
+
+    // Separate bug: SQLite has no timezone-aware column type, so every DateTime (not
+    // DateOnly Day fields — those are handled below) loses its Kind on round-trip and
+    // comes back Unspecified, which System.Text.Json then serializes without a 'Z'
+    // suffix, causing frontend clients to misparse UTC instants as local time.
+    // HeartRateSample.Timestamp, Workout.StartTime/EndTime, etc. are UTC instants —
+    // re-tag Kind=Utc on read.
+    private sealed class UtcDateTimeConverter() : ValueConverter<DateTime, DateTime>(
+        v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+    private sealed class UtcNullableDateTimeConverter() : ValueConverter<DateTime?, DateTime?>(
+        v => v, v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+        configurationBuilder.Properties<DateTime?>().HaveConversion<UtcNullableDateTimeConverter>();
+    }
 
     public DbSet<OuraToken>              Tokens          => Set<OuraToken>();
     public DbSet<UserProfile>            Profiles        => Set<UserProfile>();

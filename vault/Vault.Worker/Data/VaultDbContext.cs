@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Vault.Worker.Models;
 
 namespace Vault.Worker.Data;
@@ -6,6 +7,22 @@ namespace Vault.Worker.Data;
 public class VaultDbContext : DbContext
 {
     public VaultDbContext(DbContextOptions<VaultDbContext> options) : base(options) { }
+
+    // SQLite has no timezone-aware column type — every DateTime loses its Kind on
+    // round-trip and comes back Unspecified, which System.Text.Json then serializes
+    // without a 'Z' suffix, causing frontend clients to misparse UTC instants as
+    // local time. All DateTime columns here are UTC instants — re-tag Kind=Utc on read.
+    private sealed class UtcDateTimeConverter() : ValueConverter<DateTime, DateTime>(
+        v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+    private sealed class UtcNullableDateTimeConverter() : ValueConverter<DateTime?, DateTime?>(
+        v => v, v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+        configurationBuilder.Properties<DateTime?>().HaveConversion<UtcNullableDateTimeConverter>();
+    }
 
     public DbSet<Institution> Institutions { get; set; }
     public DbSet<Account> Accounts { get; set; }
