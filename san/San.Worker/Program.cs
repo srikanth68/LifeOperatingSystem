@@ -1,11 +1,14 @@
 using Maaya.Auth;
 using Microsoft.EntityFrameworkCore;
 using San.Application.Interfaces;
+using San.Infrastructure.Agent;
+using San.Infrastructure.Chat;
 using San.Infrastructure.Data;
 using San.Infrastructure.Google;
 using San.Infrastructure.Llm;
 using San.Infrastructure.ModuleClients;
 using San.Infrastructure.Notifications;
+using San.Infrastructure.Outlook;
 using San.Worker;
 
 // Load .env from project root
@@ -73,9 +76,20 @@ builder.Services.AddHttpClient("vitara",    c => c.BaseAddress = new Uri(vitaraU
 builder.Services.AddHttpClient("aasthi",    c => c.BaseAddress = new Uri(aasthiUrl));
 builder.Services.AddHttpClient("northstar", c => c.BaseAddress = new Uri(northstarUrl));
 builder.Services.AddSingleton<IGoogleCalendarService, GoogleCalendarService>();
+builder.Services.AddScoped<IEmailProviderClient, GoogleGmailClient>();
+builder.Services.AddHttpClient<IEmailProviderClient, MicrosoftGraphClient>();
+
+// Same agent-tool stack as San.API's ChatController, so EmailTriageWorker can let
+// Gemma tool-call reminders/alerts/calendar/property-tasks off triaged email.
+builder.Services.AddScoped<IChatActionService, ChatActionService>();
+builder.Services.AddScoped<AgentToolExecutor>();
+builder.Services.AddHttpClient<McpToolClient>(c => c.Timeout = TimeSpan.FromSeconds(90));
+builder.Services.AddScoped<AgentToolRouter>();
+
 builder.Services.AddHostedService<NotificationWorker>();
 builder.Services.AddHostedService<CalendarSyncWorker>();
 builder.Services.AddHostedService<MemoryDistillationWorker>();
+builder.Services.AddHostedService<EmailTriageWorker>();
 
 var host = builder.Build();
 

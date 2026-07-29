@@ -9,6 +9,7 @@ using San.Infrastructure.Google;
 using San.Infrastructure.Llm;
 using San.Infrastructure.ModuleClients;
 using San.Infrastructure.Notifications;
+using San.Infrastructure.Outlook;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,6 +44,8 @@ builder.Services.AddScoped<ISanRepository, SanRepository>();
 builder.Services.AddScoped<IModuleContextService, ModuleContextService>();
 builder.Services.AddScoped<IChatActionService, ChatActionService>();
 builder.Services.AddSingleton<IGoogleCalendarService, GoogleCalendarService>();
+builder.Services.AddScoped<IEmailProviderClient, GoogleGmailClient>();
+builder.Services.AddHttpClient<IEmailProviderClient, MicrosoftGraphClient>();
 builder.Services.AddScoped<IContextReceiver, ContextReceiver>();
 builder.Services.AddHttpClient<ITelegramNotifier, TelegramNotifier>();
 
@@ -120,6 +123,16 @@ using (var scope = app.Services.CreateScope())
             Key TEXT PRIMARY KEY,
             Value TEXT NOT NULL DEFAULT ''
         );
+        CREATE TABLE IF NOT EXISTS EmailAccounts (
+            Id TEXT PRIMARY KEY,
+            Provider TEXT NOT NULL,
+            EmailAddress TEXT NOT NULL,
+            TokenJson TEXT NOT NULL DEFAULT '',
+            Active INTEGER NOT NULL DEFAULT 1,
+            LastCheckedAt TEXT,
+            CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS IX_EmailAccounts_Provider_Email ON EmailAccounts(Provider, EmailAddress);
         """);
 }
 

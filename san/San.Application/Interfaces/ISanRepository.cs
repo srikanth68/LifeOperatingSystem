@@ -48,4 +48,11 @@ public interface ISanRepository
     // Settings (key-value)
     Task<string?> GetSettingAsync(string key);
     Task SetSettingAsync(string key, string value);
+
+    // Email accounts (triage worker)
+    Task<List<EmailAccount>> GetEmailAccountsAsync();
+    Task<EmailAccount?> GetEmailAccountAsync(Guid id);
+    Task<EmailAccount> UpsertEmailAccountAsync(string provider, string emailAddress, string tokenJson);
+    Task<EmailAccount?> UpdateEmailAccountAsync(Guid id, Action<EmailAccount> apply);
+    Task<bool> DeleteEmailAccountAsync(Guid id);
 }
