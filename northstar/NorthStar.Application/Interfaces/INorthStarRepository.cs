@@ -29,6 +29,7 @@ public interface INorthStarRepository
     Task<ActionItem> AddActionAsync(ActionItem action);
     Task<List<ActionItem>> GetActionsAsync(string? status = "pending", int limit = 50);
     Task<ActionItem?> UpdateActionAsync(Guid id, string status, string? resolvedBy = null);
+    Task<bool> DeleteActionAsync(Guid id);
 
     // Module snapshots
     Task UpsertSnapshotAsync(ModuleSnapshot snapshot);

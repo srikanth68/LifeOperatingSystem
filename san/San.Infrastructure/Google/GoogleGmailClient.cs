@@ -1,5 +1,6 @@
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Auth.OAuth2.Flows;
+using Google.Apis.Auth.OAuth2.Requests;
 using Google.Apis.Auth.OAuth2.Responses;
 using Google.Apis.Gmail.v1;
 using Google.Apis.Services;
@@ -26,12 +27,14 @@ public class GoogleGmailClient : IEmailProviderClient
     public string BuildAuthUrl(string redirectUri)
     {
         var flow = BuildFlow();
-        var request = flow.CreateAuthorizationCodeRequest(redirectUri);
-        var uri = request.Build();
-        // access_type=offline + prompt=consent — without both, Google only returns a
-        // refresh_token on the FIRST-ever consent for that account; re-connecting a
-        // previously-revoked account would silently come back with none.
-        return uri.AbsoluteUri + "&access_type=offline&prompt=consent";
+        var request = (GoogleAuthorizationCodeRequestUrl)flow.CreateAuthorizationCodeRequest(redirectUri);
+        // access_type=offline is already the SDK's default (appending it again as a raw
+        // string caused Google's "parameters can only have a single value" 400) — only
+        // Prompt needs setting explicitly: without it, Google only returns a refresh_token
+        // on the FIRST-ever consent for that account; re-connecting a previously-revoked
+        // account would silently come back with none.
+        request.Prompt = "consent";
+        return request.Build().AbsoluteUri;
     }
 
     public async Task<(string EmailAddress, string TokenJson)> ExchangeCodeAsync(string code, string redirectUri)
