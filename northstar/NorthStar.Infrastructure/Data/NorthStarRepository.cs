@@ -140,6 +140,15 @@ public class NorthStarRepository(NorthStarDbContext db) : INorthStarRepository
         return a;
     }
 
+    public async Task<bool> DeleteActionAsync(Guid id)
+    {
+        var a = await db.Actions.FindAsync(id);
+        if (a is null) return false;
+        db.Actions.Remove(a);
+        await db.SaveChangesAsync();
+        return true;
+    }
+
     // ── Module snapshots ──
     public async Task UpsertSnapshotAsync(ModuleSnapshot snapshot)
     {

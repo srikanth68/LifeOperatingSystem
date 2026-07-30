@@ -41,6 +41,10 @@ public class ActionsController(INorthStarRepository repo) : ControllerBase
         var result = await repo.UpdateActionAsync(id, req.Status, req.ResolvedBy);
         return result is not null ? Ok(result) : NotFound();
     }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id) =>
+        await repo.DeleteActionAsync(id) ? NoContent() : NotFound();
 }
 
 public record CreateActionRequest(string? Source, string? Category, string Title, string? Description, int? Priority, string? DueDate);
