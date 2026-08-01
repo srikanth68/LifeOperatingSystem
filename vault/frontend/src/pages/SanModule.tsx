@@ -329,10 +329,20 @@ function Assistant() {
             </div>
           ))}
           {sendMut.isPending && (
-            <div className="chat-bubble">
-              <div className="chat-avatar">S</div>
-              <div className="chat-text" style={{ color: 'var(--text3)', fontStyle: 'italic' }}>San is thinking…</div>
-            </div>
+            <>
+              {/* The real message list only refetches once the whole round trip
+                  (save → LLM call → save reply) completes server-side, so without
+                  this, the user's own message would be invisible for the entire
+                  wait — echo it immediately from the mutation's own variables. */}
+              <div className="chat-bubble">
+                <div className="chat-avatar">U</div>
+                <div className="chat-text">{sendMut.variables}</div>
+              </div>
+              <div className="chat-bubble">
+                <div className="chat-avatar">S</div>
+                <div className="chat-text" style={{ color: 'var(--text3)', fontStyle: 'italic' }}>San is thinking…</div>
+              </div>
+            </>
           )}
         </div>
         <div className="chat-bar">
