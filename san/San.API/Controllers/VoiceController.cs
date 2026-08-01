@@ -122,6 +122,7 @@ public partial class VoiceController(IHttpClientFactory httpFactory, ILogger<Voi
         if (string.IsNullOrWhiteSpace(req.Text))
             return BadRequest(new { error = "No text to speak." });
 
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             var http = httpFactory.CreateClient("piper");
@@ -147,6 +148,8 @@ public partial class VoiceController(IHttpClientFactory httpFactory, ILogger<Voi
 
             var audioBytes = await resp.Content.ReadAsByteArrayAsync();
             var contentType = resp.Content.Headers.ContentType?.ToString() ?? "audio/mpeg";
+            logger.LogInformation("TTS synthesis took {Ms}ms for {Chars} chars ({Bytes} bytes audio)",
+                sw.ElapsedMilliseconds, req.Text.Length, audioBytes.Length);
             return File(audioBytes, contentType);
         }
         catch (Exception ex)

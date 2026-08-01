@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using San.Application.DTOs;
 using San.Application.Interfaces;
@@ -63,6 +64,8 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
     {
         if (string.IsNullOrWhiteSpace(req.Content)) return BadRequest("Message content is required.");
 
+        var turnSw = Stopwatch.StartNew();
+
         // Timestamp of the last interaction BEFORE this new message — lets San know
         // how long it's been (null if this is the first message ever).
         var priorHistory = await repo.GetChatHistoryAsync();
@@ -73,6 +76,11 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         var history = await repo.GetChatHistoryAsync();
         var turns = history.Select(m => new ChatTurn(m.Role, m.Content)).ToList();
 
+        // Context-building phase — fans out to every sibling module plus NorthStar
+        // memory recall, all before the LLM is ever called. Timed separately from the
+        // LLM/tool-loop phase (which LlamaCppAgentChatProvider logs on its own) so a
+        // slow reply can be traced to "gathering context" vs "the model/tools".
+        var contextSw = Stopwatch.StartNew();
         var basePrompt = await repo.GetSettingAsync(SystemPromptKey) ?? DefaultSystemPrompt;
         var timeContext = await moduleContext.BuildTimeContextAsync(lastSeenUtc);
         var context = await moduleContext.BuildChatContextAsync();
@@ -82,6 +90,8 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         var memories = await moduleContext.RecallMemoriesAsync(req.Content);
         var memoryBlock = string.IsNullOrWhiteSpace(memories) ? null
             : $"From your long-term memory (NorthStar):\n{memories}";
+        var contextMs = contextSw.ElapsedMilliseconds;
+        logger.LogInformation("Chat context build took {ContextMs}ms", contextMs);
 
         // A provider with native tool calling (llamacpp-agent) neither needs San's
         // prose action-block instructions nor should its reply be scraped for one.
@@ -100,9 +110,9 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         // tools and falls through to plain CompleteAsync. The router serves the
         // full Maaya.Mcp catalog when the gateway is up, built-ins otherwise.
         var (tools, executor) = await toolRouter.ResolveAsync(HttpContext.RequestAborted);
-        var rawReply = await chat.CompleteWithToolsAsync(systemPrompt, turns, tools, executor);
-        logger.LogInformation("San raw reply via {Provider} ({Length} chars): {Preview}",
-            chat.ProviderName, rawReply.Length, rawReply.Length > 800 ? rawReply[..800] + "…" : rawReply);
+        var (rawReply, llmMs) = await TimedAsync(chat.CompleteWithToolsAsync(systemPrompt, turns, tools, executor));
+        logger.LogInformation("San raw reply via {Provider} ({Length} chars, {LlmMs}ms): {Preview}",
+            chat.ProviderName, rawReply.Length, llmMs, rawReply.Length > 800 ? rawReply[..800] + "…" : rawReply);
 
         var replyText = chat.HandlesToolsNatively ? rawReply : await actions.ProcessAsync(rawReply);
         if (!chat.HandlesToolsNatively)
@@ -110,7 +120,17 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
 
         var assistantMsg = await repo.AddChatMessageAsync(new ChatMessage { Role = "assistant", Content = replyText });
 
+        logger.LogInformation("Chat turn total: {TotalMs}ms (context {ContextMs}ms, llm/tools {LlmMs}ms)",
+            turnSw.ElapsedMilliseconds, contextMs, llmMs);
+
         return Ok(new ChatSendResult(ToResult(userMsg), ToResult(assistantMsg), chat.ProviderName, chat.ModelName));
+    }
+
+    private static async Task<(T Result, long Ms)> TimedAsync<T>(Task<T> task)
+    {
+        var sw = Stopwatch.StartNew();
+        var result = await task;
+        return (result, sw.ElapsedMilliseconds);
     }
 
     private static ChatMessageResult ToResult(ChatMessage m) => new(m.Id, m.Role, m.Content, m.CreatedAt);

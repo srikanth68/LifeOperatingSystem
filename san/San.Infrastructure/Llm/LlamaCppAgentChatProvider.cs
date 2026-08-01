@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using San.Application.Interfaces;
 
 namespace San.Infrastructure.Llm;
@@ -20,7 +22,7 @@ namespace San.Infrastructure.Llm;
 //   LLM_BASE_URL=http://host.docker.internal:8080   (llama.cpp on the host)
 //   LLM_MODEL=gemma-4                               (echoed; llama.cpp ignores it)
 //   LLM_API_KEY=...                                 (only if --api-key was set)
-public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config) : IChatProvider
+public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config, ILogger<LlamaCppAgentChatProvider> logger) : IChatProvider
 {
     public string ProviderName => "llamacpp-agent";
     public string ModelName => Environment.GetEnvironmentVariable("LLM_MODEL")
@@ -60,8 +62,15 @@ public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config) :
 
         var toolsJson = tools is { Count: > 0 } ? tools.Select(ToOpenAiTool).ToArray() : null;
 
+        // Total-turn timing plus a per-step/per-tool breakdown — a slow reply could be
+        // one slow LLM call, several chained tool-calling round trips, or a slow tool
+        // (an MCP call fanning out to a sibling module). This is the only place that
+        // sees the whole loop, so it's the right place to log where the time actually went.
+        var turnSw = Stopwatch.StartNew();
+
         for (var step = 0; step < Math.Max(maxSteps, 1); step++)
         {
+            var stepSw = Stopwatch.StartNew();
             JsonElement message;
             try
             {
@@ -69,8 +78,11 @@ public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config) :
             }
             catch (LlmHttpException ex)
             {
+                logger.LogWarning("Chat turn failed after {TotalMs}ms at step {Step} ({StepMs}ms): {Message}",
+                    turnSw.ElapsedMilliseconds, step, stepSw.ElapsedMilliseconds, ex.UserMessage);
                 return ex.UserMessage;
             }
+            logger.LogInformation("Step {Step}: LLM call took {StepMs}ms", step, stepSw.ElapsedMilliseconds);
 
             var toolCalls = message.TryGetProperty("tool_calls", out var tc) && tc.ValueKind == JsonValueKind.Array
                 ? tc : (JsonElement?)null;
@@ -78,6 +90,7 @@ public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config) :
             if (toolCalls is null || toolCalls.Value.GetArrayLength() == 0 || toolExecutor is null)
             {
                 var content = message.TryGetProperty("content", out var c) ? c.GetString() : null;
+                logger.LogInformation("Chat turn finished after {TotalMs}ms ({Steps} step(s))", turnSw.ElapsedMilliseconds, step + 1);
                 return string.IsNullOrWhiteSpace(content)
                     ? "🤔 The local model returned an empty answer. Try rephrasing, or check the model in Settings."
                     : content;
@@ -94,6 +107,7 @@ public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config) :
                 var name = fn.GetProperty("name").GetString() ?? "";
                 var args = ParseArguments(fn.TryGetProperty("arguments", out var a) ? a.GetString() : null);
 
+                var toolSw = Stopwatch.StartNew();
                 string result;
                 try
                 {
@@ -103,11 +117,13 @@ public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config) :
                 {
                     result = $"Tool error ({name}): {ex.Message}";
                 }
+                logger.LogInformation("Step {Step}: tool {Name} took {ToolMs}ms", step, name, toolSw.ElapsedMilliseconds);
 
                 messages.Add(new { role = "tool", tool_call_id = id, content = result });
             }
         }
 
+        logger.LogWarning("Chat turn stopped after {TotalMs}ms — too many tool steps (max {MaxSteps})", turnSw.ElapsedMilliseconds, maxSteps);
         return "⚠️ San stopped after too many tool steps without a final answer. The actions above may still have run — check the relevant tab.";
     }
 
