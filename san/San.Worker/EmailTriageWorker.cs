@@ -95,7 +95,12 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
             var (tools, executor) = await toolRouter.ResolveAsync(ct);
             var systemPrompt = SystemPrompt + "\n\n" + timeContext;
 
-            var reply = await chat.CompleteWithToolsAsync(systemPrompt, [userTurn], tools, executor);
+            // enableThinking: triage has to actually read each email and judge it —
+            // important vs noise, and whether it warrants a reminder/alert/event/task.
+            // This runs on a 15-minute timer with nobody waiting, so the extra
+            // deliberation tokens cost nothing that matters here.
+            var reply = await chat.CompleteWithToolsAsync(
+                systemPrompt, [userTurn], tools, executor, maxSteps: 10, enableThinking: true, ct: ct);
             logger.LogInformation("Email triage reply ({Length} chars): {Preview}",
                 reply.Length, reply.Length > 500 ? reply[..500] + "…" : reply);
 
