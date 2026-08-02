@@ -33,12 +33,19 @@ public class DashboardController(IVitaraRepository repo) : ControllerBase
         var latestCvAge = cvAge.LastOrDefault();
         var latestVo2  = vo2.LastOrDefault();
 
+        // Each block below is that metric's MOST RECENT record within the window, which
+        // may be days old — Oura syncs once daily, and a night the ring wasn't worn (or
+        // didn't sync) leaves a gap. Carrying only a top-level `date` meant a consumer
+        // couldn't tell last night's sleep from last week's and would report stale
+        // numbers as current, so every block states its own day and age.
         return Ok(new
         {
             date = today.ToString("yyyy-MM-dd"),
             profile = profile is not null ? new { profile.Age, profile.Weight, profile.Height, profile.BiologicalSex } : null,
             sleep = todaySleep is null ? null : new
             {
+                day = todaySleep.Day.ToString("yyyy-MM-dd"),
+                daysAgo = today.DayNumber - todaySleep.Day.DayNumber,
                 score = todaySleep.Score,
                 totalMinutes = todaySleep.TotalSleepMinutes,
                 deepMinutes = todaySleep.DeepMinutes,
@@ -53,6 +60,8 @@ public class DashboardController(IVitaraRepository repo) : ControllerBase
             },
             readiness = todayRead is null ? null : new
             {
+                day = todayRead.Day.ToString("yyyy-MM-dd"),
+                daysAgo = today.DayNumber - todayRead.Day.DayNumber,
                 score = todayRead.Score,
                 level = todayRead.Level,
                 restingHr = todayRead.RestingHeartRate,
@@ -64,6 +73,8 @@ public class DashboardController(IVitaraRepository repo) : ControllerBase
             },
             activity = todayAct is null ? null : new
             {
+                day = todayAct.Day.ToString("yyyy-MM-dd"),
+                daysAgo = today.DayNumber - todayAct.Day.DayNumber,
                 score = todayAct.Score,
                 steps = todayAct.Steps,
                 activeCalories = todayAct.ActiveCalories,
@@ -75,12 +86,16 @@ public class DashboardController(IVitaraRepository repo) : ControllerBase
             },
             stress = todayStress is null ? null : new
             {
+                day = todayStress.Day.ToString("yyyy-MM-dd"),
+                daysAgo = today.DayNumber - todayStress.Day.DayNumber,
                 summary = todayStress.DaySummary,
                 stressMinutes = todayStress.StressHighSeconds.HasValue ? todayStress.StressHighSeconds.Value / 60 : (int?)null,
                 recoveryMinutes = todayStress.RecoveryHighSeconds.HasValue ? todayStress.RecoveryHighSeconds.Value / 60 : (int?)null,
             },
             resilience = todayRes is null ? null : new
             {
+                day = todayRes.Day.ToString("yyyy-MM-dd"),
+                daysAgo = today.DayNumber - todayRes.Day.DayNumber,
                 level = todayRes.Level,
                 sleepRecovery = todayRes.SleepRecovery,
                 daytimeRecovery = todayRes.DaytimeRecovery,
@@ -88,6 +103,8 @@ public class DashboardController(IVitaraRepository repo) : ControllerBase
             },
             spo2Data = todaySpo2 is null ? null : new
             {
+                day = todaySpo2.Day.ToString("yyyy-MM-dd"),
+                daysAgo = today.DayNumber - todaySpo2.Day.DayNumber,
                 average = todaySpo2.Spo2Average,
                 breathingDisturbance = todaySpo2.BreathingDisturbanceIndex,
             },
