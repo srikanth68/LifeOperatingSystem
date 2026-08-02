@@ -136,6 +136,13 @@ public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config, I
             ["messages"] = messages,
             ["stream"] = false,
             ["temperature"] = 0.7,
+            // This model emits a full step-by-step "should I use a tool?" deliberation
+            // (reasoning_content) on every call that offers tools — even when it decides
+            // not to use one. Measured: 180 completion tokens (6.4s) vs 12 tokens (0.4s)
+            // for the same trivial question, purely from this. San's tool descriptions
+            // are specific enough that the deliberation isn't buying accuracy worth 15x
+            // the latency, so it's disabled outright rather than made configurable.
+            ["chat_template_kwargs"] = new Dictionary<string, object> { ["enable_thinking"] = false },
         };
         if (toolsJson is not null) payload["tools"] = toolsJson;
 
