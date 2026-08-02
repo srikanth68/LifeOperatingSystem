@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using San.Application.Interfaces;
 
 namespace San.Infrastructure.Agent;
@@ -17,7 +18,7 @@ namespace San.Infrastructure.Agent;
 // Config (env):
 //   MCP_BASE_URL=http://mcp:5900        (compose service; gateway on the same network)
 //   MCP_API_KEY=<MCP_API_KEY from deploy/env/mcp.env — required if the gateway has one>
-public class McpToolClient(HttpClient http)
+public class McpToolClient(HttpClient http, ILogger<McpToolClient> logger)
 {
     private const string ProtocolVersion = "2025-03-26";
     private static readonly TimeSpan ToolsCacheTtl = TimeSpan.FromMinutes(5);
@@ -87,8 +88,12 @@ public class McpToolClient(HttpClient http)
             _toolsFetchedAt = DateTime.UtcNow;
             return tools;
         }
-        catch
+        catch (Exception ex)
         {
+            // Falling back to the built-in registry is a real capability drop (~40 tools
+            // down to 10), so the reason has to be visible — this was silent before.
+            logger.LogWarning(ex, "MCP tools/list failed against {BaseUrl} (api key {KeyState})",
+                BaseUrl, string.IsNullOrWhiteSpace(ApiKey) ? "NOT set" : "set");
             return _tools; // unreachable — serve stale if we have it, else null
         }
         finally
@@ -196,7 +201,15 @@ public class McpToolClient(HttpClient http)
             req.Headers.Add("X-API-Key", ApiKey);
 
         using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
-        if (!resp.IsSuccessStatusCode) return null;
+        if (!resp.IsSuccessStatusCode)
+        {
+            // 401 here almost always means MCP_API_KEY differs between deploy/env/san.env
+            // and deploy/env/mcp.env; 404 means MCP_BASE_URL points somewhere wrong.
+            var detail = await resp.Content.ReadAsStringAsync(ct);
+            logger.LogWarning("MCP POST {BaseUrl}/ returned HTTP {Status}. {Detail}",
+                BaseUrl, (int)resp.StatusCode, detail.Length > 200 ? detail[..200] : detail);
+            return null;
+        }
 
         if (captureSession && resp.Headers.TryGetValues("Mcp-Session-Id", out var vals))
             _sessionId = vals.FirstOrDefault();

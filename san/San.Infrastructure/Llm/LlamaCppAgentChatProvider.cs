@@ -38,7 +38,7 @@ public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config, I
          ?? "http://host.docker.internal:8080").TrimEnd('/');
 
     public Task<string> CompleteAsync(string systemPrompt, List<ChatTurn> history, CancellationToken ct = default)
-        => RunAsync(systemPrompt, history, null, null, 1, ct);
+        => RunAsync(systemPrompt, history, null, null, 1, false, ct);
 
     public Task<string> CompleteWithToolsAsync(
         string systemPrompt,
@@ -46,8 +46,9 @@ public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config, I
         List<ToolDefinition> tools,
         Func<ToolCall, CancellationToken, Task<string>> toolExecutor,
         int maxSteps = 10,
+        bool enableThinking = false,
         CancellationToken ct = default)
-        => RunAsync(systemPrompt, history, tools, toolExecutor, maxSteps, ct);
+        => RunAsync(systemPrompt, history, tools, toolExecutor, maxSteps, enableThinking, ct);
 
     private async Task<string> RunAsync(
         string systemPrompt,
@@ -55,6 +56,7 @@ public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config, I
         List<ToolDefinition>? tools,
         Func<ToolCall, CancellationToken, Task<string>>? toolExecutor,
         int maxSteps,
+        bool enableThinking,
         CancellationToken ct)
     {
         var messages = new List<object> { new { role = "system", content = systemPrompt } };
@@ -74,7 +76,7 @@ public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config, I
             JsonElement message;
             try
             {
-                message = await SendAsync(messages, toolsJson, ct);
+                message = await SendAsync(messages, toolsJson, enableThinking, ct);
             }
             catch (LlmHttpException ex)
             {
@@ -127,7 +129,7 @@ public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config, I
         return "⚠️ San stopped after too many tool steps without a final answer. The actions above may still have run — check the relevant tab.";
     }
 
-    private async Task<JsonElement> SendAsync(List<object> messages, object[]? toolsJson, CancellationToken ct)
+    private async Task<JsonElement> SendAsync(List<object> messages, object[]? toolsJson, bool enableThinking, CancellationToken ct)
     {
         // Anonymous types can't hold an optional property, so shape via dictionary.
         var payload = new Dictionary<string, object>
@@ -139,10 +141,10 @@ public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config, I
             // This model emits a full step-by-step "should I use a tool?" deliberation
             // (reasoning_content) on every call that offers tools — even when it decides
             // not to use one. Measured: 180 completion tokens (6.4s) vs 12 tokens (0.4s)
-            // for the same trivial question, purely from this. San's tool descriptions
-            // are specific enough that the deliberation isn't buying accuracy worth 15x
-            // the latency, so it's disabled outright rather than made configurable.
-            ["chat_template_kwargs"] = new Dictionary<string, object> { ["enable_thinking"] = false },
+            // for the same trivial question, purely from this. Off for interactive chat
+            // where that 15x lands directly on the user's wait; on for background work
+            // that genuinely has to weigh content before acting (see IChatProvider).
+            ["chat_template_kwargs"] = new Dictionary<string, object> { ["enable_thinking"] = enableThinking },
         };
         if (toolsJson is not null) payload["tools"] = toolsJson;
 
