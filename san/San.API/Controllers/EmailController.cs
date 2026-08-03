@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using San.Application;
 using San.Application.Interfaces;
 using San.Domain.Entities;
 
@@ -33,6 +34,28 @@ public class EmailController(ISanRepository repo, IEnumerable<IEmailProviderClie
     {
         var accounts = await repo.GetEmailAccountsAsync();
         return Ok(accounts.Select(ToResult));
+    }
+
+    // What counts as "important" is entirely the model's judgment, steered by this
+    // prompt — so it's editable here rather than baked into the worker, same as
+    // San's chat system prompt.
+    [HttpGet("triage-prompt")]
+    public async Task<IActionResult> GetTriagePrompt()
+    {
+        var stored = await repo.GetSettingAsync(EmailTriageDefaults.PromptKey);
+        return Ok(new
+        {
+            prompt = stored ?? EmailTriageDefaults.Prompt,
+            isDefault = stored is null,
+            defaultPrompt = EmailTriageDefaults.Prompt,
+        });
+    }
+
+    [HttpPut("triage-prompt")]
+    public async Task<IActionResult> SetTriagePrompt([FromBody] TriagePromptRequest req)
+    {
+        await repo.SetSettingAsync(EmailTriageDefaults.PromptKey, req.Prompt ?? "");
+        return Ok(new { prompt = req.Prompt ?? "" });
     }
 
     [HttpDelete("accounts/{id}")]
@@ -85,3 +108,5 @@ public class EmailController(ISanRepository repo, IEnumerable<IEmailProviderClie
         a.CreatedAt,
     };
 }
+
+public record TriagePromptRequest(string? Prompt);

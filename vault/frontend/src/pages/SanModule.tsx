@@ -145,30 +145,37 @@ const PERSONALITIES: { label: string; prompt: string }[] = [
   },
 ];
 
-function SystemPromptEditor({ onClose }: { onClose: () => void }) {
+// Shared by the chat system prompt and the email-triage prompt — both are just a
+// stored instruction with a default to fall back to, so they get one editor.
+function PromptEditor({ title, hint, endpoint, queryKey, presets, onClose }: {
+  title: string;
+  hint: string;
+  endpoint: string;
+  queryKey: string;
+  presets?: { label: string; prompt: string }[];
+  onClose: () => void;
+}) {
   const queryClient = useQueryClient();
   const [text, setText] = useState<string | null>(null);
-  const promptQ = useQuery<SystemPromptDto>({ queryKey: ['san-system-prompt'], queryFn: () => get(`${API}/api/chat/system-prompt`) });
+  const promptQ = useQuery<SystemPromptDto>({ queryKey: [queryKey], queryFn: () => get(`${API}${endpoint}`) });
 
   useEffect(() => { if (promptQ.data && text === null) setText(promptQ.data.prompt); }, [promptQ.data, text]);
 
   const saveMut = useMutation({
-    mutationFn: (prompt: string) => send(`${API}/api/chat/system-prompt`, 'PUT', { prompt }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['san-system-prompt'] }); onClose(); },
+    mutationFn: (prompt: string) => send(`${API}${endpoint}`, 'PUT', { prompt }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: [queryKey] }); onClose(); },
   });
 
   return (
     <div className="sp-overlay" onClick={onClose}>
       <div className="sp-modal" onClick={e => e.stopPropagation()}>
         <div className="sp-head">
-          <h3>San — System Prompt</h3>
+          <h3>{title}</h3>
           <button className="sp-x" onClick={onClose}>✕</button>
         </div>
-        <p className="sp-hint">
-          This is the base instruction San runs with. A live snapshot of your modules is appended automatically after it.
-        </p>
+        <p className="sp-hint">{hint}</p>
         <div className="sp-presets">
-          {PERSONALITIES.map(p => (
+          {(presets ?? []).map(p => (
             <button key={p.label} className="sp-preset" onClick={() => setText(p.prompt)} title="Replaces the prompt below — review, then Save">
               {p.label}
             </button>
@@ -202,6 +209,31 @@ function SystemPromptEditor({ onClose }: { onClose: () => void }) {
         {saveMut.isError && <div className="sp-err">Couldn't save — is San (5300) running?</div>}
       </div>
     </div>
+  );
+}
+
+function SystemPromptEditor({ onClose }: { onClose: () => void }) {
+  return (
+    <PromptEditor
+      title="San — System Prompt"
+      hint="This is the base instruction San runs with. A live snapshot of your modules is appended automatically after it."
+      endpoint="/api/chat/system-prompt"
+      queryKey="san-system-prompt"
+      presets={PERSONALITIES}
+      onClose={onClose}
+    />
+  );
+}
+
+function TriagePromptEditor({ onClose }: { onClose: () => void }) {
+  return (
+    <PromptEditor
+      title="Email — Triage Rules"
+      hint="San decides entirely from this what counts as important, what to ignore, and when to create a reminder, alert, calendar event, or property task. Keep the NOTHING_IMPORTANT instruction intact — it's what keeps a quiet inbox quiet."
+      endpoint="/api/email/triage-prompt"
+      queryKey="san-triage-prompt"
+      onClose={onClose}
+    />
   );
 }
 
@@ -633,6 +665,7 @@ function Email() {
   useTimezone();
   const queryClient = useQueryClient();
   const [connecting, setConnecting] = useState<'google' | 'microsoft' | null>(null);
+  const [showRules, setShowRules] = useState(false);
 
   const accountsQ = useQuery<EmailAccount[]>({ queryKey: ['san-email-accounts'], queryFn: () => get(`${API}/api/email/accounts`) });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['san-email-accounts'] });
@@ -658,11 +691,14 @@ function Email() {
     <div style={style}>
       <div className="san-toolbar">
         <h3 style={{ margin: 0 }}>Email Triage</h3>
+        <button className="btn-ghost" onClick={() => setShowRules(true)}>⚙ Triage Rules</button>
       </div>
       <p className="text-dim" style={{ fontSize: '0.82rem', marginTop: '-0.5rem' }}>
         San checks connected inboxes every 15 minutes, summarizes what's worth your attention, and can
-        create reminders, alerts, calendar events, or property tasks from what it finds.
+        create reminders, alerts, calendar events, or property tasks from what it finds. Findings are
+        also written to NorthStar, so San can refer back to them in chat.
       </p>
+      {showRules && <TriagePromptEditor onClose={() => setShowRules(false)} />}
 
       <div className="san-toolbar" style={{ marginTop: '1rem' }}>
         {EMAIL_PROVIDERS.map(p => (
