@@ -328,6 +328,31 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
         catch { /* NorthStar unreachable — skip this memory */ }
     }
 
+    public async Task SaveKnowledgeAsync(string source, string topic, string summary, CancellationToken ct = default)
+    {
+        try
+        {
+            var http = httpFactory.CreateClient("northstar");
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/ingest")
+            {
+                Content = new StringContent(
+                    JsonSerializer.Serialize(new
+                    {
+                        source,
+                        topic,
+                        summary,
+                        day = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                    }),
+                    Encoding.UTF8, "application/json"),
+            };
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ServiceToken());
+            using var resp = await http.SendAsync(req, ct);
+            // Best-effort, same as SaveMemoryAsync — losing a knowledge entry must
+            // never take down the worker that produced it.
+        }
+        catch { /* NorthStar unreachable — skip this entry */ }
+    }
+
     private async Task<JsonElement?> TryGetJsonAsync(string client, string path, CancellationToken ct)
     {
         var (json, _) = await TryGetJsonWithErrorAsync(client, path, ct);

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using San.Application;
 using San.Application.Interfaces;
 using San.Infrastructure.Agent;
 
@@ -15,17 +16,9 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
 {
     private static readonly TimeSpan CheckInterval = TimeSpan.FromMinutes(15);
 
-    private const string SystemPrompt =
-        "You are San, the personal life-assistant module inside Maaya OS, triaging the user's email. " +
-        "You will be given a batch of new emails (sender, subject, snippet, received time). For each one " +
-        "that is genuinely actionable or important — a bill, a deadline, something from a real person " +
-        "needing a reply, a property-related issue, a scheduled event — decide if it warrants creating a " +
-        "reminder, alert, calendar event, or (for property-related items) a property task, and call the " +
-        "appropriate tool. Ignore newsletters, marketing, and routine notifications entirely — do not " +
-        "create anything for them and do not mention them. " +
-        "After handling actionable emails, reply with ONLY a short plain-text summary (a few lines max) " +
-        "of what's worth the user's attention right now, suitable to send verbatim as a Telegram message. " +
-        "If nothing in the batch is worth mentioning, reply with exactly: NOTHING_IMPORTANT";
+    // Prompt + sentinel live in San.Application (EmailTriageDefaults) because San.API
+    // exposes the editor for them — keeping one copy stops the two from drifting.
+    private const string NothingImportant = EmailTriageDefaults.NothingImportant;
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -93,7 +86,8 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
             var timeContext = await moduleContext.BuildTimeContextAsync(null, ct);
             var userTurn = new ChatTurn("user", "New emails since last check:\n\n" + string.Join("\n\n", batch));
             var (tools, executor) = await toolRouter.ResolveAsync(ct);
-            var systemPrompt = SystemPrompt + "\n\n" + timeContext;
+            var basePrompt = await repo.GetSettingAsync(EmailTriageDefaults.PromptKey) ?? EmailTriageDefaults.Prompt;
+            var systemPrompt = basePrompt + "\n\n" + timeContext;
 
             // enableThinking: triage has to actually read each email and judge it —
             // important vs noise, and whether it warrants a reminder/alert/event/task.
@@ -104,8 +98,23 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
             logger.LogInformation("Email triage reply ({Length} chars): {Preview}",
                 reply.Length, reply.Length > 500 ? reply[..500] + "…" : reply);
 
-            if (telegram.IsConfigured && !reply.Contains("NOTHING_IMPORTANT"))
-                await telegram.SendAsync($"📬 Email triage:\n{reply.Trim()}", ct);
+            // The sentinel must be the ENTIRE reply, not merely present in it. A
+            // substring check let "NOTHING_IMPORTANT except a bill due Friday" suppress
+            // the whole message — silently dropping the one thing worth sending. Erring
+            // toward a stray notification beats erring toward a missed bill.
+            var trimmed = reply.Trim();
+            if (trimmed.Equals(NothingImportant, StringComparison.OrdinalIgnoreCase) || trimmed.Length == 0)
+            {
+                logger.LogInformation("Email triage: nothing worth flagging in {Count} message(s).", batch.Count);
+                return;
+            }
+
+            if (telegram.IsConfigured)
+                await telegram.SendAsync($"📬 Email triage:\n{trimmed}", ct);
+
+            // Record it in the brain too, so San's own time context surfaces what came
+            // in on the next turn rather than the summary living only in Telegram.
+            await moduleContext.SaveKnowledgeAsync("san-email", "email", trimmed, ct);
         }
         catch (Exception ex)
         {
