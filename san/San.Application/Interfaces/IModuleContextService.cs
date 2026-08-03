@@ -21,6 +21,12 @@ public interface IModuleContextService
     Task<string?> RecallMemoriesAsync(string query, int limit = 8, CancellationToken ct = default);
     Task SaveMemoryAsync(string content, string kind, int importance, CancellationToken ct = default);
 
+    // Records "this happened" into NorthStar's knowledge timeline (distinct from a
+    // memory, which is a durable fact about the user). Email triage writes its
+    // findings here so the brain — and therefore San's own time context on the next
+    // turn — knows what came in without the user having to relay it.
+    Task SaveKnowledgeAsync(string source, string topic, string summary, CancellationToken ct = default);
+
     // Trailing-30-day spend from Vault, used by the spending_threshold alert check. Returns
     // null if Vault is unreachable.
     Task<decimal?> GetTrailing30DaySpendAsync(CancellationToken ct = default);
