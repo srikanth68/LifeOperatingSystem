@@ -90,6 +90,7 @@ builder.Services.AddHostedService<NotificationWorker>();
 builder.Services.AddHostedService<CalendarSyncWorker>();
 builder.Services.AddHostedService<MemoryDistillationWorker>();
 builder.Services.AddHostedService<EmailTriageWorker>();
+builder.Services.AddHostedService<SystemAuditWorker>();
 
 var host = builder.Build();
 
