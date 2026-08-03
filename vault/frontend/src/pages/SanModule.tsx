@@ -225,6 +225,18 @@ function SystemPromptEditor({ onClose }: { onClose: () => void }) {
   );
 }
 
+function AuditPromptEditor({ onClose }: { onClose: () => void }) {
+  return (
+    <PromptEditor
+      title="San — Audit Rules"
+      hint="Every 15 minutes San reviews your whole system on its own and can act on what it finds. This is what it looks for. It's shown its previous findings each run so it won't repeat itself — keep the NOTHING_IMPORTANT instruction intact, that's what keeps it silent when all is well."
+      endpoint="/api/audit/prompt"
+      queryKey="san-audit-prompt"
+      onClose={onClose}
+    />
+  );
+}
+
 function TriagePromptEditor({ onClose }: { onClose: () => void }) {
   return (
     <PromptEditor
@@ -242,6 +254,7 @@ function Assistant() {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState('');
   const [showPrompt, setShowPrompt] = useState(false);
+  const [showAudit, setShowAudit] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Voice: mic (STT) + speaker (TTS). Buttons only appear if the respective
@@ -341,8 +354,10 @@ function Assistant() {
           🗑 Clear Chat
         </button>
         <button className="btn-ghost" onClick={() => setShowPrompt(true)}>⚙ Edit System Prompt</button>
+        <button className="btn-ghost" onClick={() => setShowAudit(true)}>🔎 Audit Rules</button>
       </div>
       {showPrompt && <SystemPromptEditor onClose={() => setShowPrompt(false)} />}
+      {showAudit && <AuditPromptEditor onClose={() => setShowAudit(false)} />}
       <div className="chat-shell" style={{ marginBottom: '1.5rem' }}>
         <div className="chat-messages" ref={scrollRef}>
           {messages.length === 0 && !messagesQ.isLoading && (
