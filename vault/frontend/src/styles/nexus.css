@@ -114,15 +114,15 @@
   backdrop-filter: blur(3px);
   z-index: 60;
   display: flex;
-  justify-content: center;
-  /* flex-start + margin:auto on the panel, NOT align-items:center — a centred flex
-     item that is taller than its container overflows equally in both directions,
-     putting the top of the panel above the viewport where it cannot be scrolled
-     back into view. margin:auto centres when there is room and pins to the top
-     when there isn't. */
+  /* flex-start on BOTH axes with margin:auto on the panel, never justify/align
+     center — a centred flex item larger than its container overflows equally in
+     both directions, so the top and left spill outside the viewport where they
+     can never be scrolled back into view. margin:auto centres when there is room
+     and pins to the start edge when there isn't. */
+  justify-content: flex-start;
   align-items: flex-start;
   padding: 2vh 2vw;
-  overflow-y: auto;
+  overflow: auto;
   animation: nexus-fade 0.15s ease-out;
 }
 @keyframes nexus-fade { from { opacity: 0; } to { opacity: 1; } }
@@ -132,6 +132,8 @@
    side by side. */
 .nexus-panel {
   width: min(1480px, 100%);
+  max-width: 100%;
+  min-width: 0;
   /* border-box so max-height accounts for the padding — with content-box the
      panel's real height was max-height + 80px of padding, overflowing the
      viewport it was meant to fit inside. */
@@ -156,8 +158,12 @@
   padding-bottom: 1.75rem;
   border-bottom: 1px solid var(--border);
 }
+/* min-width:0 on every hero item — flex items default to min-width:auto, which
+   refuses to shrink below their content and pushes the row wider than the panel,
+   spilling the first item (symbol + company) off the left edge. */
+.nexus-hero > * { min-width: 0; }
 .nexus-hero-id { display: flex; flex-direction: column; align-items: flex-start; gap: 0.4rem; }
-.nexus-hero-price { display: flex; align-items: baseline; gap: 0.9rem; }
+.nexus-hero-price { display: flex; align-items: baseline; gap: 0.9rem; flex-wrap: wrap; }
 .nexus-hero-chg { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .nexus-hero-chg.up { color: var(--cash-l); }
 .nexus-hero-chg.down { color: var(--debt-l); }
@@ -167,21 +173,35 @@
 /* ── Two-column body ── */
 .nexus-cols {
   display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(340px, 1fr);
+  /* Both tracks minmax(0, …): a bare 1fr floors at min-content, so the ticket's
+     wide numbers could push the grid past the panel width and overflow it. */
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
   gap: 2.5rem;
   align-items: start;
 }
+.nexus-cols > * { min-width: 0; }
 /* The ticket is the actionable part — keep it in view while the reasoning on
    the left is scrolled through. */
 .nexus-col-side { position: sticky; top: 3.25rem; }
 .nexus-col-main > .nexus-section-label:first-child,
 .nexus-col-side > .nexus-section-label:first-child { margin-top: 0; }
 
-@media (max-width: 1100px) {
-  .nexus-cols { grid-template-columns: 1fr; gap: 1.75rem; }
+/* 1280px, not 1100 — between those widths the two columns technically fit but the
+   ticket's six numeric cells and the thesis both end up cramped. Browser zoom
+   shrinks the CSS viewport, so this is also what a zoomed-in window lands on. */
+@media (max-width: 1280px) {
+  .nexus-cols { grid-template-columns: minmax(0, 1fr); gap: 1.75rem; }
   .nexus-col-side { position: static; }
   .nexus-hero { gap: 1.5rem; }
   .nexus-hero-stats { margin-left: 0; }
+}
+/* Panel padding and symbol size are already handled by the max-width:720px rule
+   further down — only the pieces that rule doesn't cover belong here. */
+@media (max-width: 640px) {
+  .nexus-hero { gap: 1rem; }
+  .nexus-hero-stats { gap: 1.25rem; }
+  .nexus-price-big { font-size: 2rem; }
+  .nexus-ticket-fields { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* Sticky action cluster (PDF + close) in the panel's top-right. */
