@@ -168,91 +168,105 @@ export function NexusDetailPanel({ symbol, onClose }: Props) {
 
         {d && (
           <>
-            <div className="nexus-panel-head">
-              <div>
+            {/* Hero band — everything needed to size up the ticker at a glance, laid
+                out across the panel's full width rather than stacked. */}
+            <header className="nexus-hero">
+              <div className="nexus-hero-id">
                 <div className="nexus-panel-sym">{d.symbol}</div>
                 {d.meta.company && <div className="nexus-panel-co">{d.meta.company}</div>}
-              </div>
-              <div className="nexus-verdict-tag" style={{ color: verdictColor(d.action) }}>
-                <span className="act">{d.action}</span>
-                <span className="conv">conviction {d.conviction}/10 · {d.composite >= 0 ? '+' : ''}{d.composite.toFixed(2)}</span>
-              </div>
-            </div>
-
-            <div className="nexus-price-panel">
-              <div className="nexus-price-row">
-                <div>
-                  <span className="nexus-price-big">{fmtMoney(d.price)}</span>
-                </div>
                 <FreshnessBadge freshness={d.meta.freshness ?? 'RECORDED'} />
               </div>
-              <div className="nexus-stats-grid">
-                <div className="nexus-stat"><div className="k">Chg %</div><div className="v">{fmtPct(d.meta.changePct)}</div></div>
+
+              <div className="nexus-hero-price">
+                <span className="nexus-price-big">{fmtMoney(d.price)}</span>
+                <span className={`nexus-hero-chg ${(d.meta.changePct ?? 0) >= 0 ? 'up' : 'down'}`}>
+                  {fmtPct(d.meta.changePct)}
+                </span>
+              </div>
+
+              <div className="nexus-hero-stats">
                 <div className="nexus-stat"><div className="k">P/E</div><div className="v">{d.meta.pe != null ? d.meta.pe.toFixed(1) : '—'}</div></div>
                 <div className="nexus-stat"><div className="k">Mkt Cap</div><div className="v">{fmtCap(d.meta.cap)}</div></div>
-                <div className="nexus-stat"><div className="k">As Of</div><div className="v" style={{ fontSize: '0.75rem' }}>{relTime(d.asOf)}</div></div>
+                <div className="nexus-stat"><div className="k">As Of</div><div className="v">{relTime(d.asOf)}</div></div>
               </div>
+
+              <div className="nexus-verdict-tag" style={{ color: verdictColor(d.action) }}>
+                <span className="act">{d.action}</span>
+                <span className="conv">conviction {d.conviction}/10</span>
+                <span className="score">{d.composite >= 0 ? '+' : ''}{d.composite.toFixed(2)}</span>
+              </div>
+            </header>
+
+            <div className="nexus-hero-meter">
               <RangeMeter price={d.price} stop={d.risk.stop} target={d.risk.target} />
             </div>
 
-            {(d.meta.setups?.length || d.meta.patterns?.length) ? (
-              <>
-                <div className="nexus-section-label">Setups & Patterns</div>
-                <div className="nexus-badge-row">
-                  {d.meta.setups?.map((s, i) => <span key={`s${i}`} className="nexus-mini-badge">{s}</span>)}
-                  {d.meta.patterns?.map((p, i) => <span key={`p${i}`} className="nexus-mini-badge">{p}</span>)}
+            {/* Two columns: the reasoning reads down the left, while the actionable
+                ticket stays pinned on the right instead of being buried below it. */}
+            <div className="nexus-cols">
+              <section className="nexus-col-main">
+                <div className="nexus-section-label">Committee Thesis</div>
+                <div className="nexus-thesis">{d.thesis}</div>
+
+                <div className="nexus-section-label">Debate</div>
+                <div className="nexus-debate">
+                  <div className="nexus-debate-side bull">
+                    <h4>Bull</h4>
+                    <div className="nexus-debate-strength">strength {(d.debate.bullStrength * 100).toFixed(0)}%</div>
+                    <ul>{d.debate.bullPoints.map((p, i) => <li key={i}>{p}</li>)}</ul>
+                  </div>
+                  <div className="nexus-debate-side bear">
+                    <h4>Bear</h4>
+                    <div className="nexus-debate-strength">strength {(d.debate.bearStrength * 100).toFixed(0)}%</div>
+                    <ul>{d.debate.bearPoints.map((p, i) => <li key={i}>{p}</li>)}</ul>
+                  </div>
+                  <div className="nexus-synth"><b>Ruling —</b> {d.debate.synthesis}</div>
                 </div>
-              </>
-            ) : null}
 
-            <div className="nexus-section-label">Committee Thesis</div>
-            <div className="nexus-thesis">{d.thesis}</div>
+                {d.reports.length > 0 && (
+                  <>
+                    <div className="nexus-section-label">Analyst Desks</div>
+                    <div className="nexus-report-grid">
+                      {d.reports.map((r, i) => <ReportCard key={i} r={r} />)}
+                    </div>
+                  </>
+                )}
+              </section>
 
-            <div className="nexus-section-label">Debate</div>
-            <div className="nexus-debate">
-              <div className="nexus-debate-side bull">
-                <h4>Bull</h4>
-                <div className="nexus-debate-strength">strength {(d.debate.bullStrength * 100).toFixed(0)}%</div>
-                <ul>{d.debate.bullPoints.map((p, i) => <li key={i}>{p}</li>)}</ul>
-              </div>
-              <div className="nexus-debate-side bear">
-                <h4>Bear</h4>
-                <div className="nexus-debate-strength">strength {(d.debate.bearStrength * 100).toFixed(0)}%</div>
-                <ul>{d.debate.bearPoints.map((p, i) => <li key={i}>{p}</li>)}</ul>
-              </div>
-              <div className="nexus-synth"><b>Ruling —</b> {d.debate.synthesis}</div>
+              <aside className="nexus-col-side">
+                <div className="nexus-section-label">Risk Sign-off</div>
+                <div className="nexus-ticket">
+                  <div className="nexus-ticket-head">
+                    <span className="nexus-ticket-title">Trade ticket</span>
+                    <span className={`nexus-ticket-status ${d.risk.approved ? 'ok' : 'no'}`}>{d.risk.approved ? 'Approved' : 'Withheld'}</span>
+                  </div>
+                  <div className="nexus-ticket-fields">
+                    <div className="nexus-ticket-field key entry"><div className="k">Entry</div><div className="v">{fmtMoney(d.risk.entry)}</div></div>
+                    <div className="nexus-ticket-field key stop"><div className="k">Stop</div><div className="v">{fmtMoney(d.risk.stop)}</div></div>
+                    <div className="nexus-ticket-field key target"><div className="k">Target</div><div className="v">{fmtMoney(d.risk.target)}</div></div>
+                    <div className="nexus-ticket-field"><div className="k">Size</div><div className="v">{d.risk.positionPct.toFixed(2)}%</div></div>
+                    <div className="nexus-ticket-field"><div className="k">R : R</div><div className="v">{d.risk.rr.toFixed(2)}</div></div>
+                    <div className="nexus-ticket-field"><div className="k">Risk @ stop</div><div className="v">{d.risk.maxRiskPct.toFixed(2)}%</div></div>
+                  </div>
+                  {(d.risk.checks.length > 0 || d.risk.flags.length > 0) && (
+                    <div className="nexus-ticket-notes">
+                      {d.risk.checks.map((c, i) => <div key={`c${i}`}>· {c}</div>)}
+                      {d.risk.flags.map((f, i) => <div key={`f${i}`} className="flag">! {f}</div>)}
+                    </div>
+                  )}
+                </div>
+
+                {(d.meta.setups?.length || d.meta.patterns?.length) ? (
+                  <>
+                    <div className="nexus-section-label">Setups & Patterns</div>
+                    <div className="nexus-badge-row">
+                      {d.meta.setups?.map((s, i) => <span key={`s${i}`} className="nexus-mini-badge">{s}</span>)}
+                      {d.meta.patterns?.map((p, i) => <span key={`p${i}`} className="nexus-mini-badge">{p}</span>)}
+                    </div>
+                  </>
+                ) : null}
+              </aside>
             </div>
-
-            <div className="nexus-section-label">Risk Sign-off</div>
-            <div className="nexus-ticket">
-              <div className="nexus-ticket-head">
-                <span style={{ fontSize: '0.7rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Trade ticket</span>
-                <span className={`nexus-ticket-status ${d.risk.approved ? 'ok' : 'no'}`}>{d.risk.approved ? 'Approved' : 'Withheld'}</span>
-              </div>
-              <div className="nexus-ticket-fields">
-                <div className="nexus-ticket-field"><div className="k">Entry</div><div className="v">{fmtMoney(d.risk.entry)}</div></div>
-                <div className="nexus-ticket-field"><div className="k">Stop</div><div className="v">{fmtMoney(d.risk.stop)}</div></div>
-                <div className="nexus-ticket-field"><div className="k">Target</div><div className="v">{fmtMoney(d.risk.target)}</div></div>
-                <div className="nexus-ticket-field"><div className="k">Size</div><div className="v">{d.risk.positionPct.toFixed(2)}%</div></div>
-                <div className="nexus-ticket-field"><div className="k">R : R</div><div className="v">{d.risk.rr.toFixed(2)}</div></div>
-                <div className="nexus-ticket-field"><div className="k">Risk @ stop</div><div className="v">{d.risk.maxRiskPct.toFixed(2)}%</div></div>
-              </div>
-              {(d.risk.checks.length > 0 || d.risk.flags.length > 0) && (
-                <div className="nexus-ticket-notes">
-                  {d.risk.checks.map((c, i) => <div key={`c${i}`}>· {c}</div>)}
-                  {d.risk.flags.map((f, i) => <div key={`f${i}`} className="flag">! {f}</div>)}
-                </div>
-              )}
-            </div>
-
-            {d.reports.length > 0 && (
-              <>
-                <div className="nexus-section-label">Analyst Desks</div>
-                <div className="nexus-report-grid">
-                  {d.reports.map((r, i) => <ReportCard key={i} r={r} />)}
-                </div>
-              </>
-            )}
 
             {d.tradePlan && (
               <>
