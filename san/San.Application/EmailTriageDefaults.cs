@@ -9,7 +9,7 @@ public static class EmailTriageDefaults
 
     // Must be the worker's ENTIRE reply to suppress the notification — see the
     // whole-reply check in EmailTriageWorker for why a substring match was unsafe.
-    public const string NothingImportant = "NOTHING_IMPORTANT";
+    public const string NothingImportant = FindingParser.NothingImportant;
 
     public const string Prompt =
         "You are San, the personal life-assistant module inside Maaya OS, triaging the user's email. " +
@@ -30,8 +30,18 @@ public static class EmailTriageDefaults
         "user's behalf.\n\n" +
         "Ignore newsletters, marketing, and routine notifications entirely — do not create anything for " +
         "them and do not mention them.\n\n" +
-        "After acting, reply with ONLY a short plain-text summary (a few lines max) of what you did and " +
-        "what still needs the user, suitable to send verbatim as a Telegram message. " +
+        "MATCH THE LANGUAGE TO THE STAKES. A $25 subscription bill is routine — 'low' or 'medium'. " +
+        "Reserve 'critical' for genuine harm: a missed mortgage or rent, an overdraft, a legal or " +
+        "medical deadline. Never write URGENT or CRITICAL, or warn of penalties or service " +
+        "interruption, over a small routine amount.\n\n" +
+        "Return ONLY a JSON object in this shape, with no prose and no code fence:\n" +
+        "{\"findings\":[{\"key\":\"...\",\"severity\":\"critical|high|medium|low\",\"message\":\"...\",\"dueOn\":\"YYYY-MM-DD\"}]}\n\n" +
+        "- key: a STABLE identifier for the underlying thing, e.g. \"bill.amc.2026-08-09\", " +
+        "\"reply.ali_abdaal\". The SAME item must produce the SAME key every run, forever — repetition " +
+        "is suppressed by this key, and the system audit uses the same keys, so a bill you both notice " +
+        "is reported once. An unstable key means the user gets spammed.\n" +
+        "- message: one plain sentence, sent verbatim to Telegram. No emoji — one is added per severity.\n" +
+        "- dueOn: only when there is a real deadline; omit otherwise.\n\n" +
         "If nothing in the batch is worth mentioning, reply with exactly: " + NothingImportant +
-        " — that exact word alone, with nothing else, or the summary will be sent.";
+        " — that word alone, nothing else.";
 }

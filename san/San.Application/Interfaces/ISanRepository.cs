@@ -49,6 +49,13 @@ public interface ISanRepository
     Task<string?> GetSettingAsync(string key);
     Task SetSettingAsync(string key, string value);
 
+    // Notification ledger — deterministic "have we already said this, and how
+    // recently" backing for the audit/triage workers.
+    Task<List<NotificationLedgerEntry>> GetLedgerAsync();
+    Task<NotificationLedgerEntry?> GetLedgerEntryAsync(string key);
+    Task RecordNotificationAsync(NotificationLedgerEntry entry);
+    Task ClearLedgerAsync();
+
     // Email accounts (triage worker)
     Task<List<EmailAccount>> GetEmailAccountsAsync();
     Task<EmailAccount?> GetEmailAccountAsync(Guid id);
