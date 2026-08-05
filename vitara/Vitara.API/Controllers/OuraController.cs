@@ -47,27 +47,49 @@ public class OuraController(IOuraClient client, IVitaraRepository repo, IConfigu
             return Content("<html><body style='font-family:sans-serif;text-align:center;padding:4rem'>" +
                 "<h2>Oura linked ✓</h2><p>You can close this tab.</p></body></html>", "text/html");
         }
+        catch (HttpRequestException ex)
+        {
+            // Never reached Oura at all — DNS or egress from the container, which has
+            // nothing to do with the app's OAuth config. Blaming the redirect URI here
+            // (as this page used to do unconditionally) sends you off editing settings
+            // at cloud.ouraring.com that were never the problem.
+            return OuraErrorPage(ex.Message, OuraFailure.Unreachable);
+        }
         catch (Exception ex)
         {
-            // Turn the old opaque 500 into a page that names the actual cause —
-            // almost always a redirect-URI mismatch with the Oura developer app.
-            return OuraErrorPage(ex.Message);
+            // Oura answered, and rejected it — now a redirect-URI/credentials mismatch
+            // really is the likeliest cause.
+            return OuraErrorPage(ex.Message, OuraFailure.Rejected);
         }
     }
 
-    private ContentResult OuraErrorPage(string detail)
+    private enum OuraFailure { Unreachable, Rejected }
+
+    private ContentResult OuraErrorPage(string detail, OuraFailure kind = OuraFailure.Rejected)
     {
         var redirect     = cfg["Oura:RedirectUri"] ?? "(unset)";
         var safeDetail   = System.Net.WebUtility.HtmlEncode(detail);
         var safeRedirect = System.Net.WebUtility.HtmlEncode(redirect);
+
+        var guidance = kind == OuraFailure.Unreachable
+            ? "<p>This container <b>could not reach api.ouraring.com</b> — the request failed before " +
+              "Oura ever saw it, so this is a network/DNS problem, <i>not</i> your app's redirect URI.</p>" +
+              "<p>Check outbound DNS from the container:</p>" +
+              "<pre style='background:#f4f4f4;padding:.75rem;border-radius:6px'>" +
+              "docker compose exec vitara getent hosts api.ouraring.com</pre>" +
+              "<p>If that resolves nothing while the host machine can, Docker's DNS is the culprit — " +
+              "a VPN or mesh network on the host is the usual reason. Restarting Docker Desktop " +
+              "normally clears it.</p>"
+            : "<p>The most common cause is a <b>redirect URI mismatch</b>. This app sent Oura:</p>" +
+              $"<pre style='background:#f4f4f4;padding:.75rem;border-radius:6px'>{safeRedirect}</pre>" +
+              "<p>That <i>exact</i> string (scheme, host, port, path — no trailing slash) must be listed " +
+              "under <b>Redirect URIs</b> for your app at cloud.ouraring.com. If it isn't, add it there and try again.</p>";
+
         return Content(
             "<html><body style='font-family:sans-serif;max-width:42rem;margin:4rem auto;padding:0 1rem;line-height:1.5'>" +
             "<h2>Oura link failed</h2>" +
             $"<p style='color:#b00020'><b>{safeDetail}</b></p>" +
-            "<p>The most common cause is a <b>redirect URI mismatch</b>. This app sent Oura:</p>" +
-            $"<pre style='background:#f4f4f4;padding:.75rem;border-radius:6px'>{safeRedirect}</pre>" +
-            "<p>That <i>exact</i> string (scheme, host, port, path — no trailing slash) must be listed " +
-            "under <b>Redirect URIs</b> for your app at cloud.ouraring.com. If it isn't, add it there and try again.</p>" +
+            guidance +
             "</body></html>", "text/html");
     }
 
