@@ -133,6 +133,17 @@ using (var scope = app.Services.CreateScope())
             CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
         );
         CREATE UNIQUE INDEX IF NOT EXISTS IX_EmailAccounts_Provider_Email ON EmailAccounts(Provider, EmailAddress);
+        CREATE TABLE IF NOT EXISTS NotificationLedger (
+            Key TEXT PRIMARY KEY,
+            Severity TEXT NOT NULL DEFAULT 'medium',
+            LastMessage TEXT NOT NULL DEFAULT '',
+            Source TEXT NOT NULL DEFAULT '',
+            NotifyCount INTEGER NOT NULL DEFAULT 0,
+            FirstSeenAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00',
+            LastNotifiedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00',
+            DueOn TEXT
+        );
+        CREATE INDEX IF NOT EXISTS IX_NotificationLedger_LastNotifiedAt ON NotificationLedger(LastNotifiedAt);
         """);
 }
 

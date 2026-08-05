@@ -33,6 +33,7 @@ public class SanDbContext(DbContextOptions<SanDbContext> options) : DbContext(op
     public DbSet<Person> People => Set<Person>();
     public DbSet<AppSetting> Settings => Set<AppSetting>();
     public DbSet<EmailAccount> EmailAccounts => Set<EmailAccount>();
+    public DbSet<NotificationLedgerEntry> NotificationLedger => Set<NotificationLedgerEntry>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -86,6 +87,14 @@ public class SanDbContext(DbContextOptions<SanDbContext> options) : DbContext(op
         {
             e.HasKey(a => a.Id);
             e.HasIndex(a => new { a.Provider, a.EmailAddress }).IsUnique();
+        });
+
+        b.Entity<NotificationLedgerEntry>(e =>
+        {
+            // The topic key IS the identity — that's what makes suppression work
+            // across both the audit and the email triage.
+            e.HasKey(x => x.Key);
+            e.HasIndex(x => x.LastNotifiedAt);
         });
     }
 }

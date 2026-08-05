@@ -29,20 +29,28 @@ public class AuditController(ISanRepository repo) : ControllerBase
         return Ok(new { prompt = req.Prompt ?? "" });
     }
 
-    // What the last run reported — also what's fed back in to stop it repeating itself.
-    // Clearing it makes the next run treat everything as new, which is the way to
-    // re-surface a finding you dismissed.
-    [HttpGet("last-findings")]
-    public async Task<IActionResult> GetLastFindings()
+    // Everything San has notified about, with how many times and when — this is what
+    // decides whether a finding repeats, so it's also the place to look when something
+    // is either nagging or has gone quiet unexpectedly.
+    [HttpGet("ledger")]
+    public async Task<IActionResult> GetLedger()
     {
-        var findings = await repo.GetSettingAsync(SystemAuditDefaults.LastFindingsKey);
-        return Ok(new { findings });
+        var now = DateTime.UtcNow;
+        var entries = await repo.GetLedgerAsync();
+        return Ok(entries.Select(e => new
+        {
+            e.Key, e.Severity, e.Source, e.NotifyCount, e.LastMessage,
+            e.FirstSeenAt, e.LastNotifiedAt, e.DueOn,
+            nextEligibleAt = e.LastNotifiedAt + NotifyPolicy.Cooldown(e.Severity, e.NotifyCount, e.DueOn, now),
+        }));
     }
 
-    [HttpDelete("last-findings")]
-    public async Task<IActionResult> ClearLastFindings()
+    // Clearing makes everything eligible again — the way to re-surface something you
+    // dismissed. Delete a single key to un-suppress just that one.
+    [HttpDelete("ledger")]
+    public async Task<IActionResult> ClearLedger()
     {
-        await repo.SetSettingAsync(SystemAuditDefaults.LastFindingsKey, "");
+        await repo.ClearLedgerAsync();
         return NoContent();
     }
 }

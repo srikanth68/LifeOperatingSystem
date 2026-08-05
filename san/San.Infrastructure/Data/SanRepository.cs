@@ -225,6 +225,38 @@ public class SanRepository(SanDbContext db) : ISanRepository
         await db.SaveChangesAsync();
     }
 
+    // ── Notification ledger ──
+    public Task<List<NotificationLedgerEntry>> GetLedgerAsync() =>
+        db.NotificationLedger.OrderByDescending(e => e.LastNotifiedAt).ToListAsync();
+
+    public Task<NotificationLedgerEntry?> GetLedgerEntryAsync(string key) =>
+        db.NotificationLedger.FirstOrDefaultAsync(e => e.Key == key);
+
+    public async Task RecordNotificationAsync(NotificationLedgerEntry entry)
+    {
+        var existing = await db.NotificationLedger.FirstOrDefaultAsync(e => e.Key == entry.Key);
+        if (existing is null)
+        {
+            db.NotificationLedger.Add(entry);
+        }
+        else
+        {
+            existing.Severity = entry.Severity;
+            existing.LastMessage = entry.LastMessage;
+            existing.Source = entry.Source;
+            existing.DueOn = entry.DueOn;
+            existing.NotifyCount += 1;
+            existing.LastNotifiedAt = entry.LastNotifiedAt;
+        }
+        await db.SaveChangesAsync();
+    }
+
+    public async Task ClearLedgerAsync()
+    {
+        db.NotificationLedger.RemoveRange(db.NotificationLedger);
+        await db.SaveChangesAsync();
+    }
+
     // ── Email accounts ──
     public Task<List<EmailAccount>> GetEmailAccountsAsync() =>
         db.EmailAccounts.OrderBy(a => a.EmailAddress).ToListAsync();

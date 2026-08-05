@@ -18,7 +18,7 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
 
     // Prompt + sentinel live in San.Application (EmailTriageDefaults) because San.API
     // exposes the editor for them — keeping one copy stops the two from drifting.
-    private const string NothingImportant = EmailTriageDefaults.NothingImportant;
+    // The sentinel is interpreted by FindingParser, not here.
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -98,23 +98,10 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
             logger.LogInformation("Email triage reply ({Length} chars): {Preview}",
                 reply.Length, reply.Length > 500 ? reply[..500] + "…" : reply);
 
-            // The sentinel must be the ENTIRE reply, not merely present in it. A
-            // substring check let "NOTHING_IMPORTANT except a bill due Friday" suppress
-            // the whole message — silently dropping the one thing worth sending. Erring
-            // toward a stray notification beats erring toward a missed bill.
-            var trimmed = reply.Trim();
-            if (trimmed.Equals(NothingImportant, StringComparison.OrdinalIgnoreCase) || trimmed.Length == 0)
-            {
-                logger.LogInformation("Email triage: nothing worth flagging in {Count} message(s).", batch.Count);
-                return;
-            }
-
-            if (telegram.IsConfigured)
-                await telegram.SendAsync($"📬 Email triage:\n{trimmed}", ct);
-
-            // Record it in the brain too, so San's own time context surfaces what came
-            // in on the next turn rather than the summary living only in Telegram.
-            await moduleContext.SaveKnowledgeAsync("san-email", "email", trimmed, ct);
+            // Keyed findings through the shared ledger — same key namespace as the
+            // system audit, so a bill both of them notice is reported once. Also
+            // records to NorthStar so San's time context surfaces it in chat.
+            await FindingDispatcher.DispatchAsync(reply, "email", repo, telegram, moduleContext, logger, ct);
         }
         catch (Exception ex)
         {
