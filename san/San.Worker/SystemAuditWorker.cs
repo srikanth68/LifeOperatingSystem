@@ -52,17 +52,18 @@ public class SystemAuditWorker(IServiceProvider services, ILogger<SystemAuditWor
             var telegram = scope.ServiceProvider.GetRequiredService<ITelegramNotifier>();
             var moduleContext = scope.ServiceProvider.GetRequiredService<IModuleContextService>();
 
+            var actions = scope.ServiceProvider.GetRequiredService<IChatActionService>();
+
             var timeContext = await moduleContext.BuildTimeContextAsync(null, ct);
             var context = await moduleContext.BuildChatContextAsync(ct);
-            var previous = await repo.GetSettingAsync(SystemAuditDefaults.LastFindingsKey);
+            // San's own reminders/alerts/events — without these it re-flags things it
+            // already scheduled, which was half the repetition.
+            var ownContext = await actions.BuildOwnContextAsync();
 
             var basePrompt = await repo.GetSettingAsync(SystemAuditDefaults.PromptKey) ?? SystemAuditDefaults.Prompt;
             var systemPrompt = string.Join("\n\n", new[]
             {
-                basePrompt,
-                timeContext,
-                context,
-                string.IsNullOrWhiteSpace(previous) ? null : $"Your PREVIOUS audit reported:\n{previous}",
+                basePrompt, timeContext, context, ownContext,
             }.Where(s => !string.IsNullOrWhiteSpace(s)));
 
             var (tools, executor) = await toolRouter.ResolveAsync(ct);
@@ -77,20 +78,9 @@ public class SystemAuditWorker(IServiceProvider services, ILogger<SystemAuditWor
             logger.LogInformation("System audit reply ({Length} chars): {Preview}",
                 reply.Length, reply.Length > 500 ? reply[..500] + "…" : reply);
 
-            // Whole-reply match, same reasoning as email triage: a substring check would
-            // let "NOTHING_IMPORTANT except your readiness dropped" suppress the finding.
-            var trimmed = reply.Trim();
-            if (trimmed.Equals(SystemAuditDefaults.NothingImportant, StringComparison.OrdinalIgnoreCase) || trimmed.Length == 0)
-            {
-                logger.LogInformation("System audit: nothing new to report.");
-                return;
-            }
-
-            if (telegram.IsConfigured)
-                await telegram.SendAsync($"🔎 System audit:\n{trimmed}", ct);
-
-            await moduleContext.SaveKnowledgeAsync("san-audit", "audit", trimmed, ct);
-            await repo.SetSettingAsync(SystemAuditDefaults.LastFindingsKey, trimmed);
+            // Suppression lives in the ledger now, not in the model's memory of what it
+            // last said — see FindingDispatcher.
+            await FindingDispatcher.DispatchAsync(reply, "audit", repo, telegram, moduleContext, logger, ct);
         }
         catch (Exception ex)
         {
