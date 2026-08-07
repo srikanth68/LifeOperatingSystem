@@ -256,6 +256,7 @@ function Assistant() {
   const [showPrompt, setShowPrompt] = useState(false);
   const [showAudit, setShowAudit] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Voice: mic (STT) + speaker (TTS). Buttons only appear if the respective
   // service is configured on the backend (see /api/voice/status).
@@ -287,6 +288,14 @@ function Assistant() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messagesQ.data, sendMut.isPending]);
+
+  // The input is disabled while San is thinking, and the browser blurs a disabled
+  // element without handing focus back when it's re-enabled — so every reply meant
+  // clicking the box again before you could type. Restore it once it's usable.
+  const inputBusy = sendMut.isPending || recording || transcribing;
+  useEffect(() => {
+    if (!inputBusy) inputRef.current?.focus();
+  }, [inputBusy]);
 
   // Speak newly-arrived assistant replies when TTS is on. Guards against
   // re-speaking on every re-render by tracking the last spoken message id.
@@ -402,11 +411,12 @@ function Assistant() {
             >{ttsOn ? '🔊' : '🔈'}</button>
           )}
           <input
+            ref={inputRef}
             placeholder={recording ? 'Listening…' : transcribing ? 'Transcribing…' : 'Ask San anything about your life data…'}
             value={draft}
             onChange={e => setDraft(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') submit(); }}
-            disabled={sendMut.isPending || recording || transcribing}
+            disabled={inputBusy}
           />
           {voice.sttReady && (
             <button
