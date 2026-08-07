@@ -53,35 +53,59 @@ public class McpToolClient(HttpClient http, ILogger<McpToolClient> logger)
             var result = await RpcAsync("tools/list", new { }, ct);
             if (result is null) return _tools; // stale list beats none
 
+            if (!result.Value.TryGetProperty("tools", out var toolsEl) || toolsEl.ValueKind != JsonValueKind.Array)
+            {
+                logger.LogWarning("MCP tools/list returned no 'tools' array — got: {Shape}",
+                    result.Value.ValueKind);
+                return _tools;
+            }
+
             var tools = new List<ToolDefinition>();
             var types = new Dictionary<string, Dictionary<string, string>>();
-            foreach (var t in result.Value.GetProperty("tools").EnumerateArray())
+            foreach (var t in toolsEl.EnumerateArray())
             {
-                var name = t.GetProperty("name").GetString() ?? "";
-                var desc = t.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
-                var parameters = new Dictionary<string, ToolParameter>();
-                var paramTypes = new Dictionary<string, string>();
-
-                if (t.TryGetProperty("inputSchema", out var schema))
+                // Per-tool isolation: one tool with an unexpected schema used to throw
+                // out of the whole loop, so San silently dropped ALL ~41 MCP tools and
+                // fell back to the 10 built-ins. Losing one tool beats losing the lot.
+                try
                 {
-                    var required = new HashSet<string>();
-                    if (schema.TryGetProperty("required", out var reqEl) && reqEl.ValueKind == JsonValueKind.Array)
-                        foreach (var r in reqEl.EnumerateArray())
-                            if (r.GetString() is { } s) required.Add(s);
+                    var name = t.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                    if (string.IsNullOrEmpty(name)) continue;
+                    var desc = t.TryGetProperty("description", out var d) && d.ValueKind == JsonValueKind.String
+                        ? d.GetString() ?? "" : "";
+                    var parameters = new Dictionary<string, ToolParameter>();
+                    var paramTypes = new Dictionary<string, string>();
 
-                    if (schema.TryGetProperty("properties", out var props) && props.ValueKind == JsonValueKind.Object)
-                        foreach (var p in props.EnumerateObject())
-                        {
-                            var pType = p.Value.TryGetProperty("type", out var pt) ? pt.GetString() ?? "string" : "string";
-                            var pDesc = p.Value.TryGetProperty("description", out var pd) ? pd.GetString() ?? "" : "";
-                            parameters[p.Name] = new ToolParameter(pType, pDesc, required.Contains(p.Name));
-                            paramTypes[p.Name] = pType;
-                        }
+                    if (t.TryGetProperty("inputSchema", out var schema) && schema.ValueKind == JsonValueKind.Object)
+                    {
+                        var required = new HashSet<string>();
+                        if (schema.TryGetProperty("required", out var reqEl) && reqEl.ValueKind == JsonValueKind.Array)
+                            foreach (var r in reqEl.EnumerateArray())
+                                if (r.ValueKind == JsonValueKind.String && r.GetString() is { } s) required.Add(s);
+
+                        if (schema.TryGetProperty("properties", out var props) && props.ValueKind == JsonValueKind.Object)
+                            foreach (var p in props.EnumerateObject())
+                            {
+                                var pType = ReadType(p.Value);
+                                var pDesc = p.Value.ValueKind == JsonValueKind.Object
+                                            && p.Value.TryGetProperty("description", out var pd)
+                                            && pd.ValueKind == JsonValueKind.String
+                                    ? pd.GetString() ?? "" : "";
+                                parameters[p.Name] = new ToolParameter(pType, pDesc, required.Contains(p.Name));
+                                paramTypes[p.Name] = pType;
+                            }
+                    }
+
+                    tools.Add(new ToolDefinition(name, desc, parameters));
+                    types[name] = paramTypes;
                 }
-
-                tools.Add(new ToolDefinition(name, desc, parameters));
-                types[name] = paramTypes;
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "MCP: skipping a tool whose schema couldn't be read.");
+                }
             }
+
+            logger.LogInformation("MCP catalog: {Count} tool(s) loaded.", tools.Count);
 
             _tools = tools;
             _paramTypes = types;
@@ -138,6 +162,26 @@ public class McpToolClient(HttpClient http, ILogger<McpToolClient> logger)
         var body = text.ToString().Trim();
         if (body.Length == 0) body = isError ? "unknown error" : $"{call.Name}: done.";
         return isError ? $"Tool error ({call.Name}): {body}" : body;
+    }
+
+    // A JSON Schema "type" is not always a plain string. Optional parameters —
+    // which ActionTools is full of (string? description = null) — serialise as a
+    // union, "type": ["string","null"]. Calling GetString() on that array threw,
+    // which is what took the whole catalogue down.
+    private static string ReadType(JsonElement prop)
+    {
+        if (prop.ValueKind != JsonValueKind.Object) return "string";
+        if (!prop.TryGetProperty("type", out var t)) return "string";
+
+        return t.ValueKind switch
+        {
+            JsonValueKind.String => t.GetString() ?? "string",
+            JsonValueKind.Array => t.EnumerateArray()
+                .Where(x => x.ValueKind == JsonValueKind.String)
+                .Select(x => x.GetString())
+                .FirstOrDefault(s => !string.IsNullOrEmpty(s) && s != "null") ?? "string",
+            _ => "string",
+        };
     }
 
     // ── JSON-RPC plumbing ─────────────────────────────────────────────────────
