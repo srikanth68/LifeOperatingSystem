@@ -98,6 +98,80 @@ public static class FindingParser
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(s)))[..12].ToLowerInvariant();
 }
 
+// Decides whether two findings are about the SAME thing, from their text alone.
+//
+// The ledger originally keyed off a "stable key" the model was asked to supply. It
+// doesn't supply one — the same course deadline came back as "starts tomorrow",
+// "cohort starts tomorrow", "begins tomorrow", "is rapidly approaching" and "is
+// tomorrow morning" within hours, each with its own key, so nothing ever matched.
+// Asking the model for stability is the same mistake as asking it not to repeat
+// itself; identity has to be computed here.
+public static class TopicSignature
+{
+    // Ordinary English filler, plus the words these findings ALWAYS contain
+    // regardless of subject: urgency, deadlines, and generic money/action nouns.
+    // Stripping them is what stops "AMC bill due Aug 9" and "electric bill due
+    // Aug 12" collapsing into each other on {bill, due, aug} — what's left is the
+    // distinctive part ({amc, theatres} vs {electric}).
+    private static readonly HashSet<string> Stop = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "the","a","an","is","are","was","were","be","been","being","to","for","of","in","on","at",
+        "and","or","but","if","then","so","as","by","from","up","about","into","than","that","this",
+        "these","those","it","its","your","you","yours","my","me","i","we","our","they","them",
+        "will","would","should","shall","can","could","may","might","must","do","does","did","have",
+        "has","had","not","no","yes","with","without","there","here","now","new",
+        // temporal
+        "today","tomorrow","tonight","yesterday","morning","afternoon","evening","day","days","week",
+        "weeks","month","months","soon","upcoming","approaching","rapidly","imminent","begins","begin",
+        "starts","start","starting","started","ends","end","ending","before","after","during","until",
+        "date","dates","deadline","time","times",
+        // urgency / action
+        "urgent","urgently","critical","important","immediate","immediately","action","required",
+        "require","requires","needed","needs","need","please","review","check","ensure","make","sure",
+        "attention","alert","reminder","remind","note","noted","warning","warn","asap","must",
+        // generic finance / status
+        "bill","bills","payment","payments","pay","paid","due","amount","balance","cash","cost",
+        "fee","fees","charge","charges","total","status","update","updates",
+    };
+
+    public static IReadOnlySet<string> Tokens(string message)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var sb = new StringBuilder();
+        foreach (var ch in message ?? "")
+        {
+            if (char.IsLetterOrDigit(ch)) sb.Append(char.ToLowerInvariant(ch));
+            else { Add(set, sb); sb.Clear(); }
+        }
+        Add(set, sb);
+        return set;
+
+        static void Add(HashSet<string> set, StringBuilder sb)
+        {
+            if (sb.Length < 2) return;
+            var w = sb.ToString();
+            if (!Stop.Contains(w)) set.Add(w);
+        }
+    }
+
+    // Overlap coefficient, not Jaccard: the same issue gets described at very
+    // different lengths run to run, and Jaccard punishes that by inflating the
+    // union. Overlap asks "is the shorter description essentially contained in the
+    // longer one", which is the actual question.
+    public static double Similarity(IReadOnlySet<string> a, IReadOnlySet<string> b)
+    {
+        if (a.Count == 0 || b.Count == 0) return 0;
+        var shared = a.Count <= b.Count ? a.Count(b.Contains) : b.Count(a.Contains);
+        return (double)shared / Math.Min(a.Count, b.Count);
+    }
+
+    public const double SameTopicThreshold = 0.6;
+
+    // Below this there isn't enough left after stripping to judge similarity on, so
+    // we don't guess — the finding keeps its own key.
+    public const int MinTokens = 2;
+}
+
 // How often a still-true finding may be repeated. Not "once ever" — a bill that is
 // still unpaid should resurface, just on a sane cadence rather than every 15 minutes.
 public static class NotifyPolicy
