@@ -8,6 +8,7 @@ struct LoginView: View {
     @State private var probing = true
     @State private var method: AuthMethod = .credentials
     @State private var forceCredentials = false
+    @State private var showServerSettings = false
 
     var body: some View {
         ZStack {
@@ -33,8 +34,28 @@ struct LoginView: View {
             }
             .padding()
             .frame(maxWidth: 440)
+
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        showServerSettings = true
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                            .foregroundStyle(.secondary)
+                            .padding(12)
+                    }
+                }
+                Spacer()
+            }
         }
         .task { await runProbe() }
+        .sheet(isPresented: $showServerSettings) {
+            ServerSettingsSheet {
+                showServerSettings = false
+                Task { await runProbe() }
+            }
+        }
     }
 
     private var header: some View {
@@ -62,6 +83,47 @@ struct LoginView: View {
             method = .credentials
         }
         probing = false
+    }
+}
+
+// Reachable before sign-in, unlike the full Settings tab (which lives behind
+// auth). Lets you point the app at the right host/scheme before attempting
+// to log in — otherwise a fresh install is stuck on the default mesh IP with
+// no way to reach a local/dev backend first.
+private struct ServerSettingsSheet: View {
+    let onDone: () -> Void
+
+    @AppStorage("serverHost") private var serverHost = "100.126.41.41"
+    @AppStorage("serverScheme") private var serverScheme = "http"
+
+    private let schemes = ["http", "https"]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Picker("Scheme", selection: $serverScheme) {
+                        ForEach(schemes, id: \.self) { Text($0) }
+                    }
+                    TextField("Host / mesh IP", text: $serverHost)
+                        .keyboardType(.URL)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                } header: {
+                    Text("Server")
+                } footer: {
+                    Text("e.g. \"localhost\" if the Maaya backend runs on this same Mac, or the NordVPN Meshnet / Tailscale IP (e.g. 100.126.41.41) for a remote host.")
+                        .font(.caption)
+                }
+            }
+            .navigationTitle("Server")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { onDone() }
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
 
