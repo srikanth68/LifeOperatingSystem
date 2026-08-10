@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using San.Application;
 using San.Application.DTOs;
 using San.Application.Interfaces;
 using San.Domain.Entities;
@@ -99,9 +100,12 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         var toolInstructions = chat.HandlesToolsNatively ? null : actions.ToolInstructions;
 
         // Order: persona, memory, time awareness, live module snapshot, San's own
-        // scheduled items, then (plain LLMs only) the tool instructions.
+        // scheduled items, then (plain LLMs only) the tool instructions. Output
+        // conventions go last — they're not part of the editable persona, and the
+        // model honours late instructions better than ones buried above the snapshot.
         var systemPrompt = string.Join("\n\n",
-            new[] { basePrompt, memoryBlock, timeContext, context, ownContext, toolInstructions }
+            new[] { basePrompt, memoryBlock, timeContext, context, ownContext, toolInstructions,
+                    SanOutputConventions.Text }
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
 
         // One call covers every provider shape: llamacpp-agent overrides
