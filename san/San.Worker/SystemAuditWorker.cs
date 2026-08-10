@@ -63,7 +63,7 @@ public class SystemAuditWorker(IServiceProvider services, ILogger<SystemAuditWor
             var basePrompt = await repo.GetSettingAsync(SystemAuditDefaults.PromptKey) ?? SystemAuditDefaults.Prompt;
             var systemPrompt = string.Join("\n\n", new[]
             {
-                basePrompt, timeContext, context, ownContext,
+                basePrompt, timeContext, context, ownContext, SanOutputConventions.Text,
             }.Where(s => !string.IsNullOrWhiteSpace(s)));
 
             var (tools, executor) = await toolRouter.ResolveAsync(ct);

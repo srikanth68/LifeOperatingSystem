@@ -87,7 +87,7 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
             var userTurn = new ChatTurn("user", "New emails since last check:\n\n" + string.Join("\n\n", batch));
             var (tools, executor) = await toolRouter.ResolveAsync(ct);
             var basePrompt = await repo.GetSettingAsync(EmailTriageDefaults.PromptKey) ?? EmailTriageDefaults.Prompt;
-            var systemPrompt = basePrompt + "\n\n" + timeContext;
+            var systemPrompt = basePrompt + "\n\n" + timeContext + "\n\n" + SanOutputConventions.Text;
 
             // enableThinking: triage has to actually read each email and judge it —
             // important vs noise, and whether it warrants a reminder/alert/event/task.
