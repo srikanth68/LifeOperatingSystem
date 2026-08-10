@@ -226,17 +226,31 @@ public class SanRepository(SanDbContext db) : ISanRepository
     }
 
     // ── Notification ledger ──
+    // By last SEEN, not last notified: a row can now sit unnotified for days while
+    // still being observed every 15 minutes, and those are exactly the rows worth
+    // looking at first when checking whether suppression is behaving.
     public Task<List<NotificationLedgerEntry>> GetLedgerAsync() =>
-        db.NotificationLedger.OrderByDescending(e => e.LastNotifiedAt).ToListAsync();
+        db.NotificationLedger.OrderByDescending(e => e.LastSeenAt).ToListAsync();
 
     public Task<NotificationLedgerEntry?> GetLedgerEntryAsync(string key) =>
         db.NotificationLedger.FirstOrDefaultAsync(e => e.Key == key);
 
-    public async Task RecordNotificationAsync(NotificationLedgerEntry entry)
+    // One write per sighting. `notified` and `recordedKnowledge` are independent:
+    // a finding can be seen and stay silent, be seen and told to the user, or be
+    // seen, kept quiet, and still handed to NorthStar because it changed. Rolling
+    // them together is what previously left the brain stuck on a finding's first
+    // wording for the whole cooldown.
+    public async Task RecordSightingAsync(NotificationLedgerEntry entry, bool notified, bool recordedKnowledge)
     {
         var existing = await db.NotificationLedger.FirstOrDefaultAsync(e => e.Key == entry.Key);
         if (existing is null)
         {
+            entry.SeenCount = 1;
+            entry.NotifyCount = notified ? 1 : 0;
+            // A row that has never notified must not look like it just did, or the
+            // cooldown would start running against a message nobody received.
+            if (!notified) entry.LastNotifiedAt = DateTime.MinValue;
+            if (!recordedKnowledge) { entry.KnowledgeAt = default; entry.KnowledgeMessage = ""; }
             db.NotificationLedger.Add(entry);
         }
         else
@@ -245,8 +259,19 @@ public class SanRepository(SanDbContext db) : ISanRepository
             existing.LastMessage = entry.LastMessage;
             existing.Source = entry.Source;
             existing.DueOn = entry.DueOn;
-            existing.NotifyCount += 1;
-            existing.LastNotifiedAt = entry.LastNotifiedAt;
+            existing.LastSeenAt = entry.LastSeenAt;
+            existing.SeenCount += 1;
+
+            if (notified)
+            {
+                existing.NotifyCount += 1;
+                existing.LastNotifiedAt = entry.LastNotifiedAt;
+            }
+            if (recordedKnowledge)
+            {
+                existing.KnowledgeAt = entry.KnowledgeAt;
+                existing.KnowledgeMessage = entry.KnowledgeMessage;
+            }
         }
         await db.SaveChangesAsync();
     }

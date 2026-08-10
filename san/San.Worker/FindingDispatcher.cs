@@ -6,8 +6,18 @@ using San.Domain.Entities;
 namespace San.Worker;
 
 // Shared by SystemAuditWorker and EmailTriageWorker: parse a model reply into keyed
-// findings, drop the ones still inside their cooldown, and send what's left as ONE
-// message. Both go through here on a single key namespace, so the same bill spotted
+// findings, then answer TWO questions per finding, separately —
+//
+//   "does the user need a message about this right now?"  → NotifyPolicy (cooldown)
+//   "does San's brain need to know about this?"           → KnowledgePolicy
+//
+// They used to be one question. NorthStar was written only when a Telegram message
+// went out, so anything inside its cooldown was dropped whole: a finding that
+// escalated or changed while quiet never reached the brain, and San would keep
+// answering from the version it first saw. Now silence and ignorance are separate
+// outcomes — a finding can be suppressed for the user and still update NorthStar.
+//
+// Both workers go through here on a single key namespace, so the same bill spotted
 // in an email and in the Vault snapshot notifies once, not twice.
 public static class FindingDispatcher
 {
@@ -29,62 +39,77 @@ public static class FindingDispatcher
 
         var now = DateTime.UtcNow;
         var ledger = await repo.GetLedgerAsync();
-        var due = new List<(AgentFinding Finding, string Key)>();
         var usedThisRun = new List<(string Key, IReadOnlySet<string> Tokens)>();
+        var sightings = new List<Sighting>();
 
         foreach (var f in findings)
         {
             // Resolve to an EXISTING topic before trusting the model's key, so a
             // reworded repeat lands on the row that's already counting.
-            var (key, entry) = ResolveKey(f, ledger, usedThisRun, logger, source);
+            var (key, entry, duplicateInRun) = ResolveKey(f, ledger, usedThisRun, logger, source);
+            if (duplicateInRun) continue; // same thing twice in one reply — not a second sighting
 
-            if (entry is not null &&
-                !NotifyPolicy.ShouldNotify(f.Severity, entry.NotifyCount, entry.LastNotifiedAt, f.DueOn, now))
+            var notify = entry is null ||
+                         NotifyPolicy.ShouldNotify(f.Severity, entry.NotifyCount, entry.LastNotifiedAt, f.DueOn, now);
+
+            if (!notify)
             {
-                var wait = NotifyPolicy.Cooldown(f.Severity, entry.NotifyCount, f.DueOn, now) - (now - entry.LastNotifiedAt);
+                var wait = NotifyPolicy.Cooldown(f.Severity, entry!.NotifyCount, f.DueOn, now) - (now - entry.LastNotifiedAt);
                 logger.LogInformation("{Source}: suppressing '{Key}' ({Severity}, told {Count}x) — {Hours:F1}h of cooldown left.",
                     source, key, f.Severity, entry.NotifyCount, wait.TotalHours);
-                continue;
             }
 
+            // Asked regardless of the cooldown — that separation is the whole point.
+            var record = KnowledgePolicy.ShouldRecord(f, entry, now, out var why);
+            if (record && !notify)
+                logger.LogInformation("{Source}: '{Key}' stays quiet but updates NorthStar — {Why}.", source, key, why);
+
             usedThisRun.Add((key, TopicSignature.Tokens(f.Message)));
-            due.Add((f, key));
+            sightings.Add(new Sighting(f, key, notify, record));
         }
 
-        if (due.Count == 0)
+        var due = sightings.Where(s => s.Notify).ToList();
+
+        if (due.Count > 0)
         {
-            logger.LogInformation("{Source}: {Total} finding(s), all within cooldown — staying quiet.", source, findings.Count);
-            return 0;
+            var body = string.Join("\n", due.Select(s => $"{Icon(s.Finding.Severity)} {s.Finding.Message}"));
+            var header = source == "audit" ? "🔎 System audit" : "📬 Email triage";
+            if (telegram.IsConfigured)
+                await telegram.SendAsync($"{header}:\n{body}", ct);
         }
 
-        var body = string.Join("\n", due.Select(x => $"{Icon(x.Finding.Severity)} {x.Finding.Message}"));
-        var header = source == "audit" ? "🔎 System audit" : "📬 Email triage";
-        if (telegram.IsConfigured)
-            await telegram.SendAsync($"{header}:\n{body}", ct);
+        // Per finding, not one blob of the batch: NorthStar keys knowledge by topic,
+        // and a finding suppressed for the user has no batch to ride along with.
+        foreach (var s in sightings.Where(s => s.Record))
+            await moduleContext.SaveKnowledgeAsync($"san-{source}", s.Key, s.Finding.Message, ct);
 
-        foreach (var (f, key) in due)
-            await repo.RecordNotificationAsync(new NotificationLedgerEntry
+        foreach (var s in sightings)
+            await repo.RecordSightingAsync(new NotificationLedgerEntry
             {
-                Key = key,
-                Severity = f.Severity,
-                LastMessage = f.Message,
+                Key = s.Key,
+                Severity = s.Finding.Severity,
+                LastMessage = s.Finding.Message,
                 Source = source,
-                NotifyCount = 1,          // ignored on update — the repo increments
-                FirstSeenAt = now,
-                LastNotifiedAt = now,
-                DueOn = f.DueOn,
-            });
+                FirstSeenAt = now,      // ignored on update
+                LastSeenAt = now,
+                LastNotifiedAt = now,   // applied only when notified
+                KnowledgeAt = now,      // applied only when recorded
+                KnowledgeMessage = s.Finding.Message,
+                DueOn = s.Finding.DueOn,
+            }, s.Notify, s.Record);
 
-        await moduleContext.SaveKnowledgeAsync($"san-{source}", source, body, ct);
-        logger.LogInformation("{Source}: sent {Sent} of {Total} finding(s).", source, due.Count, findings.Count);
+        logger.LogInformation("{Source}: {Total} finding(s) — sent {Sent}, recorded {Recorded} to NorthStar.",
+            source, sightings.Count, due.Count, sightings.Count(s => s.Record));
         return due.Count;
     }
+
+    private readonly record struct Sighting(AgentFinding Finding, string Key, bool Notify, bool Record);
 
     // Exact key match first (cheap, and correct when the model does behave), then
     // content similarity against everything the ledger already knows, then anything
     // already emitted in this same run. Only if none of those hit does the model's
     // key get used as-is.
-    private static (string Key, NotificationLedgerEntry? Entry) ResolveKey(
+    private static (string Key, NotificationLedgerEntry? Entry, bool DuplicateInRun) ResolveKey(
         AgentFinding f,
         List<NotificationLedgerEntry> ledger,
         List<(string Key, IReadOnlySet<string> Tokens)> usedThisRun,
@@ -92,10 +117,10 @@ public static class FindingDispatcher
         string source)
     {
         var exact = ledger.FirstOrDefault(e => e.Key == f.Key);
-        if (exact is not null) return (f.Key, exact);
+        if (exact is not null) return (f.Key, exact, false);
 
         var tokens = TopicSignature.Tokens(f.Message);
-        if (tokens.Count < TopicSignature.MinTokens) return (f.Key, null);
+        if (tokens.Count < TopicSignature.MinTokens) return (f.Key, null, false);
 
         NotificationLedgerEntry? best = null;
         var bestScore = 0.0;
@@ -109,7 +134,7 @@ public static class FindingDispatcher
         {
             logger.LogInformation("{Source}: '{New}' matches existing topic '{Key}' ({Score:P0}) — reusing it.",
                 source, f.Key, best.Key, bestScore);
-            return (best.Key, best);
+            return (best.Key, best, false);
         }
 
         // Two rewordings of the same thing arriving in ONE reply would otherwise both
@@ -118,13 +143,10 @@ public static class FindingDispatcher
             if (TopicSignature.Similarity(tokens, used) >= TopicSignature.SameTopicThreshold)
             {
                 logger.LogInformation("{Source}: '{New}' duplicates '{Key}' within this run — dropping.", source, f.Key, key);
-                return (key, new NotificationLedgerEntry
-                {
-                    Key = key, NotifyCount = 1, LastNotifiedAt = DateTime.UtcNow, Severity = f.Severity,
-                });
+                return (key, null, true);
             }
 
-        return (f.Key, null);
+        return (f.Key, null, false);
     }
 
     private static string Icon(string severity) => severity switch

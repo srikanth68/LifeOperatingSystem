@@ -10,6 +10,14 @@ namespace San.Domain.Entities;
 //
 // Shared by the system audit and email triage — one fact reported by both notifies
 // once, because they share this key namespace.
+//
+// SEEN vs NOTIFIED vs RECORDED are three different things and are tracked apart:
+//   seen     — the finding came back in a run (every 15 min while it stays true)
+//   notified — it cleared the Telegram cooldown and the user was actually told
+//   recorded — NorthStar was given the finding, so San's brain knows it
+// They used to be collapsed into "notified", which meant a finding that changed
+// while inside its cooldown was dropped whole and NorthStar never learned it had
+// changed. See KnowledgePolicy.
 public class NotificationLedgerEntry
 {
     public string Key { get; set; } = "";
@@ -22,4 +30,16 @@ public class NotificationLedgerEntry
     // Model-supplied deadline, when the finding has one. Near a deadline the
     // backoff is suspended so a due bill keeps its steady cadence.
     public DateTime? DueOn { get; set; }
+
+    // Every sighting, whether or not it was worth telling anyone about. Makes the
+    // difference between "quiet because nothing is wrong" and "quiet because the
+    // cooldown is swallowing it" visible in the ledger.
+    public DateTime LastSeenAt { get; set; } = DateTime.UtcNow;
+    public int SeenCount { get; set; }
+
+    // What NorthStar was last told, and when. Compared against on later sightings
+    // to decide whether the brain is out of date — an empty KnowledgeMessage means
+    // the brain has never heard about this key at all.
+    public DateTime KnowledgeAt { get; set; }
+    public string KnowledgeMessage { get; set; } = "";
 }
