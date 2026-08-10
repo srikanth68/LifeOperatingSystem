@@ -29,9 +29,11 @@ public class AuditController(ISanRepository repo) : ControllerBase
         return Ok(new { prompt = req.Prompt ?? "" });
     }
 
-    // Everything San has notified about, with how many times and when — this is what
-    // decides whether a finding repeats, so it's also the place to look when something
-    // is either nagging or has gone quiet unexpectedly.
+    // Everything San has seen, with how often it was seen, how often the user was
+    // actually told, and when NorthStar last heard about it. Those three diverging is
+    // the normal healthy state, not a fault — `silentSightings` climbing while
+    // `notifyCount` holds steady is suppression doing its job, and is the number to
+    // read when deciding whether San has gone quiet correctly or has gone deaf.
     [HttpGet("ledger")]
     public async Task<IActionResult> GetLedger()
     {
@@ -39,9 +41,17 @@ public class AuditController(ISanRepository repo) : ControllerBase
         var entries = await repo.GetLedgerAsync();
         return Ok(entries.Select(e => new
         {
-            e.Key, e.Severity, e.Source, e.NotifyCount, e.LastMessage,
-            e.FirstSeenAt, e.LastNotifiedAt, e.DueOn,
+            e.Key, e.Severity, e.Source, e.NotifyCount, e.SeenCount, e.LastMessage,
+            e.FirstSeenAt, e.LastSeenAt, e.LastNotifiedAt, e.DueOn,
+            silentSightings = Math.Max(e.SeenCount - e.NotifyCount, 0),
             nextEligibleAt = e.LastNotifiedAt + NotifyPolicy.Cooldown(e.Severity, e.NotifyCount, e.DueOn, now),
+            knowledge = new
+            {
+                at = e.KnowledgeAt == default ? (DateTime?)null : e.KnowledgeAt,
+                message = e.KnowledgeMessage,
+                // True means San's brain has never been given this finding at all.
+                missing = string.IsNullOrWhiteSpace(e.KnowledgeMessage),
+            },
         }));
     }
 

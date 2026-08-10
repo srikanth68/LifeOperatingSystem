@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using San.Domain.Entities;
 
 namespace San.Application;
 
@@ -165,11 +166,106 @@ public static class TopicSignature
         return (double)shared / Math.Min(a.Count, b.Count);
     }
 
+    // Symmetric, unlike Similarity above — and that is the whole point. Overlap
+    // answers "are these the same topic", where a short description contained in a
+    // longer one SHOULD score 1.0. Jaccard answers "is this the same statement",
+    // where extra words are evidence of change, not of containment.
+    //
+    // "AMC bill due Aug 9" vs "AMC bill overdue, late fee applied" scores 1.00 on
+    // overlap (correct: still the AMC bill) and 0.33 on Jaccard (correct: it now
+    // says something new). Using overlap for both questions is what would let a
+    // finding silently get worse without NorthStar hearing about it.
+    public static double Jaccard(IReadOnlySet<string> a, IReadOnlySet<string> b)
+    {
+        if (a.Count == 0 && b.Count == 0) return 1;
+        if (a.Count == 0 || b.Count == 0) return 0;
+        var shared = a.Count <= b.Count ? a.Count(b.Contains) : b.Count(a.Contains);
+        return (double)shared / (a.Count + b.Count - shared);
+    }
+
     public const double SameTopicThreshold = 0.6;
 
     // Below this there isn't enough left after stripping to judge similarity on, so
     // we don't guess — the finding keeps its own key.
     public const int MinTokens = 2;
+}
+
+// Whether San's BRAIN needs this finding — a separate question from whether the
+// user needs a Telegram message about it, and deliberately not tied to it.
+//
+// The two were the same decision until now: NorthStar was written to only when a
+// notification actually went out. A finding's first sighting always notifies (there
+// is no ledger row yet to suppress against), so first sightings did reach NorthStar
+// — but every LATER version was dropped whole while inside the cooldown. A bill
+// that went from "due Friday" to "overdue, late fee applied", or a medium that
+// escalated to critical, changed nothing in the brain: San would still answer from
+// the original wording, for as long as the cooldown ran.
+//
+// NorthStar's /api/ingest appends — it does not upsert — so this has to be a real
+// gate and not just "write every time we see it", or one recurring bill becomes 96
+// knowledge rows a day.
+public static class KnowledgePolicy
+{
+    // Rewording alone shouldn't count as news, but the tokenizer is stemless
+    // ("aug" and "august" are different tokens), so identical statements can score
+    // well below 1.0. Kept at a half-match, with the time floor below as the real
+    // backstop against churn.
+    public const double SameStatementThreshold = 0.5;
+
+    private static TimeSpan MinRefresh => TimeSpan.FromHours(
+        double.TryParse(Environment.GetEnvironmentVariable("KNOWLEDGE_REFRESH_MIN_HOURS"), out var h) && h > 0
+            ? h : 6);
+
+    public static int Rank(string severity) => severity switch
+    {
+        "critical" => 3,
+        "high" => 2,
+        "medium" => 1,
+        _ => 0,
+    };
+
+    // `reason` is non-empty only when the answer is true, and is logged so a quiet
+    // ledger can be told apart from a broken one.
+    public static bool ShouldRecord(AgentFinding f, NotificationLedgerEntry? entry, DateTime nowUtc, out string reason)
+    {
+        if (entry is null)
+        {
+            reason = "new topic";
+            return true;
+        }
+
+        // Escalation is news even mid-cooldown, and jumps the time floor.
+        if (Rank(f.Severity) > Rank(entry.Severity))
+        {
+            reason = $"severity {entry.Severity} → {f.Severity}";
+            return true;
+        }
+
+        // Ledger rows written before this existed carry no knowledge stamp; the
+        // brain may genuinely never have heard about them.
+        if (string.IsNullOrWhiteSpace(entry.KnowledgeMessage) || entry.KnowledgeAt == default)
+        {
+            reason = "never recorded";
+            return true;
+        }
+
+        if (nowUtc - entry.KnowledgeAt < MinRefresh)
+        {
+            reason = "";
+            return false;
+        }
+
+        var score = TopicSignature.Jaccard(
+            TopicSignature.Tokens(f.Message), TopicSignature.Tokens(entry.KnowledgeMessage));
+        if (score < SameStatementThreshold)
+        {
+            reason = $"content changed ({score:P0} match)";
+            return true;
+        }
+
+        reason = "";
+        return false;
+    }
 }
 
 // How often a still-true finding may be repeated. Not "once ever" — a bill that is

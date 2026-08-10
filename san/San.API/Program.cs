@@ -103,48 +103,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<SanDbContext>();
-    await db.Database.EnsureCreatedAsync();
-    await db.Database.ExecuteSqlRawAsync("""
-        CREATE TABLE IF NOT EXISTS People (
-            Id TEXT PRIMARY KEY,
-            Name TEXT NOT NULL DEFAULT '',
-            Phone TEXT,
-            Email TEXT,
-            Birthday TEXT,
-            Relationship TEXT NOT NULL DEFAULT 'other',
-            Notes TEXT,
-            Tags TEXT,
-            CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00',
-            UpdatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
-        );
-        CREATE INDEX IF NOT EXISTS IX_People_Name ON People(Name);
-        CREATE INDEX IF NOT EXISTS IX_People_Birthday ON People(Birthday);
-        CREATE TABLE IF NOT EXISTS Settings (
-            Key TEXT PRIMARY KEY,
-            Value TEXT NOT NULL DEFAULT ''
-        );
-        CREATE TABLE IF NOT EXISTS EmailAccounts (
-            Id TEXT PRIMARY KEY,
-            Provider TEXT NOT NULL,
-            EmailAddress TEXT NOT NULL,
-            TokenJson TEXT NOT NULL DEFAULT '',
-            Active INTEGER NOT NULL DEFAULT 1,
-            LastCheckedAt TEXT,
-            CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
-        );
-        CREATE UNIQUE INDEX IF NOT EXISTS IX_EmailAccounts_Provider_Email ON EmailAccounts(Provider, EmailAddress);
-        CREATE TABLE IF NOT EXISTS NotificationLedger (
-            Key TEXT PRIMARY KEY,
-            Severity TEXT NOT NULL DEFAULT 'medium',
-            LastMessage TEXT NOT NULL DEFAULT '',
-            Source TEXT NOT NULL DEFAULT '',
-            NotifyCount INTEGER NOT NULL DEFAULT 0,
-            FirstSeenAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00',
-            LastNotifiedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00',
-            DueOn TEXT
-        );
-        CREATE INDEX IF NOT EXISTS IX_NotificationLedger_LastNotifiedAt ON NotificationLedger(LastNotifiedAt);
-        """);
+    await SanSchema.EnsureAsync(db);
 }
 
 app.UseCors();

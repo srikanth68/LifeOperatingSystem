@@ -33,6 +33,28 @@ Thumbs.db
 # FUSE filesystem leftovers (deleted-but-open file copies, not source)
 .fuse_hidden*
 
+# ── Xcode (ios/) ──
+# Per-user state — window layout, breakpoints, last-opened file, the sidebar
+# scroll position. Rewritten every time the project is opened, so tracking it
+# means a dirty tree after merely looking at the app. The SHARED scheme lives in
+# xcshareddata/ and is deliberately NOT ignored: without it a fresh clone opens
+# with no run target.
+**/xcuserdata/
+ios/**/DerivedData/
+ios/**/build/
+*.xcuserstate
+*.moved-aside
+*.hmap
+
+# Xcode build products / debug symbols
+*.ipa
+*.dSYM
+*.dSYM.zip
+
+# Swift Package Manager per-checkout state (Package.resolved IS tracked)
+.swiftpm/xcode/package.xcworkspace/xcuserdata/
+ios/**/.build/
+
 # Third-party MCP clone (has its own git repo; add as a submodule if needed)
 mfp-mcp/
 .aidesigner/*

@@ -97,7 +97,9 @@ var host = builder.Build();
 using (var scope = host.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<SanDbContext>();
-    await db.Database.EnsureCreatedAsync();
+    // Same patch set as San.API — the worker must not depend on the API container
+    // having started first to find its own columns.
+    await SanSchema.EnsureAsync(db);
 }
 
 await host.RunAsync();

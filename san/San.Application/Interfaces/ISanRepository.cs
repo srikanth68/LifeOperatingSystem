@@ -53,7 +53,7 @@ public interface ISanRepository
     // recently" backing for the audit/triage workers.
     Task<List<NotificationLedgerEntry>> GetLedgerAsync();
     Task<NotificationLedgerEntry?> GetLedgerEntryAsync(string key);
-    Task RecordNotificationAsync(NotificationLedgerEntry entry);
+    Task RecordSightingAsync(NotificationLedgerEntry entry, bool notified, bool recordedKnowledge);
     Task ClearLedgerAsync();
 
     // Email accounts (triage worker)
