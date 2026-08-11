@@ -78,7 +78,12 @@ public class GoogleGmailClient : IEmailProviderClient
         {
             var getReq = service.Users.Messages.Get("me", m.Id);
             getReq.Format = UsersResource.MessagesResource.GetRequest.FormatEnum.Metadata;
-            getReq.MetadataHeaders = new Repeatable<string>(["From", "Subject"]);
+            // The extra headers are what let bulk mail be recognised deterministically
+            // instead of being described to a model that will not reliably act on it.
+            // Costs nothing — the metadata fetch happens either way.
+            getReq.MetadataHeaders = new Repeatable<string>(
+                ["From", "Subject", "List-Unsubscribe", "List-Id", "List-Post", "List-Help",
+                 "Precedence", "Auto-Submitted", "X-Campaign-Id", "Feedback-ID"]);
             var full = await getReq.ExecuteAsync();
 
             var receivedAt = full.InternalDate is { } ms
@@ -89,7 +94,20 @@ public class GoogleGmailClient : IEmailProviderClient
             var headers = full.Payload?.Headers ?? [];
             var from = headers.FirstOrDefault(h => h.Name == "From")?.Value ?? "(unknown sender)";
             var subject = headers.FirstOrDefault(h => h.Name == "Subject")?.Value ?? "(no subject)";
-            messages.Add(new EmailMessage(from, subject, full.Snippet ?? "", receivedAt));
+
+            // Lower-cased keys: header names are case-insensitive per RFC 5322, and the
+            // filter should not have to guess how a given sender capitalised them.
+            var headerMap = headers
+                .Where(h => !string.IsNullOrEmpty(h.Name))
+                .GroupBy(h => h.Name!.ToLowerInvariant())
+                .ToDictionary(g => g.Key, g => g.First().Value ?? "");
+
+            messages.Add(new EmailMessage(
+                from, subject, full.Snippet ?? "", receivedAt,
+                headerMap,
+                // Gmail's own CATEGORY_* classification, which is better than anything
+                // worth rebuilding here.
+                full.LabelIds?.ToList() ?? []));
         }
 
         // Refresh tokens rotate on some flows — always persist whatever credential.Token

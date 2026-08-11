@@ -46,6 +46,11 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
             var accounts = (await repo.GetEmailAccountsAsync()).Where(a => a.Active).ToList();
             if (accounts.Count == 0) return;
 
+            // Read once per run, not per message. Editable in Settings so a sender that
+            // keeps being filtered wrongly can be fixed without a rebuild.
+            var keepSenders = await repo.GetSettingAsync(EmailFilter.KeepSendersKey);
+            var dropSenders = await repo.GetSettingAsync(EmailFilter.DropSendersKey);
+
             var runStartedAt = DateTime.UtcNow;
             var batch = new List<string>();
 
@@ -71,9 +76,26 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
 
                     if (messages.Count == 0) continue;
 
-                    logger.LogInformation("{Count} new message(s) in {Email}", messages.Count, account.EmailAddress);
+                    // Bulk mail is removed here rather than being described to the model
+                    // and hoped about. Every drop is logged with its reason: a filter
+                    // that silently ate a real bill would be worse than the spam it
+                    // prevents, so it must always be possible to see what it took.
+                    var kept = 0;
                     foreach (var m in messages)
+                    {
+                        var verdict = EmailFilter.Classify(m, keepSenders, dropSenders);
+                        if (!verdict.Keep)
+                        {
+                            logger.LogInformation("Filtered out \"{Subject}\" from {From} — {Reason}.",
+                                Trim(m.Subject), Trim(m.From), verdict.Reason);
+                            continue;
+                        }
+                        kept++;
                         batch.Add($"[{account.EmailAddress}] From: {m.From} | Subject: {m.Subject} | Received: {m.ReceivedAtUtc:u}\n{m.Snippet}");
+                    }
+
+                    logger.LogInformation("{Kept} of {Count} new message(s) in {Email} reached triage.",
+                        kept, messages.Count, account.EmailAddress);
                 }
                 catch (Exception ex)
                 {
@@ -121,4 +143,9 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
             catch { /* the run already failed; bookkeeping must not mask it */ }
         }
     }
+
+    // Log lines only — a 200-character marketing subject should not make the filter's
+    // decisions unreadable in the logs.
+    private static string Trim(string? s) =>
+        string.IsNullOrEmpty(s) ? "(none)" : s.Length > 70 ? s[..70] + "…" : s;
 }
