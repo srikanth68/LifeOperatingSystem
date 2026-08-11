@@ -15,6 +15,8 @@ public record EmailAccountProbe(
 
 public record HealthProbes(
     McpProbe Mcp,
+    // null when it could not be determined — which must never be reported as insecure.
+    bool? McpSecured,
     ServiceProbe Llm,
     IReadOnlyList<ServiceProbe> Modules,
     bool TelegramConfigured,
@@ -45,6 +47,7 @@ public static class HealthProblemKeys
     public const string Prefix = "health.";
 
     public static string Mcp => Prefix + "mcp";
+    public static string McpUnsecured => Prefix + "mcp.unsecured";
     public static string Llm => Prefix + "llm";
     public static string Module(string name) => Prefix + "module." + name;
     public static string Component(string component) => Prefix + "component." + component;

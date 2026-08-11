@@ -42,13 +42,15 @@ public class HealthProbe(
         // hangs because a dependency hangs is worse than none, since it fails exactly
         // when you most need an answer.
         var mcpTask = ProbeMcpAsync(ct);
+        var mcpSecuredTask = ProbeMcpSecuredAsync(ct);
         var modulesTask = ProbeModulesAsync(ct);
         var llmTask = ProbeLlmAsync(ct);
         var emailTask = ProbeEmailAsync();
         var observedTask = health.ReadAllAsync(ct);
-        await Task.WhenAll(mcpTask, modulesTask, llmTask, emailTask, observedTask);
+        await Task.WhenAll(mcpTask, mcpSecuredTask, modulesTask, llmTask, emailTask, observedTask);
 
         var mcpResult = await mcpTask;
+        var mcpSecured = await mcpSecuredTask;
         var llm = await llmTask;
         var modules = await modulesTask;
         var (accountCount, accounts) = await emailTask;
@@ -62,6 +64,10 @@ public class HealthProbe(
         else if (mcpResult.ToolCount <= BuiltInToolCount)
             problems.Add(new(HealthProblemKeys.Mcp, "high",
                 $"MCP is serving only {mcpResult.ToolCount} tools instead of the full catalogue."));
+
+        if (mcpSecured is false)
+            problems.Add(new(HealthProblemKeys.McpUnsecured, "critical",
+                "The MCP gateway is running with no API key — every tool that can write to your modules is open to anything on the mesh."));
 
         if (!llm.Ok)
             problems.Add(new(HealthProblemKeys.Llm, "critical",
@@ -86,7 +92,7 @@ public class HealthProbe(
 
         return new HealthReport(
             problems.Count == 0, problems, sw.ElapsedMilliseconds,
-            new HealthProbes(mcpResult, llm, modules, telegram.IsConfigured, accountCount, accounts),
+            new HealthProbes(mcpResult, mcpSecured, llm, modules, telegram.IsConfigured, accountCount, accounts),
             observed);
     }
 
@@ -102,6 +108,35 @@ public class HealthProbe(
         catch (Exception ex)
         {
             return new McpProbe(false, 0, ex.GetBaseException().Message);
+        }
+    }
+
+    // The gateway's own /health reports whether its API key is configured. It is
+    // unauthenticated by design (that is what makes it a probe target), and it is the
+    // only way to notice from outside that the gateway is running without a key —
+    // which, before it started refusing, meant ~41 write-capable tools open to anything
+    // on the mesh. Returns null when it cannot be determined, which must not be
+    // reported as insecure.
+    private async Task<bool?> ProbeMcpSecuredAsync(CancellationToken ct)
+    {
+        var baseUrl = (Environment.GetEnvironmentVariable("MCP_BASE_URL") ?? "http://mcp:5900").TrimEnd('/');
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(ProbeTimeout);
+        try
+        {
+            using var http = new HttpClient();
+            using var resp = await http.GetAsync($"{baseUrl}/health", cts.Token);
+            if (!resp.IsSuccessStatusCode) return null;
+
+            using var doc = System.Text.Json.JsonDocument.Parse(await resp.Content.ReadAsStringAsync(cts.Token));
+            return doc.RootElement.TryGetProperty("secured", out var s)
+                   && s.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False
+                ? s.GetBoolean()
+                : null;
+        }
+        catch
+        {
+            return null;
         }
     }
 
