@@ -43,6 +43,11 @@ public class SystemAuditWorker(IServiceProvider services, ILogger<SystemAuditWor
 
     private async Task RunAsync(CancellationToken ct)
     {
+        // Its own scope and its own try: the self-check has to survive everything below
+        // it failing. Running it inside the main block would mean an unreachable LLM
+        // took down the audit run before it ever got to report the unreachable LLM.
+        await SelfCheckAsync(ct);
+
         try
         {
             using var scope = services.CreateScope();
@@ -98,6 +103,26 @@ public class SystemAuditWorker(IServiceProvider services, ILogger<SystemAuditWor
                     .RecordAsync(HealthComponents.WorkerAudit, false, ex.Message, ct);
             }
             catch { /* the run already failed; bookkeeping must not mask it */ }
+        }
+    }
+
+    private async Task SelfCheckAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var scope = services.CreateScope();
+            await SelfCheck.RunAsync(
+                scope.ServiceProvider.GetRequiredService<IHealthProbe>(),
+                scope.ServiceProvider.GetRequiredService<ISanRepository>(),
+                scope.ServiceProvider.GetRequiredService<ITelegramNotifier>(),
+                scope.ServiceProvider.GetRequiredService<IModuleContextService>(),
+                logger, ct);
+        }
+        catch (Exception ex)
+        {
+            // Nothing to escalate to — this IS the escalation path. Log and let the
+            // audit proceed; a failed self-check must never cost the real audit run.
+            logger.LogError(ex, "Self-check failed");
         }
     }
 }

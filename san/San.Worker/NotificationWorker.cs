@@ -27,6 +27,9 @@ public class NotificationWorker(IServiceProvider services, ILogger<NotificationW
 
     private async Task CheckAsync(CancellationToken ct)
     {
+        // See CalendarSyncWorker: recorded in a finally so the early "Telegram not
+        // configured" return still marks the timer alive.
+        string? error = null;
         try
         {
             using var scope = services.CreateScope();
@@ -86,6 +89,17 @@ public class NotificationWorker(IServiceProvider services, ILogger<NotificationW
         catch (Exception ex)
         {
             logger.LogError(ex, "Notification check failed");
+            error = ex.Message;
+        }
+        finally
+        {
+            try
+            {
+                using var scope = services.CreateScope();
+                await scope.ServiceProvider.GetRequiredService<IHealthTracker>()
+                    .RecordAsync(HealthComponents.WorkerNotifications, error is null, error, ct);
+            }
+            catch { /* bookkeeping must never be why a check is considered failed */ }
         }
     }
 }
