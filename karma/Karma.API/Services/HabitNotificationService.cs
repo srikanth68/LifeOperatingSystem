@@ -1,3 +1,4 @@
+using Karma.Application;
 using Karma.Application.Interfaces;
 
 namespace Karma.API.Services;
@@ -27,20 +28,26 @@ public class HabitNotificationService(IServiceProvider sp, ILogger<HabitNotifica
 
         var now = DateTime.Now;
         var today = DateOnly.FromDateTime(now);
-        var currentTime = $"{now.Hour:D2}:{now.Minute:D2}";
-        var dayOfWeek = (int)now.DayOfWeek;
 
         var habits = await repo.GetHabitsAsync(activeOnly: true);
         foreach (var habit in habits)
         {
-            if (habit.NotifyTime != currentTime) continue;
-            if (!habit.NotifyDays.Contains(dayOfWeek)) continue;
-            if (habit.LastNotificationSentOn == today) continue;
+            if (!HabitSchedule.IsDue(habit, now)) continue;
 
             var msg = habit.NotifyMessage ?? $"{habit.Emoji} <b>{habit.Name}</b> — time to check in!";
             await sender.SendAsync(msg, habit.NotifyChannel, ct);
+            // Marked BEFORE anything else can throw on the next iteration, and marked
+            // even though the send already succeeded, so a failure further down the
+            // list can never resend this one.
             await repo.MarkHabitNotifiedAsync(habit.Id, today);
-            log.LogInformation("Sent habit notification: {Habit}", habit.Name);
+
+            var late = HabitSchedule.TryParseNotifyTime(habit.NotifyTime, out var at)
+                ? now - now.Date.Add(at) : TimeSpan.Zero;
+            if (late > TimeSpan.FromMinutes(1))
+                log.LogWarning("Sent habit notification {Habit} {Minutes:F0}m late — recovered a reminder that would previously have been lost for the day.",
+                    habit.Name, late.TotalMinutes);
+            else
+                log.LogInformation("Sent habit notification: {Habit}", habit.Name);
         }
     }
 }
