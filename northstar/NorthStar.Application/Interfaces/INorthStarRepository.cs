@@ -6,7 +6,8 @@ public interface INorthStarRepository
 {
     // Knowledge
     Task<KnowledgeEntry> AddEntryAsync(KnowledgeEntry entry);
-    Task<KnowledgeEntry> UpsertDailyEntryAsync(string source, string topic, string summary, string rawJson, DateOnly day);
+    Task<(KnowledgeEntry Entry, bool Created)> UpsertDailyEntryAsync(
+        string source, string topic, string summary, string? rawJson, DateOnly day);
     Task<List<KnowledgeEntry>> GetEntriesAsync(string? source = null, string? topic = null, int days = 30, int limit = 200);
     Task<KnowledgeEntry?> GetEntryAsync(Guid id);
     Task<List<KnowledgeEntry>> SearchAsync(string query, int limit = 50);

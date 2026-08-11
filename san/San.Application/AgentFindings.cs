@@ -201,9 +201,11 @@ public static class TopicSignature
 // escalated to critical, changed nothing in the brain: San would still answer from
 // the original wording, for as long as the cooldown ran.
 //
-// NorthStar's /api/ingest appends — it does not upsert — so this has to be a real
-// gate and not just "write every time we see it", or one recurring bill becomes 96
-// knowledge rows a day.
+// NorthStar's /api/ingest upserts on (source, topic, day) when a day is supplied,
+// and these writes supply one — so a repeated finding rewrites the day's row rather
+// than piling up. That makes this gate a rate limit rather than the thing standing
+// between the brain and 96 near-identical rows a day, which is why the floor is
+// hours and not something more defensive.
 public static class KnowledgePolicy
 {
     // Rewording alone shouldn't count as news, but the tokenizer is stemless
@@ -212,9 +214,14 @@ public static class KnowledgePolicy
     // backstop against churn.
     public const double SameStatementThreshold = 0.5;
 
+    // Upserting ingest means a refresh costs an UPDATE, not a new row, so this is
+    // tuned for how current the brain should be rather than for how much it can hold.
+    // It is not zero because the upsert also bumps CreatedAt, and a finding that
+    // rewrote itself every 15 minutes would sit permanently at the top of NorthStar's
+    // timeline as if something had just happened.
     private static TimeSpan MinRefresh => TimeSpan.FromHours(
         double.TryParse(Environment.GetEnvironmentVariable("KNOWLEDGE_REFRESH_MIN_HOURS"), out var h) && h > 0
-            ? h : 6);
+            ? h : 2);
 
     public static int Rank(string severity) => severity switch
     {
