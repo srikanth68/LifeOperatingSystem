@@ -2,7 +2,17 @@ using San.Domain.Entities;
 
 namespace San.Application.Interfaces;
 
-public record EmailMessage(string From, string Subject, string Snippet, DateTime ReceivedAtUtc);
+// Headers and Labels are optional so a provider that cannot supply them still works —
+// EmailFilter treats their absence as "no bulk signal", i.e. keep, which is the safe
+// direction to fail in. Header keys are LOWERCASE by convention; the filter looks them
+// up that way.
+public record EmailMessage(
+    string From,
+    string Subject,
+    string Snippet,
+    DateTime ReceivedAtUtc,
+    IReadOnlyDictionary<string, string>? Headers = null,
+    IReadOnlyList<string>? Labels = null);
 
 // One implementation per provider (google, microsoft). San.API resolves the right one by
 // Provider key when starting/completing an OAuth connection; San.Worker's EmailTriageWorker
