@@ -81,10 +81,23 @@ public class SystemAuditWorker(IServiceProvider services, ILogger<SystemAuditWor
             // Suppression lives in the ledger now, not in the model's memory of what it
             // last said — see FindingDispatcher.
             await FindingDispatcher.DispatchAsync(reply, "audit", repo, telegram, moduleContext, logger, ct);
+
+            // Marks the timer alive, not the findings useful. A run that reports nothing
+            // is a healthy run; a worker whose timer died reports nothing too, and
+            // without this the two are indistinguishable.
+            var health = scope.ServiceProvider.GetRequiredService<IHealthTracker>();
+            await health.RecordAsync(HealthComponents.WorkerAudit, true, ct: ct);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "System audit run failed");
+            try
+            {
+                using var scope = services.CreateScope();
+                await scope.ServiceProvider.GetRequiredService<IHealthTracker>()
+                    .RecordAsync(HealthComponents.WorkerAudit, false, ex.Message, ct);
+            }
+            catch { /* the run already failed; bookkeeping must not mask it */ }
         }
     }
 }

@@ -5,6 +5,7 @@ using San.Infrastructure.Agent;
 using San.Infrastructure.Chat;
 using San.Infrastructure.Context;
 using San.Infrastructure.Data;
+using San.Infrastructure.Health;
 using San.Infrastructure.Google;
 using San.Infrastructure.Llm;
 using San.Infrastructure.ModuleClients;
@@ -41,6 +42,7 @@ builder.Services.AddMaayaAuth();
 builder.Services.AddDbContext<SanDbContext>(o =>
     o.UseSqlite($"Data Source={Path.Combine(Directory.GetCurrentDirectory(), "..", "san.db")}"));
 builder.Services.AddScoped<ISanRepository, SanRepository>();
+builder.Services.AddScoped<IHealthTracker, HealthTracker>();
 builder.Services.AddScoped<IModuleContextService, ModuleContextService>();
 builder.Services.AddScoped<IChatActionService, ChatActionService>();
 builder.Services.AddSingleton<IGoogleCalendarService, GoogleCalendarService>();

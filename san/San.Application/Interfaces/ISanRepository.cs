@@ -48,6 +48,7 @@ public interface ISanRepository
     // Settings (key-value)
     Task<string?> GetSettingAsync(string key);
     Task SetSettingAsync(string key, string value);
+    Task<IReadOnlyList<KeyValuePair<string, string>>> GetSettingsByPrefixAsync(string prefix);
 
     // Notification ledger — deterministic "have we already said this, and how
     // recently" backing for the audit/triage workers.

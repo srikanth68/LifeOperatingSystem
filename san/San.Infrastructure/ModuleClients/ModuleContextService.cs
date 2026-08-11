@@ -17,7 +17,7 @@ namespace San.Infrastructure.ModuleClients;
 // Every sibling module enforces Maaya's global JWT auth policy, so these calls MUST carry a
 // Bearer token. San mints its own service token via the shared TokenService (same JWT_SECRET
 // across all modules), which validates everywhere.
-public class ModuleContextService(IHttpClientFactory httpFactory, TokenService tokens) : IModuleContextService
+public class ModuleContextService(IHttpClientFactory httpFactory, TokenService tokens, IHealthTracker health) : IModuleContextService
 {
     private string ServiceToken() => tokens.GenerateAccessToken("san-service", "san");
     public async Task<string> BuildChatContextAsync(CancellationToken ct = default)
@@ -310,47 +310,44 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
         return lines.Count == 0 ? null : string.Join("\n", lines);
     }
 
-    public async Task SaveMemoryAsync(string content, string kind, int importance, CancellationToken ct = default)
-    {
-        try
-        {
-            var http = httpFactory.CreateClient("northstar");
-            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/memory")
-            {
-                Content = new StringContent(
-                    JsonSerializer.Serialize(new { content, kind, importance, source = "san" }),
-                    Encoding.UTF8, "application/json"),
-            };
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ServiceToken());
-            using var resp = await http.SendAsync(req, ct);
-            // Best-effort: a failed save must never break the chat/worker flow.
-        }
-        catch { /* NorthStar unreachable — skip this memory */ }
-    }
+    public Task SaveMemoryAsync(string content, string kind, int importance, CancellationToken ct = default) =>
+        PostToBrainAsync(
+            "/api/memory",
+            new { content, kind, importance, source = "san" },
+            HealthComponents.NorthStarWrite, ct);
 
-    public async Task SaveKnowledgeAsync(string source, string topic, string summary, CancellationToken ct = default)
+    public Task SaveKnowledgeAsync(string source, string topic, string summary, CancellationToken ct = default) =>
+        PostToBrainAsync(
+            "/api/ingest",
+            new { source, topic, summary, day = DateTime.UtcNow.ToString("yyyy-MM-dd") },
+            HealthComponents.NorthStarWrite, ct);
+
+    // Writes to NorthStar stay best-effort — losing one must never take down the chat
+    // turn or worker run that produced it — but they are no longer SILENT. Both of
+    // these used to swallow the exception and, worse, ignore the response status
+    // entirely: a 401 from an expired service token counted as a successful save. San
+    // would go on believing it had a brain while everything it learned went nowhere.
+    private async Task PostToBrainAsync(string path, object payload, string component, CancellationToken ct)
     {
         try
         {
             var http = httpFactory.CreateClient("northstar");
-            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/ingest")
+            using var req = new HttpRequestMessage(HttpMethod.Post, path)
             {
-                Content = new StringContent(
-                    JsonSerializer.Serialize(new
-                    {
-                        source,
-                        topic,
-                        summary,
-                        day = DateTime.UtcNow.ToString("yyyy-MM-dd"),
-                    }),
-                    Encoding.UTF8, "application/json"),
+                Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"),
             };
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ServiceToken());
             using var resp = await http.SendAsync(req, ct);
-            // Best-effort, same as SaveMemoryAsync — losing a knowledge entry must
-            // never take down the worker that produced it.
+
+            if (resp.IsSuccessStatusCode)
+                await health.RecordAsync(component, true, ct: ct);
+            else
+                await health.RecordAsync(component, false, $"HTTP {(int)resp.StatusCode} from {path}", ct);
         }
-        catch { /* NorthStar unreachable — skip this entry */ }
+        catch (Exception ex)
+        {
+            await health.RecordAsync(component, false, ex.Message, ct);
+        }
     }
 
     private async Task<JsonElement?> TryGetJsonAsync(string client, string path, CancellationToken ct)

@@ -225,6 +225,11 @@ public class SanRepository(SanDbContext db) : ISanRepository
         await db.SaveChangesAsync();
     }
 
+    public async Task<IReadOnlyList<KeyValuePair<string, string>>> GetSettingsByPrefixAsync(string prefix) =>
+        (await db.Settings.Where(s => s.Key.StartsWith(prefix)).ToListAsync())
+            .Select(s => new KeyValuePair<string, string>(s.Key, s.Value))
+            .ToList();
+
     // ── Notification ledger ──
     // By last SEEN, not last notified: a row can now sit unnotified for days while
     // still being observed every 15 minutes, and those are exactly the rows worth
