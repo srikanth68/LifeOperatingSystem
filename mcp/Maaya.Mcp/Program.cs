@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using Maaya.Auth;
@@ -24,10 +25,28 @@ var apiKey = Environment.GetEnvironmentVariable("MCP_API_KEY");
 var bind = Environment.GetEnvironmentVariable("MCP_BIND") ?? "http://localhost:5900";
 
 // Security invariant: never expose the gateway beyond localhost without a key.
-var localOnly = bind.Contains("localhost") || bind.Contains("127.0.0.1");
+//
+// Decided by parsing the bind URL, not by searching it for a substring. The old
+// `bind.Contains("localhost")` test called http://127.0.0.1.attacker.example local,
+// and would have called any future host containing that text local too — a security
+// decision resting on string matching is one rename away from being wrong.
+var localOnly = IsLoopbackBind(bind);
 if (!localOnly && string.IsNullOrWhiteSpace(apiKey))
     throw new InvalidOperationException(
         "MCP_API_KEY is required when MCP_BIND is not localhost (the gateway would be open to the whole network/Meshnet).");
+
+static bool IsLoopbackBind(string bind)
+{
+    // ASP.NET wildcard binds (http://+:5900, http://*:5900) are not valid URIs but
+    // ARE network-exposed, so anything unparseable is treated as exposed.
+    var hostPart = bind;
+    if (Uri.TryCreate(bind, UriKind.Absolute, out var uri)) hostPart = uri.Host;
+    else return false;
+
+    if (hostPart is "+" or "*" or "0.0.0.0" or "[::]" or "::") return false;
+    if (string.Equals(hostPart, "localhost", StringComparison.OrdinalIgnoreCase)) return true;
+    return IPAddress.TryParse(hostPart.Trim('[', ']'), out var ip) && IPAddress.IsLoopback(ip);
+}
 
 // Service JWT minting for downstream module calls (same shared-secret trust as all modules).
 builder.Services.AddSingleton(new JwtConfig { Secret = jwtSecret });
@@ -63,12 +82,29 @@ builder.Services.AddMcpServer()
 var app = builder.Build();
 
 // API-key gate (constant-time compare). /health stays open for probes.
-if (!string.IsNullOrWhiteSpace(apiKey))
+//
+// Installed UNCONDITIONALLY. It used to be wrapped in `if (apiKey is set)`, so a
+// missing key skipped the middleware entirely and every tool was served
+// unauthenticated. The startup check above already refuses a keyless non-loopback
+// bind, so that was only reachable on a loopback bind — but "the door is unlocked
+// whenever we forgot to fit a lock" is the wrong shape for a gateway whose ~41 tools
+// can write to every module. Now a missing key denies instead of allows, and the two
+// defences are independent: neither one silently depends on the other being correct.
 {
-    var keyBytes = Encoding.UTF8.GetBytes(apiKey);
+    var keyBytes = string.IsNullOrWhiteSpace(apiKey) ? null : Encoding.UTF8.GetBytes(apiKey);
     app.Use(async (ctx, next) =>
     {
         if (ctx.Request.Path.StartsWithSegments("/health")) { await next(); return; }
+
+        if (keyBytes is null)
+        {
+            ctx.Response.StatusCode = 503;
+            await ctx.Response.WriteAsJsonAsync(new
+            {
+                error = "MCP_API_KEY is not configured — the gateway refuses to serve tools unauthenticated.",
+            });
+            return;
+        }
 
         var presented = ctx.Request.Headers["X-API-Key"].ToString();
         if (string.IsNullOrEmpty(presented))
