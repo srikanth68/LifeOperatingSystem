@@ -22,6 +22,10 @@ public class CalendarSyncWorker(IServiceProvider services, ILogger<CalendarSyncW
 
     private async Task SyncAsync(CancellationToken ct)
     {
+        // Recorded in a finally so the early "not configured" return still counts as a
+        // completed run. The heartbeat measures whether the TIMER is alive, not whether
+        // there was anything to do — an unconfigured calendar is not a stalled worker.
+        string? error = null;
         try
         {
             var google = services.GetRequiredService<IGoogleCalendarService>();
@@ -38,6 +42,17 @@ public class CalendarSyncWorker(IServiceProvider services, ILogger<CalendarSyncW
         catch (Exception ex)
         {
             logger.LogError(ex, "Calendar sync failed");
+            error = ex.Message;
+        }
+        finally
+        {
+            try
+            {
+                using var scope = services.CreateScope();
+                await scope.ServiceProvider.GetRequiredService<IHealthTracker>()
+                    .RecordAsync(HealthComponents.WorkerCalendarSync, error is null, error, ct);
+            }
+            catch { /* bookkeeping must never be why a sync is considered failed */ }
         }
     }
 }

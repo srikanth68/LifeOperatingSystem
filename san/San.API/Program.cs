@@ -43,6 +43,7 @@ builder.Services.AddDbContext<SanDbContext>(o =>
     o.UseSqlite($"Data Source={Path.Combine(Directory.GetCurrentDirectory(), "..", "san.db")}"));
 builder.Services.AddScoped<ISanRepository, SanRepository>();
 builder.Services.AddScoped<IHealthTracker, HealthTracker>();
+builder.Services.AddScoped<IHealthProbe, HealthProbe>();
 builder.Services.AddScoped<IModuleContextService, ModuleContextService>();
 builder.Services.AddScoped<IChatActionService, ChatActionService>();
 builder.Services.AddSingleton<IGoogleCalendarService, GoogleCalendarService>();

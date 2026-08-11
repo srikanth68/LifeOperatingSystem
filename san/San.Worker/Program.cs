@@ -28,6 +28,12 @@ var vaultUrl     = Environment.GetEnvironmentVariable("VAULT_API_URL")     ?? "h
 var vitaraUrl    = Environment.GetEnvironmentVariable("VITARA_API_URL")    ?? "http://localhost:5100";
 var aasthiUrl    = Environment.GetEnvironmentVariable("AASTHI_API_URL")    ?? "http://localhost:5200";
 var northstarUrl = Environment.GetEnvironmentVariable("NORTHSTAR_API_URL") ?? "http://localhost:5500";
+// The worker reads no context from these three, but its self-check probes the same
+// seven modules San.API does. Without them registered, CreateClient returns a client
+// with no BaseAddress and the probe reports a permanent outage that isn't real.
+var sutraUrl     = Environment.GetEnvironmentVariable("SUTRA_API_URL")     ?? "http://localhost:5400";
+var karmaUrl     = Environment.GetEnvironmentVariable("KARMA_API_URL")     ?? "http://localhost:5600";
+var nexusUrl     = Environment.GetEnvironmentVariable("NEXUS_API_URL")     ?? "http://localhost:5700";
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -38,6 +44,7 @@ builder.Services.AddDbContext<SanDbContext>(o =>
     o.UseSqlite($"Data Source={Path.Combine(Directory.GetCurrentDirectory(), "..", "san.db")}"));
 builder.Services.AddScoped<ISanRepository, SanRepository>();
 builder.Services.AddScoped<IHealthTracker, HealthTracker>();
+builder.Services.AddScoped<IHealthProbe, HealthProbe>();
 builder.Services.AddScoped<IModuleContextService, ModuleContextService>();
 builder.Services.AddHttpClient<ITelegramNotifier, TelegramNotifier>();
 
@@ -77,6 +84,9 @@ builder.Services.AddHttpClient("vault",     c => c.BaseAddress = new Uri(vaultUr
 builder.Services.AddHttpClient("vitara",    c => c.BaseAddress = new Uri(vitaraUrl));
 builder.Services.AddHttpClient("aasthi",    c => c.BaseAddress = new Uri(aasthiUrl));
 builder.Services.AddHttpClient("northstar", c => c.BaseAddress = new Uri(northstarUrl));
+builder.Services.AddHttpClient("sutra",     c => c.BaseAddress = new Uri(sutraUrl));
+builder.Services.AddHttpClient("karma",     c => c.BaseAddress = new Uri(karmaUrl));
+builder.Services.AddHttpClient("nexus",     c => c.BaseAddress = new Uri(nexusUrl));
 builder.Services.AddSingleton<IGoogleCalendarService, GoogleCalendarService>();
 builder.Services.AddScoped<IEmailProviderClient, GoogleGmailClient>();
 builder.Services.AddHttpClient<IEmailProviderClient, MicrosoftGraphClient>();

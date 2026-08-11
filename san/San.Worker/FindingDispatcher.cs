@@ -21,8 +21,24 @@ namespace San.Worker;
 // in an email and in the Vault snapshot notifies once, not twice.
 public static class FindingDispatcher
 {
-    public static async Task<int> DispatchAsync(
+    public static Task<int> DispatchAsync(
         string reply,
+        string source,
+        ISanRepository repo,
+        ITelegramNotifier telegram,
+        IModuleContextService moduleContext,
+        ILogger logger,
+        CancellationToken ct) =>
+        DispatchFindingsAsync(FindingParser.Parse(reply), source, repo, telegram, moduleContext, logger, ct);
+
+    // Takes findings directly, for callers that DERIVE them rather than parse them out
+    // of a model reply. San's own health checks come in this way: "San is running on
+    // built-in tools" is exactly the report you cannot ask a possibly-broken San to
+    // write for you, so it is computed deterministically and handed straight here —
+    // where it still gets the same keyed suppression, cooldown, escalation and
+    // NorthStar recording as everything else.
+    public static async Task<int> DispatchFindingsAsync(
+        IReadOnlyList<AgentFinding> findings,
         string source,
         ISanRepository repo,
         ITelegramNotifier telegram,
@@ -30,7 +46,6 @@ public static class FindingDispatcher
         ILogger logger,
         CancellationToken ct)
     {
-        var findings = FindingParser.Parse(reply);
         if (findings.Count == 0)
         {
             logger.LogInformation("{Source}: nothing to report.", source);
@@ -73,9 +88,8 @@ public static class FindingDispatcher
         if (due.Count > 0)
         {
             var body = string.Join("\n", due.Select(s => $"{Icon(s.Finding.Severity)} {s.Finding.Message}"));
-            var header = source == "audit" ? "🔎 System audit" : "📬 Email triage";
             if (telegram.IsConfigured)
-                await telegram.SendAsync($"{header}:\n{body}", ct);
+                await telegram.SendAsync($"{Header(source)}:\n{body}", ct);
         }
 
         // Per finding, not one blob of the batch: NorthStar keys knowledge by topic,
@@ -148,6 +162,16 @@ public static class FindingDispatcher
 
         return (f.Key, null, false);
     }
+
+    // Health problems say so up front — "San is degraded" and "your bill is overdue"
+    // want very different reactions, and the icons alone don't carry that.
+    private static string Header(string source) => source switch
+    {
+        "audit" => "🔎 System audit",
+        "email" => "📬 Email triage",
+        "health" => "🩺 San self-check",
+        _ => "🔎 San",
+    };
 
     private static string Icon(string severity) => severity switch
     {
