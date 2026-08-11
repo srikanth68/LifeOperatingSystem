@@ -33,8 +33,16 @@ public class MemoryDistillationWorker(IServiceProvider services, ILogger<MemoryD
         using var timer = new PeriodicTimer(Interval);
         do
         {
-            try { await DistillAsync(ct); }
-            catch (Exception ex) { logger.LogError(ex, "Memory distillation pass failed"); }
+            try
+            {
+                await DistillAsync(ct);
+                await RecordAsync(true, null, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Memory distillation pass failed");
+                await RecordAsync(false, ex.Message, ct);
+            }
         } while (await timer.WaitForNextTickAsync(ct));
     }
 
@@ -79,5 +87,18 @@ public class MemoryDistillationWorker(IServiceProvider services, ILogger<MemoryD
             saved++;
         }
         if (saved > 0) logger.LogInformation("Distilled {n} memory(ies) into NorthStar from recent chat.", saved);
+    }
+
+    // A pass that found nothing to distill still counts as a completed pass — this
+    // marks the timer alive, not the output useful.
+    private async Task RecordAsync(bool ok, string? error, CancellationToken ct)
+    {
+        try
+        {
+            using var scope = services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<IHealthTracker>()
+                .RecordAsync(HealthComponents.WorkerMemoryDistillation, ok, error, ct);
+        }
+        catch { /* bookkeeping must never be why a pass is considered failed */ }
     }
 }

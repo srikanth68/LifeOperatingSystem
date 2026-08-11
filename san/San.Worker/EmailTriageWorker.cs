@@ -81,6 +81,12 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
                 }
             }
 
+            // Before the empty-batch exit: fetching every mailbox and finding nothing new
+            // is a completed run. Only recording at the bottom would make a healthy quiet
+            // worker look identical to one whose timer had died.
+            var health = scope.ServiceProvider.GetRequiredService<IHealthTracker>();
+            await health.RecordAsync(HealthComponents.WorkerEmailTriage, true, ct: ct);
+
             if (batch.Count == 0) return;
 
             var timeContext = await moduleContext.BuildTimeContextAsync(null, ct);
@@ -106,6 +112,13 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
         catch (Exception ex)
         {
             logger.LogError(ex, "Email triage run failed");
+            try
+            {
+                using var scope = services.CreateScope();
+                await scope.ServiceProvider.GetRequiredService<IHealthTracker>()
+                    .RecordAsync(HealthComponents.WorkerEmailTriage, false, ex.Message, ct);
+            }
+            catch { /* the run already failed; bookkeeping must not mask it */ }
         }
     }
 }
