@@ -23,11 +23,28 @@ public class TransactionsController : ControllerBase
         [FromQuery] string? accountId = null,
         [FromQuery] DateTime? startDate = null,
         [FromQuery] DateTime? endDate = null,
-        [FromQuery] string? category = null)
+        [FromQuery] string? category = null,
+        // Free-text over merchant and description. Without it there was no way to
+        // answer "what did I spend at Home Depot" short of pulling every transaction
+        // and reading them — which is exactly what San had to do.
+        [FromQuery] string? q = null,
+        // Previously unbounded. A full transaction history is a fine answer for a
+        // dashboard fetching once, and a terrible one for a tool call whose result is
+        // pasted into a model's context window.
+        [FromQuery] int limit = 500)
     {
         _logger.LogInformation("Fetching transactions with filters");
 
         var query = _db.Transactions.Include(t => t.Account).ThenInclude(a => a!.Institution).AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var term = q.Trim().ToLower();
+            query = query.Where(t =>
+                (t.Description != null && t.Description.ToLower().Contains(term))
+                || (t.MerchantName != null && t.MerchantName.ToLower().Contains(term))
+                || (t.Category != null && t.Category.ToLower().Contains(term)));
+        }
 
         if (!string.IsNullOrEmpty(accountId))
         {
@@ -52,6 +69,7 @@ public class TransactionsController : ControllerBase
 
         var transactions = await query
             .OrderByDescending(t => t.TransactionDate)
+            .Take(Math.Clamp(limit, 1, 2000))
             .Select(t => new TransactionDto
             {
                 Id = t.Id,

@@ -21,6 +21,71 @@ public sealed class ModuleTools(ModuleGateway gw)
         ["northstar"] = "/api/memory/stats",
     };
 
+    // Where a free-text search lands in each module. Kept here rather than spread
+    // through the tool body so adding a searchable module is one line.
+    private static readonly (string Module, string Label, string PathFormat)[] SearchTargets =
+    [
+        ("sutra", "documents", "/api/documents?q={0}"),
+        ("aasthi", "property records", "/api/search?q={0}&limit=10"),
+        ("vault", "transactions", "/api/transactions?q={0}&limit=25"),
+        ("northstar", "long-term memory", "/api/knowledge/search?q={0}"),
+    ];
+
+    [McpServerTool(Name = "maaya_search")]
+    [Description(
+        "Search across the user's ENTIRE Maaya system at once — documents (Sutra), property records, " +
+        "tasks and maintenance (Aasthi), bank transactions (Vault), and long-term memory (NorthStar). " +
+        "USE THIS whenever the user asks where something is or to find/recall something without saying " +
+        "which module holds it — e.g. 'find the HVAC invoice', 'what did I spend at Home Depot', " +
+        "'when did I last service the boiler'. Returns results grouped by source; a group is omitted " +
+        "when it has no matches.")]
+    public async Task<string> MaayaSearch(
+        [Description("What to look for, e.g. 'HVAC', 'Home Depot', 'roof warranty'.")] string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return "Provide something to search for.";
+
+        var term = Uri.EscapeDataString(query.Trim());
+
+        // Fanned out in parallel: searching five modules one after another would put
+        // five sequential HTTP round-trips inside a single tool call, which the user
+        // waits through.
+        var results = await Task.WhenAll(SearchTargets.Select(async t =>
+        {
+            var body = await gw.GetAsync(t.Module, string.Format(t.PathFormat, term));
+            return (t.Label, Body: body);
+        }));
+
+        var sb = new System.Text.StringBuilder();
+        var found = 0;
+        foreach (var (label, body) in results)
+        {
+            // An empty array, an empty object, or an error from one module must not
+            // hide the modules that did answer — report per-source and keep going.
+            if (LooksEmpty(body)) continue;
+            found++;
+            sb.AppendLine($"## {label}");
+            sb.AppendLine(body);
+            sb.AppendLine();
+        }
+
+        return found == 0
+            ? $"No matches for \"{query}\" in documents, property records, transactions, or long-term memory."
+            : sb.ToString().TrimEnd();
+    }
+
+    private static bool LooksEmpty(string body)
+    {
+        var t = body.Trim();
+        if (t.Length == 0 || t is "[]" or "{}" or "null") return true;
+        // The gateway turns an unreachable module into an error object; that is worth
+        // knowing about but is not a search hit, and listing it as one would have San
+        // report an outage as though it were a result.
+        if (t.StartsWith("{\"error\"", StringComparison.Ordinal)) return true;
+        // Aasthi always answers with its four groups, so emptiness is total:0.
+        return t.Contains("\"total\":0", StringComparison.Ordinal);
+    }
+
     [McpServerTool(Name = "vault_finances")]
     [Description("Vault — the user's finances: net worth, cash, debt, spending summary.")]
     public Task<string> VaultFinances() => gw.GetAsync("vault", "/api/summary");
