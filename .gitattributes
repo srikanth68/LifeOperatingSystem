@@ -1,0 +1,11 @@
+# Files that MUST keep Unix line endings regardless of which machine checks them out.
+#
+# This repo is edited on Windows (core.autocrlf=true) and runs on a Mac. A shell
+# script checked out with CRLF fails there with `bad interpreter: /usr/bin/env
+# bash^M`, which is an obscure way to discover that the nightly backup has never
+# once run. launchd is equally unforgiving about a plist with CRLF.
+#
+# Deliberately narrow: a blanket `* text=auto eol=lf` would renormalise every file
+# in the repo in a single unreviewable commit.
+*.sh    text eol=lf
+*.plist text eol=lf
