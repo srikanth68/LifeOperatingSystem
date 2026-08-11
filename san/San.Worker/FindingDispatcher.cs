@@ -85,11 +85,36 @@ public static class FindingDispatcher
 
         var due = sightings.Where(s => s.Notify).ToList();
 
+        // Local time decides whether the phone may buzz, so it has to come from the
+        // user's timezone rather than the container's idea of "now".
+        var tz = await moduleContext.ResolveTimeZoneAsync(ct);
+        var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(now, tz);
+
+        // Anything held overnight goes out first, before this run's own findings.
+        await DeferredNotifications.FlushAsync(repo, telegram, nowLocal, logger, ct);
+
         if (due.Count > 0)
         {
-            var body = string.Join("\n", due.Select(s => $"{Icon(s.Finding.Severity)} {s.Finding.Message}"));
-            if (telegram.IsConfigured)
+            var send = new List<Sighting>();
+            foreach (var s in due)
+            {
+                if (QuietHours.ShouldHold(s.Finding.Severity, nowLocal))
+                {
+                    // Queued, not dropped — and it is still recorded to the ledger and
+                    // NorthStar below, so only the interruption waits, not the fact.
+                    await DeferredNotifications.HoldAsync(repo, s.Finding.Severity, s.Finding.Message, source);
+                    logger.LogInformation("{Source}: holding '{Key}' ({Severity}) until {Opening:h:mm tt} — quiet hours.",
+                        source, s.Key, s.Finding.Severity, QuietHours.NextOpening(nowLocal));
+                    continue;
+                }
+                send.Add(s);
+            }
+
+            if (send.Count > 0 && telegram.IsConfigured)
+            {
+                var body = string.Join("\n", send.Select(s => $"{Icon(s.Finding.Severity)} {s.Finding.Message}"));
                 await telegram.SendAsync($"{Header(source)}:\n{body}", ct);
+            }
         }
 
         // Per finding, not one blob of the batch: NorthStar keys knowledge by topic,
