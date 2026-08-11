@@ -43,21 +43,26 @@ public class NorthStarRepository(NorthStarDbContext db) : INorthStarRepository
         return await q.CountAsync();
     }
 
-    public async Task<KnowledgeEntry> UpsertDailyEntryAsync(string source, string topic, string summary, string rawJson, DateOnly day)
+    // Returns the entry and whether it was newly created, so callers can tell a fresh
+    // fact from a restatement of one already held.
+    public async Task<(KnowledgeEntry Entry, bool Created)> UpsertDailyEntryAsync(
+        string source, string topic, string summary, string? rawJson, DateOnly day)
     {
         var existing = await db.Entries.FirstOrDefaultAsync(e => e.Source == source && e.Topic == topic && e.Day == day);
         if (existing is not null)
         {
             existing.Summary = summary;
-            existing.RawJson = rawJson;
+            // Only when the caller actually supplied one — a later write that carries no
+            // raw payload must not erase the payload an earlier write stored.
+            if (rawJson is not null) existing.RawJson = rawJson;
             existing.CreatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
-            return existing;
+            return (existing, false);
         }
         var entry = new KnowledgeEntry { Source = source, Topic = topic, Summary = summary, RawJson = rawJson, Day = day, CreatedAt = DateTime.UtcNow };
         db.Entries.Add(entry);
         await db.SaveChangesAsync();
-        return entry;
+        return (entry, true);
     }
 
     // ── Insights ──
