@@ -310,14 +310,14 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
         return lines.Count == 0 ? null : string.Join("\n", lines);
     }
 
-    public Task SaveMemoryAsync(string content, string kind, int importance, CancellationToken ct = default) =>
+    public Task<bool> SaveMemoryAsync(string content, string kind, int importance, CancellationToken ct = default) =>
         PostToBrainAsync(
             "/api/memory",
             new { content, kind, importance, source = "san" },
             HealthComponents.NorthStarWrite, ct);
 
-    public Task SaveKnowledgeAsync(string source, string topic, string summary, CancellationToken ct = default) =>
-        PostToBrainAsync(
+    public async Task SaveKnowledgeAsync(string source, string topic, string summary, CancellationToken ct = default) =>
+        await PostToBrainAsync(
             "/api/ingest",
             new { source, topic, summary, day = DateTime.UtcNow.ToString("yyyy-MM-dd") },
             HealthComponents.NorthStarWrite, ct);
@@ -327,7 +327,7 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
     // these used to swallow the exception and, worse, ignore the response status
     // entirely: a 401 from an expired service token counted as a successful save. San
     // would go on believing it had a brain while everything it learned went nowhere.
-    private async Task PostToBrainAsync(string path, object payload, string component, CancellationToken ct)
+    private async Task<bool> PostToBrainAsync(string path, object payload, string component, CancellationToken ct)
     {
         try
         {
@@ -340,13 +340,18 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
             using var resp = await http.SendAsync(req, ct);
 
             if (resp.IsSuccessStatusCode)
+            {
                 await health.RecordAsync(component, true, ct: ct);
-            else
-                await health.RecordAsync(component, false, $"HTTP {(int)resp.StatusCode} from {path}", ct);
+                return true;
+            }
+
+            await health.RecordAsync(component, false, $"HTTP {(int)resp.StatusCode} from {path}", ct);
+            return false;
         }
         catch (Exception ex)
         {
             await health.RecordAsync(component, false, ex.Message, ct);
+            return false;
         }
     }
 
