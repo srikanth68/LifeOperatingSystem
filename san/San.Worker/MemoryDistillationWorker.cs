@@ -58,7 +58,10 @@ public class MemoryDistillationWorker(IServiceProvider services, ILogger<MemoryD
             System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal,
             out var parsed) ? parsed : DateTime.MinValue;
 
-        var history = await repo.GetChatHistoryAsync(50);
+        // Fetches well beyond one interval's worth. At 50 a burst of more than fifty
+        // messages inside fifteen minutes pushed the oldest out of the window before
+        // the timestamp filter ever saw them, and the cursor then skipped past them.
+        var history = await repo.GetChatHistoryAsync(300);
         var since = history.Where(m => m.CreatedAt > lastUtc).ToList();
         // Need at least a full exchange to have anything worth distilling.
         if (since.Count < 2) return;
@@ -67,12 +70,17 @@ public class MemoryDistillationWorker(IServiceProvider services, ILogger<MemoryD
         var reply = await chat.CompleteAsync(ExtractionPrompt, [new ChatTurn("user", transcript)], ct);
 
         var newestUtc = since.Max(m => m.CreatedAt);
-        await repo.SetSettingAsync(LastDistilledKey, newestUtc.ToString("O"));
 
         if (string.IsNullOrWhiteSpace(reply) || reply.Contains("NONE", StringComparison.OrdinalIgnoreCase))
+        {
+            // Nothing worth keeping is a real answer — move on so this window is not
+            // re-examined forever.
+            await repo.SetSettingAsync(LastDistilledKey, newestUtc.ToString("O"));
             return;
+        }
 
         int saved = 0;
+        int failed = 0;
         foreach (var line in reply.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var sep = line.IndexOf('|');
@@ -83,10 +91,34 @@ public class MemoryDistillationWorker(IServiceProvider services, ILogger<MemoryD
             if (kind is not ("preference" or "fact" or "decision" or "event")) kind = "observation";
 
             var importance = kind is "preference" or "decision" ? 4 : 3;
-            await brain.SaveMemoryAsync(text, kind, importance, ct);
-            saved++;
+            if (await brain.SaveMemoryAsync(text, kind, importance, ct)) saved++;
+            else failed++;
         }
-        if (saved > 0) logger.LogInformation("Distilled {n} memory(ies) into NorthStar from recent chat.", saved);
+
+        // The cursor used to advance immediately after the model replied, before any
+        // of this ran — and SaveMemoryAsync swallowed its failures. NorthStar being
+        // down for a single fifteen-minute window therefore lost that window's
+        // memories permanently and silently: the writes failed, the cursor had already
+        // moved past them, and nothing ever looked at those messages again.
+        //
+        // Hold the cursor only when EVERYTHING failed, which is what a NorthStar
+        // outage looks like and costs nothing to retry since none of it was stored.
+        // A partial failure still advances: re-running would duplicate the memories
+        // that did save, and one lost memory beats a growing pile of repeats.
+        if (failed > 0 && saved == 0)
+        {
+            logger.LogWarning(
+                "Distillation held back: all {Failed} memory write(s) failed — leaving the cursor so this window retries.",
+                failed);
+            return;
+        }
+
+        await repo.SetSettingAsync(LastDistilledKey, newestUtc.ToString("O"));
+
+        if (failed > 0)
+            logger.LogWarning("Distilled {Saved} memory(ies); {Failed} could not be saved and are lost.", saved, failed);
+        else if (saved > 0)
+            logger.LogInformation("Distilled {n} memory(ies) into NorthStar from recent chat.", saved);
     }
 
     // A pass that found nothing to distill still counts as a completed pass — this

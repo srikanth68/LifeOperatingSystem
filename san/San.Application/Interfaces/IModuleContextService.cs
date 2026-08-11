@@ -19,7 +19,11 @@ public interface IModuleContextService
     // NorthStar is San's brain / long-term memory. Recall pulls relevant stored
     // memories to ground a reply; Save writes a new durable memory back.
     Task<string?> RecallMemoriesAsync(string query, int limit = 8, CancellationToken ct = default);
-    Task SaveMemoryAsync(string content, string kind, int importance, CancellationToken ct = default);
+    // Returns whether NorthStar actually accepted it. Still best-effort — a false
+    // never throws — but the caller has to be able to tell, because advancing a
+    // "distilled up to here" cursor past a memory that was never stored loses it
+    // permanently and silently.
+    Task<bool> SaveMemoryAsync(string content, string kind, int importance, CancellationToken ct = default);
 
     // Records "this happened" into NorthStar's knowledge timeline (distinct from a
     // memory, which is a durable fact about the user). Email triage writes its
