@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Maaya.Auth;
+using San.Application;
 using San.Application.DTOs;
 using San.Application.Interfaces;
 
@@ -194,15 +195,22 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
         var sb = new StringBuilder();
         sb.Append($"Right now it is {nowLocal:dddd, MMMM d, yyyy} at {nowLocal:h:mm tt} ({tzLabel}).");
 
+        // The clock alone was never enough. "15:42" is a fact; "mid-afternoon on a
+        // weekday, and they've been gone since yesterday" is a situation — and only a
+        // situation can change how San answers. Derived here rather than left to the
+        // model, which is reliable at acting on "late night" and unreliable at working
+        // it out from a timestamp on every turn.
+        sb.Append(' ');
+        sb.Append(TimeAwareness.Describe(nowLocal, lastSeenUtc, nowUtc, tzi));
+
         if (lastSeenUtc is { } seen)
         {
             var localSeen = TimeZoneInfo.ConvertTimeFromUtc(seen, tzi);
-            sb.Append($" The user's previous message was {Humanize(nowUtc - seen)} ago (at {localSeen:h:mm tt}).");
+            sb.Append($" Their previous message was {Humanize(nowUtc - seen)} ago (at {localSeen:h:mm tt}).");
         }
-        else
-        {
-            sb.Append(" This is the start of the conversation.");
-        }
+
+        if (QuietHours.IsQuiet(nowLocal))
+            sb.Append($" (Notifications are currently held until {QuietHours.NextOpening(nowLocal):h:mm tt}.)");
 
         // What's happened across the modules since the last message — real, discrete,
         // event-level activity from NorthStar's append-only event log (each with its true
