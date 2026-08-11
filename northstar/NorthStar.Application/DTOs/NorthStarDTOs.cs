@@ -19,7 +19,10 @@ public record DashboardResult(
     Dictionary<string, DateTime?> LastSyncByModule
 );
 
-public record InsightCreateRequest(string Title, string Body);
+// GeneratedBy defaults to "manual" so existing callers keep their behaviour; San's
+// insight worker sets it, which is what makes a model-derived observation
+// distinguishable from something the user wrote themselves.
+public record InsightCreateRequest(string Title, string Body, string? GeneratedBy = null);
 
 public record SearchResult(List<KnowledgeEntryResult> Entries, int Count, string Query);
 

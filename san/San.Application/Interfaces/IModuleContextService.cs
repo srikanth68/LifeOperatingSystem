@@ -31,6 +31,13 @@ public interface IModuleContextService
     // turn — knows what came in without the user having to relay it.
     Task SaveKnowledgeAsync(string source, string topic, string summary, CancellationToken ct = default);
 
+    // NorthStar's week-by-week table of what actually happened. Raw JSON, passed to the
+    // model verbatim and also used as the ground truth an insight is checked against —
+    // so it must be the SAME string in both places, not two separate fetches.
+    Task<string?> GetRollupAsync(CancellationToken ct = default);
+
+    Task<bool> SaveInsightAsync(string title, string body, CancellationToken ct = default);
+
     // Trailing-30-day spend from Vault, used by the spending_threshold alert check. Returns
     // null if Vault is unreachable.
     Task<decimal?> GetTrailing30DaySpendAsync(CancellationToken ct = default);

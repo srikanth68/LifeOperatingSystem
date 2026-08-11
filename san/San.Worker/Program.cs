@@ -103,6 +103,7 @@ builder.Services.AddHostedService<CalendarSyncWorker>();
 builder.Services.AddHostedService<MemoryDistillationWorker>();
 builder.Services.AddHostedService<EmailTriageWorker>();
 builder.Services.AddHostedService<SystemAuditWorker>();
+builder.Services.AddHostedService<InsightWorker>();
 
 var host = builder.Build();
 

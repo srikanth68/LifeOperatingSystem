@@ -39,4 +39,5 @@ public static class HealthComponents
     public const string WorkerMemoryDistillation = "worker.memory_distillation";
     public const string WorkerCalendarSync = "worker.calendar_sync";
     public const string WorkerNotifications = "worker.notifications";
+    public const string WorkerInsights = "worker.insights";
 }

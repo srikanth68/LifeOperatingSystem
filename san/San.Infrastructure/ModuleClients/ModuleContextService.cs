@@ -327,6 +327,39 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
     // these used to swallow the exception and, worse, ignore the response status
     // entirely: a 401 from an expired service token counted as a successful save. San
     // would go on believing it had a brain while everything it learned went nowhere.
+    public async Task<string?> GetRollupAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var http = httpFactory.CreateClient("northstar");
+            using var req = new HttpRequestMessage(HttpMethod.Get, "/api/rollup?weeks=8");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ServiceToken());
+            using var resp = await http.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode)
+            {
+                await health.RecordAsync(HealthComponents.NorthStarRecall, false,
+                    $"HTTP {(int)resp.StatusCode} from /api/rollup", ct);
+                return null;
+            }
+            await health.RecordAsync(HealthComponents.NorthStarRecall, true, ct: ct);
+            return await resp.Content.ReadAsStringAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            await health.RecordAsync(HealthComponents.NorthStarRecall, false, ex.Message, ct);
+            return null;
+        }
+    }
+
+    public Task<bool> SaveInsightAsync(string title, string body, CancellationToken ct = default) =>
+        PostToBrainAsync(
+            "/api/insights",
+            // Tagged with the model, not just "san": an insight is a claim, and knowing
+            // which model made it is the difference between auditing a bad one and
+            // guessing at it.
+            new { title, body, generatedBy = $"san-insights/{Environment.GetEnvironmentVariable("LLM_MODEL") ?? "llm"}" },
+            HealthComponents.NorthStarWrite, ct);
+
     private async Task<bool> PostToBrainAsync(string path, object payload, string component, CancellationToken ct)
     {
         try
