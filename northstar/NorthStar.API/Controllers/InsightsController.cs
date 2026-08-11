@@ -22,7 +22,7 @@ public class InsightsController(INorthStarRepository repo) : ControllerBase
         {
             Title = req.Title,
             Body = req.Body,
-            GeneratedBy = "manual"
+            GeneratedBy = string.IsNullOrWhiteSpace(req.GeneratedBy) ? "manual" : req.GeneratedBy.Trim()
         };
         await repo.AddInsightAsync(insight);
         return Ok(ToResult(insight));
