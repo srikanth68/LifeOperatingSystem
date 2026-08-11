@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using San.Application.Interfaces;
 using San.Infrastructure.Agent;
 
@@ -84,6 +85,7 @@ public class HealthProbe(
                 $"{c.Component} has failed {c.ConsecutiveFailures} times in a row ({c.LastError})."));
 
         problems.AddRange(StalledWorkers(observed));
+        if (ProbeBackup() is { } backupProblem) problems.Add(backupProblem);
 
         foreach (var a in accounts.Where(a => a.Stale))
             problems.Add(new(HealthProblemKeys.EmailAccount(a.EmailAddress), "medium",
@@ -201,6 +203,54 @@ public class HealthProbe(
             // mailbox with no new mail, which is why this is worth surfacing.
             Stale: a.Active && (a.LastCheckedAt is null
                                 || DateTime.UtcNow - a.LastCheckedAt > TimeSpan.FromHours(2)))).ToList());
+    }
+
+    // The nightly backup runs on the HOST, outside Docker, so nothing in the stack
+    // would ever notice it stopping — and a backup discovered to have been broken for
+    // three weeks is the same as no backup. It leaves a status file in the data
+    // directory, which every container sees at /data/backup-status.json.
+    //
+    // Silent when the file is absent: a deployment that has not set the launchd job up
+    // yet should not be nagged every fifteen minutes about a feature it never enabled.
+    // Once the file exists, its absence of updates is a real problem.
+    private static HealthProblem? ProbeBackup()
+    {
+        var path = Environment.GetEnvironmentVariable("BACKUP_STATUS_PATH") ?? "/data/backup-status.json";
+        if (!File.Exists(path)) return null;
+
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+            var root = doc.RootElement;
+
+            var ok = !root.TryGetProperty("ok", out var okEl) || okEl.ValueKind != System.Text.Json.JsonValueKind.False;
+            if (!ok)
+            {
+                var err = root.TryGetProperty("error", out var e) ? e.GetString() : null;
+                return new HealthProblem(HealthProblemKeys.Backup, "critical",
+                    $"The last backup FAILED{(string.IsNullOrWhiteSpace(err) ? "" : $": {err}")}.");
+            }
+
+            if (!root.TryGetProperty("lastRunUtc", out var lastEl) ||
+                !DateTime.TryParse(lastEl.GetString(), CultureInfo.InvariantCulture,
+                    DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var last))
+                return null;
+
+            var age = DateTime.UtcNow - last;
+            // Nightly job, so 48h means two consecutive nights were missed — past the
+            // point where it could be a one-off.
+            if (age > TimeSpan.FromHours(48))
+                return new HealthProblem(HealthProblemKeys.Backup, "high",
+                    $"No successful backup in {age.TotalDays:F1} days — the nightly job has stopped.");
+
+            return null;
+        }
+        catch
+        {
+            // A malformed status file is not evidence of a failed backup, and guessing
+            // either way would be worse than saying nothing.
+            return null;
+        }
     }
 
     // A worker whose timer died is otherwise undetectable: no error, no log, the system

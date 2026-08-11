@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Nightly Maaya backup, run by launchd on the Mac mini.
+
+  launchd rather than cron: it is the supported mechanism on macOS, it survives
+  reboots without a crontab, and StartCalendarInterval catches up a run that was
+  missed because the machine was asleep — which cron does not, and which is exactly
+  when a backup is most likely to be skipped.
+
+  EDIT THE PATHS BELOW before installing: replace /Users/kanth/maaya with wherever
+  the repo actually lives, and set MAAYA_BACKUP_MIRROR to the external drive (or
+  delete that pair of lines to run tier 1 only).
+
+  Install:
+    cp com.maaya.backup.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.maaya.backup.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.maaya.backup</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/kanth/maaya/deploy/backup/maaya-backup.sh</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>MAAYA_DATA</key>
+        <string>/Users/kanth/maaya/deploy/data</string>
+        <key>MAAYA_BACKUP_DIR</key>
+        <string>/Users/kanth/maaya/deploy/backups</string>
+        <!-- Tier 2. An unmounted drive is not an error; tier 1 still runs. -->
+        <key>MAAYA_BACKUP_MIRROR</key>
+        <string>/Volumes/MaayaBackup/maaya</string>
+        <key>MAAYA_KEEP_DAILY</key>
+        <string>14</string>
+        <key>MAAYA_KEEP_WEEKLY</key>
+        <string>8</string>
+    </dict>
+
+    <!-- 03:15 local. Late enough that the day's data has settled, and off the
+         :00 boundary so it does not contend with every other scheduled job. -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key><integer>3</integer>
+        <key>Minute</key><integer>15</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/kanth/maaya/deploy/backups/backup.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/kanth/maaya/deploy/backups/backup.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>
