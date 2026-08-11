@@ -49,6 +49,7 @@ public static class HealthProblemKeys
     public static string Mcp => Prefix + "mcp";
     public static string McpUnsecured => Prefix + "mcp.unsecured";
     public static string Llm => Prefix + "llm";
+    public static string Backup => Prefix + "backup";
     public static string Module(string name) => Prefix + "module." + name;
     public static string Component(string component) => Prefix + "component." + component;
     public static string Worker(string component) => Prefix + "stalled." + component;

@@ -20,6 +20,12 @@
 # Document storage (user uploads, not source)
 **/storage/
 
+# Backup snapshots and the status file the nightly job writes. These are copies of
+# every database in the system — financial, health, property — and must never reach
+# a remote. The script and its launchd job under deploy/backup/ ARE tracked.
+deploy/backups/
+deploy/data/backup-status.json
+
 # Node / frontend
 **/node_modules/
 **/dist/
