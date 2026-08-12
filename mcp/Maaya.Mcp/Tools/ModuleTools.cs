@@ -99,15 +99,15 @@ public sealed class ModuleTools(ModuleGateway gw)
     }
 
     [McpServerTool(Name = "vault_finances")]
-    [Description("Vault — the user's finances: net worth, cash, debt, spending summary.")]
+    [Description("Vault — the user's finances: net worth, cash, debt, and a 30-day spending summary by category. USE THIS for 'how much do I have', 'what's my net worth', 'what am I spending on'. For a SPECIFIC merchant or transaction, use maaya_search instead.")]
     public Task<string> VaultFinances() => gw.GetAsync("vault", "/api/summary");
 
     [McpServerTool(Name = "vitara_health")]
-    [Description("Vitara — the user's health dashboard: readiness, sleep, activity, heart metrics (Oura-sourced).")]
+    [Description("Vitara — the user's health dashboard: readiness, sleep, activity, heart metrics, recent workouts. USE THIS for 'how did I sleep', 'how am I doing', 'what's my readiness', 'am I recovered'.")]
     public Task<string> VitaraHealth() => gw.GetAsync("vitara", "/api/dashboard");
 
     [McpServerTool(Name = "aasthi_properties")]
-    [Description("Aasthi — the user's real-estate portfolio: properties, values, profit.")]
+    [Description("Aasthi — the user's real-estate portfolio: properties, values, profit. USE THIS for 'my properties', 'how are the rentals doing'. For a specific repair, cost or vendor, use maaya_search instead.")]
     public Task<string> AasthiProperties() => gw.GetAsync("aasthi", "/api/properties");
 
     [McpServerTool(Name = "sutra_documents")]
@@ -119,7 +119,7 @@ public sealed class ModuleTools(ModuleGateway gw)
             : gw.GetAsync("sutra", $"/api/documents?q={Uri.EscapeDataString(query)}");
 
     [McpServerTool(Name = "karma_habits")]
-    [Description("Karma — today's habit check-ins and active goals with progress.")]
+    [Description("Karma — today's habit check-ins and active goals with progress. USE THIS for 'did I do my habits', 'how are my streaks', 'how am I doing on my goals'. Also gives you the habit ids needed for habit_checkin.")]
     public async Task<string> KarmaHabits()
     {
         var habits = await gw.GetAsync("karma", "/api/habits/today");
@@ -142,7 +142,7 @@ public sealed class ModuleTools(ModuleGateway gw)
     }
 
     [McpServerTool(Name = "san_people")]
-    [Description("San — the user's people/contacts. Search by name, or list upcoming birthdays with query 'birthdays'.")]
+    [Description("San — the user's people/contacts. USE THIS for 'who is X', 'what's X's number', 'whose birthday is coming up' (query 'birthdays'). Gives you the id needed to update or delete a contact.")]
     public Task<string> SanPeople(
         [Description("Name to search, or 'birthdays' for upcoming birthdays.")] string query) =>
         query.Trim().Equals("birthdays", StringComparison.OrdinalIgnoreCase)
@@ -150,6 +150,6 @@ public sealed class ModuleTools(ModuleGateway gw)
             : gw.GetAsync("san", $"/api/people?q={Uri.EscapeDataString(query)}");
 
     [McpServerTool(Name = "maaya_status")]
-    [Description("Health check across all 8 Maaya modules — who is online, with latency. Call when a module tool errored or before a multi-module task.")]
+    [Description("Health check across all 8 Maaya modules — who is online, with latency. Call this AFTER another tool returns an error, to find out whether the module is down. Do not call it speculatively before other tools.")]
     public Task<string> MaayaStatus() => gw.ProbeAllAsync(Probes);
 }
