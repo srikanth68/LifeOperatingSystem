@@ -20,7 +20,11 @@ public static class SelfCheck
     // Requiring a problem to be seen TWICE before it can notify costs one interval of
     // detection latency and removes that entire class of false alarm — which matters
     // here more than usual, since notification spam has already had to be fixed twice.
-    private const string PendingKey = "health.unconfirmed_problems";
+    // NOT under "health." — HealthTracker owns that prefix and reads every key beneath
+    // it as a component's state, so this list surfaced on the health endpoint as a
+    // phantom component with no timestamps. Two different things were sharing one
+    // namespace.
+    private const string PendingKey = "selfcheck.unconfirmed_problems";
 
     public static async Task<int> RunAsync(
         IHealthProbe probe,

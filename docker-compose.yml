@@ -15,6 +15,16 @@ x-backend: &backend
     - ./deploy/data:/data
   extra_hosts:
     - "host.docker.internal:host-gateway"
+  # Explicit public resolvers instead of inheriting Docker's, which forwards to
+  # whatever the host is using. On a machine running a mesh VPN that upstream moves
+  # when the tunnel does, and containers start failing to resolve anything external
+  # with "Name or service not known" — intermittently, which is what made Oura look
+  # flaky and what broke the Google OAuth exchange. Only affects outbound lookups;
+  # service-name resolution between containers still goes through Docker's own DNS,
+  # which is consulted first.
+  dns:
+    - 1.1.1.1
+    - 8.8.8.8
 
 services:
   vault:
