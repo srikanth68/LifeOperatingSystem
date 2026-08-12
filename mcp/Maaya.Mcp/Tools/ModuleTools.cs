@@ -31,6 +31,18 @@ public sealed class ModuleTools(ModuleGateway gw)
         ("northstar", "long-term memory", "/api/knowledge/search?q={0}"),
     ];
 
+    [McpServerTool(Name = "agenda_now")]
+    [Description(
+        "What the user is supposed to be doing RIGHT NOW — one ranked list merging calendar events, " +
+        "reminders, active alerts, NorthStar action items, Aasthi property tasks and today's unticked " +
+        "habits. USE THIS for \"what's on\", \"what should I be doing\", \"what have I got today\", " +
+        "\"what am I forgetting\", \"where do I need to be\". Prefer it over asking each module " +
+        "separately — it is already ordered by what matters soonest, with anything in progress or " +
+        "overdue first.")]
+    public Task<string> AgendaNow(
+        [Description("How many items to return. Default 12.")] int? limit = null) =>
+        gw.GetAsync("san", $"/api/agenda?limit={Math.Clamp(limit ?? 12, 1, 50)}");
+
     [McpServerTool(Name = "maaya_search")]
     [Description(
         "Search across the user's ENTIRE Maaya system at once — documents (Sutra), property records, " +
