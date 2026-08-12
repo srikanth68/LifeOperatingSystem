@@ -1,6 +1,7 @@
 using Maaya.Auth;
 using Microsoft.EntityFrameworkCore;
 using San.Application.Interfaces;
+using San.Infrastructure.Agenda;
 using San.Infrastructure.Agent;
 using San.Infrastructure.Chat;
 using San.Infrastructure.Context;
@@ -44,6 +45,7 @@ builder.Services.AddDbContext<SanDbContext>(o =>
 builder.Services.AddScoped<ISanRepository, SanRepository>();
 builder.Services.AddScoped<IHealthTracker, HealthTracker>();
 builder.Services.AddScoped<IHealthProbe, HealthProbe>();
+builder.Services.AddScoped<IAgendaService, AgendaService>();
 builder.Services.AddScoped<IModuleContextService, ModuleContextService>();
 builder.Services.AddScoped<IChatActionService, ChatActionService>();
 builder.Services.AddSingleton<IGoogleCalendarService, GoogleCalendarService>();

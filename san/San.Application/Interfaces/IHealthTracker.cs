@@ -41,4 +41,5 @@ public static class HealthComponents
     public const string WorkerNotifications = "worker.notifications";
     public const string WorkerInsights = "worker.insights";
     public const string WorkerCommitments = "worker.commitments";
+    public const string WorkerMorningBrief = "worker.morning_brief";
 }
