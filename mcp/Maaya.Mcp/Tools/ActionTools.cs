@@ -159,7 +159,7 @@ public sealed class ActionTools(ModuleGateway gw)
     }
 
     [McpServerTool(Name = "alerts_list")]
-    [Description("List the user's Maaya/San alerts, with ids for updating or deleting.")]
+    [Description("List the user's Maaya/San alerts, with ids for updating or deleting. USE THIS for 'what alerts do I have'. Active alerts already appear in agenda_now, so do not call this just to answer 'what should I do'.")]
     public Task<string> AlertsList() => gw.GetAsync("san", "/api/alerts");
 
     [McpServerTool(Name = "alert_delete")]
@@ -190,7 +190,7 @@ public sealed class ActionTools(ModuleGateway gw)
     }
 
     [McpServerTool(Name = "calendar_events_list")]
-    [Description("List the user's upcoming Maaya/San calendar events in a date window.")]
+    [Description("List the user's upcoming Maaya/San calendar events in a date window. USE THIS for 'what's on my calendar', 'am I free on X', 'when is Y'. For a general 'what should I be doing', prefer agenda_now, which already includes the calendar.")]
     public Task<string> CalendarEventsList(
         [Description("Window start, ISO-8601 UTC. Omit for today.")] string? from = null,
         [Description("Window end, ISO-8601 UTC. Omit for a week out.")] string? to = null)
@@ -286,7 +286,7 @@ public sealed class ActionTools(ModuleGateway gw)
         gw.SendAsync("karma", HttpMethod.Post, $"/api/habits/{habitId}/log", new { date, completed, note });
 
     [McpServerTool(Name = "habit_create")]
-    [Description("Create a new habit to track in Maaya/Karma.")]
+    [Description("Create a new habit to track in Maaya/Karma. USE THIS for a repeating action the user wants to do regularly ('I want to meditate every morning'). For a one-off outcome, use goal_create instead.")]
     public Task<string> HabitCreate(
         [Description("Habit name, e.g. 'Morning walk'.")] string name,
         [Description("Optional description.")] string? description = null,
@@ -298,11 +298,11 @@ public sealed class ActionTools(ModuleGateway gw)
             new { name, description, emoji, category, notifyTime, notifyMessage, notifyChannel = "telegram" });
 
     [McpServerTool(Name = "goals_list")]
-    [Description("List the user's Maaya/Karma goals with their current progress — gives you the ids needed to update one.")]
+    [Description("List the user's Maaya/Karma goals with their current progress. USE THIS for 'what are my goals', 'how far along am I'. Gives you the ids needed by goal_progress_set.")]
     public Task<string> GoalsList() => gw.GetAsync("karma", "/api/goals");
 
     [McpServerTool(Name = "goal_create")]
-    [Description("Create a new goal in Maaya/Karma.")]
+    [Description("Create a new goal in Maaya/Karma. USE THIS when the user says they want to achieve something over time ('I want to run a half marathon'). For a repeating daily action, use habit_create instead.")]
     public Task<string> GoalCreate(
         [Description("Goal title, e.g. 'Reach 75kg'.")] string title,
         [Description("Optional description.")] string? description = null,

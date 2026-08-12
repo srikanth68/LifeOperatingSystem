@@ -19,8 +19,8 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         "dashboard the user built for themselves. Your long-term memory and brain is NorthStar — " +
         "the relevant things you remember about the user are surfaced below under 'From your " +
         "long-term memory (NorthStar)'. Treat those as things you genuinely know about them. You " +
-        "also have a live snapshot of their other modules and the current time, plus the ability to " +
-        "create reminders, alerts, and calendar events directly (see the tool instructions below). " +
+        "also have a live snapshot of their other modules and the current time, and tools that reach " +
+        "every part of their Maaya system — see the capability list below rather than assuming a limit. " +
         "Be concise, warm, and concrete — use the real numbers and remembered facts when relevant. " +
         "If a module is unreachable, just say so plainly instead of guessing.";
 
@@ -109,21 +109,25 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         // The in-San prose-JSON path is only for plain LLM providers.
         var toolInstructions = chat.HandlesToolsNatively ? null : actions.ToolInstructions;
 
+        // Resolved BEFORE the prompt is assembled: what San is told it can do depends on
+        // what it actually has. The router serves the full Maaya.Mcp catalog when the
+        // gateway is up and the built-in registry otherwise, and claiming the full set
+        // while running on built-ins is exactly the lie that made the silent MCP outage
+        // so hard to spot from the outside.
+        var (tools, executor) = await toolRouter.ResolveAsync(HttpContext.RequestAborted);
+
         // Order: persona, memory, time awareness, live module snapshot, San's own
-        // scheduled items, then (plain LLMs only) the tool instructions. Output
-        // conventions go last — they're not part of the editable persona, and the
-        // model honours late instructions better than ones buried above the snapshot.
+        // scheduled items, then (plain LLMs only) the tool instructions. Capabilities
+        // and output conventions go last — they're not part of the editable persona,
+        // and the model honours late instructions better than ones buried above the
+        // snapshot. Keeping them out of the persona also means rewriting the prompt in
+        // the UI cannot amputate San's own description of what it can do.
+        var capabilities = tools.Count > 0 ? SanCapabilities.Text : null;
+
         var systemPrompt = string.Join("\n\n",
             new[] { basePrompt, memoryBlock, timeContext, context, ownContext, toolInstructions,
-                    SanOutputConventions.Text }
+                    capabilities, SanOutputConventions.Text }
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
-
-        // One call covers every provider shape: llamacpp-agent overrides
-        // CompleteWithToolsAsync and runs a native tool loop with these tools;
-        // plain LLM providers use the interface's default, which ignores the
-        // tools and falls through to plain CompleteAsync. The router serves the
-        // full Maaya.Mcp catalog when the gateway is up, built-ins otherwise.
-        var (tools, executor) = await toolRouter.ResolveAsync(HttpContext.RequestAborted);
 
         // Where the prompt weight actually goes, per turn. Latency questions about San
         // have so far been answered by guessing at this; now the numbers are in the log
@@ -136,7 +140,7 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
             ChatWindow.EstimateTokens(timeContext),
             ChatWindow.EstimateTokens(context),
             ChatWindow.EstimateTokens(ownContext),
-            ChatWindow.EstimateTokens(SanOutputConventions.Text),
+            ChatWindow.EstimateTokens(SanOutputConventions.Text) + ChatWindow.EstimateTokens(capabilities),
             tools.Sum(t => ChatWindow.EstimateTokens(t.Name + t.Description)
                            + t.Parameters.Sum(p => ChatWindow.EstimateTokens(p.Key + p.Value.Description))),
             tools.Count,

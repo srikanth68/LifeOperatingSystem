@@ -27,7 +27,7 @@ public sealed class MemoryTools(ModuleGateway gw)
         gw.GetAsync("northstar", $"/api/memory/recall?q={Uri.EscapeDataString(query)}&limit={limit}");
 
     [McpServerTool(Name = "memory_recent")]
-    [Description("List the most recently saved memories — useful to resume where the last session left off.")]
+    [Description("List the most recently saved memories, newest first — useful to resume where the last session left off. For anything topic-specific, use memory_recall instead; this is not a search.")]
     public Task<string> MemoryRecent(
         [Description("Max results (1-100).")] int limit = 20) =>
         gw.GetAsync("northstar", $"/api/memory/recent?limit={limit}");
@@ -41,7 +41,7 @@ public sealed class MemoryTools(ModuleGateway gw)
             new { value, source = "mcp" });
 
     [McpServerTool(Name = "facts_list")]
-    [Description("List all stable user-profile facts (key-value pairs) from the brain.")]
+    [Description("List all stable user-profile facts (key-value pairs) from the brain — timezone, city, and anything else set with fact_set. USE THIS for 'what do you know about me', or when you need a setting before acting.")]
     public Task<string> FactsList() => gw.GetAsync("northstar", "/api/facts");
 
     [McpServerTool(Name = "context_brief")]
@@ -59,7 +59,7 @@ public sealed class MemoryTools(ModuleGateway gw)
             new { title, description, priority, dueDate, source = "mcp", category = "task" });
 
     [McpServerTool(Name = "actions_pending")]
-    [Description("List the user's pending actions from the brain's action queue, priority-ordered.")]
+    [Description("List the user's pending actions from the brain's cross-module action queue, priority-ordered. Gives you the GUIDs needed by action_complete. For 'what should I do right now', prefer agenda_now — it already includes these, ranked against everything else.")]
     public Task<string> ActionsPending(
         [Description("Max results.")] int limit = 25) =>
         gw.GetAsync("northstar", $"/api/actions?status=pending&limit={limit}");
