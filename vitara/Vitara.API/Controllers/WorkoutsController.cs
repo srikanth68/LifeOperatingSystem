@@ -7,19 +7,28 @@ namespace Vitara.API.Controllers;
 [ApiController, Route("api/workouts")]
 public class WorkoutsController(IVitaraRepository repo) : ControllerBase
 {
+    // A workout's Day is a local-calendar fact, so both the default and the query
+    // window use local time (containers run TZ=America/New_York). Computed in UTC, an
+    // evening workout logged after 8pm Eastern was filed under TOMORROW — and the
+    // window ended "today" in UTC, which is a different day from the one the user is
+    // standing in.
     [HttpGet]
     public async Task<IActionResult> Get([FromQuery] int days = 30)
     {
-        var to = DateOnly.FromDateTime(DateTime.UtcNow);
-        return Ok(await repo.GetWorkoutsAsync(to.AddDays(-days), to));
+        var to = DateOnly.FromDateTime(DateTime.Now);
+        // +1 tolerates anything already filed under tomorrow by an earlier build.
+        return Ok(await repo.GetWorkoutsAsync(to.AddDays(-days), to.AddDays(1)));
     }
 
     [HttpPost]
     public async Task<IActionResult> Log([FromBody] WorkoutRequest req)
     {
         if (string.IsNullOrWhiteSpace(req.Activity)) return BadRequest("Activity is required.");
+        if (!string.IsNullOrWhiteSpace(req.Day) && !DateOnly.TryParse(req.Day, out _))
+            return BadRequest($"Could not read '{req.Day}' as a date — use yyyy-MM-dd.");
+
         var day = string.IsNullOrWhiteSpace(req.Day)
-            ? DateOnly.FromDateTime(DateTime.UtcNow)
+            ? DateOnly.FromDateTime(DateTime.Now)
             : DateOnly.Parse(req.Day);
 
         var workout = new Workout

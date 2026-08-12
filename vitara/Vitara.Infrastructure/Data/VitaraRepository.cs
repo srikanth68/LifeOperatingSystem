@@ -104,8 +104,15 @@ public class VitaraRepository(VitaraDbContext db) : IVitaraRepository
 
     // ── Workouts ──
     public Task UpsertWorkoutsAsync(IEnumerable<Workout> workouts) => UpsertByIdAsync(db.Workouts, workouts, w => w.Id);
+    // Ordered by DAY first, then time within the day. Ordering by StartTime alone
+    // silently hid every manually logged workout: StartTime is nullable and only Oura
+    // supplies it, and SQLite sorts NULL last under DESC — so anything logged through
+    // San or the UI ranked below every synced workout, and the callers that take the
+    // most recent 3 or 10 then cut it off entirely. It was saved and invisible.
     public Task<List<Workout>> GetWorkoutsAsync(DateOnly from, DateOnly to) =>
-        db.Workouts.Where(w => w.Day >= from && w.Day <= to).OrderByDescending(w => w.StartTime).ToListAsync();
+        db.Workouts.Where(w => w.Day >= from && w.Day <= to)
+            .OrderByDescending(w => w.Day).ThenByDescending(w => w.StartTime)
+            .ToListAsync();
 
     // ── Nutrition ──
     public Task UpsertNutritionAsync(IEnumerable<DailyNutrition> entries) => UpsertByIdAsync(db.Nutrition, entries, n => n.Id);
