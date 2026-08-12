@@ -84,8 +84,15 @@ public class MicrosoftGraphClient(HttpClient http) : IEmailProviderClient
         token = token with { RefreshToken = token.RefreshToken ?? storedRefreshToken };
 
         var filter = $"receivedDateTime ge {sinceUtc:yyyy-MM-ddTHH:mm:ssZ}";
+        // internetMessageHeaders carries List-Unsubscribe, List-Id and Precedence —
+        // the same signals EmailFilter uses to drop bulk mail before the model reads
+        // it. Graph returns them only when explicitly selected, and documents that a
+        // collection query may omit them anyway; when that happens the filter simply
+        // sees no headers and keeps the message, which is the safe direction to fail.
         var url = $"{GraphBase}/me/mailFolders/inbox/messages" +
-                  $"?$filter={Uri.EscapeDataString(filter)}&$select=from,subject,bodyPreview,receivedDateTime&$top=25&$orderby=receivedDateTime asc";
+                  $"?$filter={Uri.EscapeDataString(filter)}" +
+                  $"&$select=from,subject,bodyPreview,receivedDateTime,internetMessageHeaders" +
+                  $"&$top=25&$orderby=receivedDateTime asc";
 
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
         req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
@@ -99,7 +106,18 @@ public class MicrosoftGraphClient(HttpClient http) : IEmailProviderClient
                 m.From?.EmailAddress?.Address ?? "(unknown sender)",
                 m.Subject ?? "(no subject)",
                 m.BodyPreview ?? "",
-                m.ReceivedDateTime))
+                m.ReceivedDateTime,
+                // Lower-cased keys, matching the Gmail client — header names are
+                // case-insensitive per RFC 5322 and the filter looks them up that way.
+                // Duplicates (a message can carry several Received headers) keep the
+                // first; the filter only ever tests for presence or a simple value.
+                (m.InternetMessageHeaders ?? [])
+                    .Where(h => !string.IsNullOrEmpty(h.Name))
+                    .GroupBy(h => h.Name!.ToLowerInvariant())
+                    .ToDictionary(g => g.Key, g => g.First().Value ?? ""),
+                // Graph has no equivalent of Gmail's CATEGORY_* classification, so
+                // Outlook relies on headers alone.
+                []))
             .ToList();
 
         return (JsonSerializer.Serialize(token), messages);
@@ -117,9 +135,14 @@ public class MicrosoftGraphClient(HttpClient http) : IEmailProviderClient
 
     private record GraphUser(string? Mail, string? UserPrincipalName);
     private record GraphMessagePage(List<GraphMessage>? Value = null);
-    private record GraphMessage(GraphFrom? From, string? Subject, string? BodyPreview, DateTime ReceivedDateTime);
+    private record GraphMessage(
+        GraphFrom? From, string? Subject, string? BodyPreview, DateTime ReceivedDateTime,
+        // Null whenever Graph declines to expand it on a collection query — handled at
+        // the call site rather than defaulted, so "absent" stays distinguishable.
+        List<GraphHeader>? InternetMessageHeaders);
     private record GraphFrom(GraphEmailAddress? EmailAddress);
     private record GraphEmailAddress(string? Address);
+    private record GraphHeader(string? Name, string? Value);
 
     private record MsTokenResponse
     {
