@@ -148,8 +148,18 @@ public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config, I
         };
         if (toolsJson is not null) payload["tools"] = toolsJson;
 
+        var body = JsonSerializer.Serialize(payload);
+
+        // Exactly what goes on the wire, for when the question is "what did San
+        // actually send" rather than "how long did it take". Off unless asked for:
+        // this prints the entire prompt, which carries the user's finances, health
+        // and correspondence, into the container log.
+        if (LogWire)
+            logger.LogInformation("LLM REQUEST ({Bytes} bytes, {ToolCount} tools):\n{Body}",
+                body.Length, toolsJson?.Length ?? 0, Pretty(body));
+
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/v1/chat/completions");
-        req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        req.Content = new StringContent(body, Encoding.UTF8, "application/json");
 
         var apiKey = Environment.GetEnvironmentVariable("LLM_API_KEY");
         if (!string.IsNullOrWhiteSpace(apiKey))
@@ -167,13 +177,18 @@ public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config, I
             throw new LlmHttpException(Offline);
         }
 
-        var body = await resp.Content.ReadAsStringAsync(ct);
+        var replyBody = await resp.Content.ReadAsStringAsync(ct);
+
+        if (LogWire)
+            logger.LogInformation("LLM RESPONSE (HTTP {Status}, {Bytes} bytes):\n{Body}",
+                (int)resp.StatusCode, replyBody.Length, Pretty(replyBody));
+
         if (!resp.IsSuccessStatusCode)
             throw new LlmHttpException($"⚠️ San's local model returned an error ({(int)resp.StatusCode}). Nothing left your machine — try again in a moment.");
 
         try
         {
-            return JsonDocument.Parse(body).RootElement
+            return JsonDocument.Parse(replyBody).RootElement
                 .GetProperty("choices")[0]
                 .GetProperty("message")
                 .Clone();
@@ -182,6 +197,24 @@ public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config, I
         {
             throw new LlmHttpException("⚠️ San got an unexpected response from the local model. Nothing left your machine.");
         }
+    }
+
+    // Deliberately opt-in and deliberately not Debug: a log level nobody has set is a
+    // log nobody finds, and this is only ever wanted while actively looking at it.
+    private static bool LogWire =>
+        string.Equals(Environment.GetEnvironmentVariable("LLM_LOG_WIRE"), "true",
+            StringComparison.OrdinalIgnoreCase);
+
+    // Indented so a prompt is readable in `docker compose logs`. Falls back to the raw
+    // string rather than throwing — a logging helper must never break the call it logs.
+    private static string Pretty(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            return JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (JsonException) { return json; }
     }
 
     private static object ToOpenAiTool(ToolDefinition t) => new
