@@ -1,6 +1,7 @@
 using Maaya.Auth;
 using Microsoft.EntityFrameworkCore;
 using San.Application.Interfaces;
+using San.Infrastructure.Agenda;
 using San.Infrastructure.Agent;
 using San.Infrastructure.Chat;
 using San.Infrastructure.Data;
@@ -45,6 +46,7 @@ builder.Services.AddDbContext<SanDbContext>(o =>
 builder.Services.AddScoped<ISanRepository, SanRepository>();
 builder.Services.AddScoped<IHealthTracker, HealthTracker>();
 builder.Services.AddScoped<IHealthProbe, HealthProbe>();
+builder.Services.AddScoped<IAgendaService, AgendaService>();
 builder.Services.AddScoped<IModuleContextService, ModuleContextService>();
 builder.Services.AddHttpClient<ITelegramNotifier, TelegramNotifier>();
 
@@ -105,6 +107,7 @@ builder.Services.AddHostedService<EmailTriageWorker>();
 builder.Services.AddHostedService<SystemAuditWorker>();
 builder.Services.AddHostedService<InsightWorker>();
 builder.Services.AddHostedService<CommitmentWorker>();
+builder.Services.AddHostedService<MorningBriefWorker>();
 
 var host = builder.Build();
 
