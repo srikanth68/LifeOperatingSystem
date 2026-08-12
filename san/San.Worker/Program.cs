@@ -104,6 +104,7 @@ builder.Services.AddHostedService<MemoryDistillationWorker>();
 builder.Services.AddHostedService<EmailTriageWorker>();
 builder.Services.AddHostedService<SystemAuditWorker>();
 builder.Services.AddHostedService<InsightWorker>();
+builder.Services.AddHostedService<CommitmentWorker>();
 
 var host = builder.Build();
 

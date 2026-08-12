@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -335,6 +336,67 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
     // these used to swallow the exception and, worse, ignore the response status
     // entirely: a 401 from an expired service token counted as a successful save. San
     // would go on believing it had a brain while everything it learned went nowhere.
+    // Open commitments from every store that holds one. Anything unreachable
+    // contributes nothing rather than failing the lot — a chase that only sees
+    // NorthStar is still worth more than no chase at all.
+    public async Task<List<Commitment>> GetOpenCommitmentsAsync(CancellationToken ct = default)
+    {
+        var list = new List<Commitment>();
+
+        if (await TryGetJsonAsync("northstar", "/api/actions?status=pending&limit=100", ct) is { } actions
+            && actions.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var a in actions.EnumerateArray())
+            {
+                var id = Str(a, "id");
+                var title = Str(a, "title");
+                if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(title)) continue;
+
+                list.Add(new Commitment(
+                    $"commitment.northstar.{id}", title!, "northstar",
+                    ParseDay(Str(a, "dueDate")),
+                    a.TryGetProperty("createdAt", out var ca) && ca.TryGetDateTime(out var created)
+                        ? DateTime.SpecifyKind(created, DateTimeKind.Utc) : DateTime.UtcNow,
+                    a.TryGetProperty("priority", out var p) && p.TryGetInt32(out var pri) ? pri : 3,
+                    Str(a, "category")));
+            }
+        }
+
+        if (await TryGetJsonAsync("aasthi", "/api/tasks?status=pending", ct) is { } tasks
+            && tasks.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var t in tasks.EnumerateArray())
+            {
+                var id = Str(t, "id");
+                var title = Str(t, "title");
+                if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(title)) continue;
+
+                // Aasthi ranks by word, NorthStar by number — mapped here so one
+                // ordering governs the chase.
+                var priority = (Str(t, "priority") ?? "medium").ToLowerInvariant() switch
+                {
+                    "urgent" => 1, "high" => 2, "medium" => 3, _ => 4,
+                };
+
+                list.Add(new Commitment(
+                    $"commitment.aasthi.{id}", title!, "aasthi",
+                    ParseDay(Str(t, "dueDate")),
+                    t.TryGetProperty("createdAt", out var ca) && ca.TryGetDateTime(out var created)
+                        ? DateTime.SpecifyKind(created, DateTimeKind.Utc) : DateTime.UtcNow,
+                    priority,
+                    "property task"));
+            }
+        }
+
+        return list;
+    }
+
+    private static string? Str(JsonElement el, string name) =>
+        el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+    private static DateOnly? ParseDay(string? raw) =>
+        DateOnly.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : null;
+
     public async Task<string?> GetRollupAsync(CancellationToken ct = default)
     {
         try
