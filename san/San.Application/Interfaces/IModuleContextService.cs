@@ -34,6 +34,9 @@ public interface IModuleContextService
     // Everything the user has said they would do, from every store that holds one.
     Task<List<Commitment>> GetOpenCommitmentsAsync(CancellationToken ct = default);
 
+    // Today's habits and whether each is already ticked, for the agenda.
+    Task<List<(string Name, bool DoneToday)>> GetTodaysHabitsAsync(CancellationToken ct = default);
+
     // NorthStar's week-by-week table of what actually happened. Raw JSON, passed to the
     // model verbatim and also used as the ground truth an insight is checked against —
     // so it must be the SAME string in both places, not two separate fetches.

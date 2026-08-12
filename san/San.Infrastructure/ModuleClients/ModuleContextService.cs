@@ -391,6 +391,25 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
         return list;
     }
 
+    // Today's habits and whether each is already ticked. Karma answers with streaks
+    // and metadata the agenda has no use for; only the two fields it needs cross over.
+    public async Task<List<(string Name, bool DoneToday)>> GetTodaysHabitsAsync(CancellationToken ct = default)
+    {
+        var list = new List<(string, bool)>();
+        if (await TryGetJsonAsync("karma", "/api/habits/today", ct) is not { } habits
+            || habits.ValueKind != JsonValueKind.Array) return list;
+
+        foreach (var h in habits.EnumerateArray())
+        {
+            var name = Str(h, "name");
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            // Null means "no log either way today", which is not done.
+            var done = h.TryGetProperty("todayCompleted", out var d) && d.ValueKind == JsonValueKind.True;
+            list.Add((name!, done));
+        }
+        return list;
+    }
+
     private static string? Str(JsonElement el, string name) =>
         el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
