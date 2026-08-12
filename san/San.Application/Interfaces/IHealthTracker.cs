@@ -40,4 +40,5 @@ public static class HealthComponents
     public const string WorkerCalendarSync = "worker.calendar_sync";
     public const string WorkerNotifications = "worker.notifications";
     public const string WorkerInsights = "worker.insights";
+    public const string WorkerCommitments = "worker.commitments";
 }

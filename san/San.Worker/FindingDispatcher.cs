@@ -195,6 +195,7 @@ public static class FindingDispatcher
         "audit" => "🔎 System audit",
         "email" => "📬 Email triage",
         "health" => "🩺 San self-check",
+        "commitments" => "📌 Still on your list",
         _ => "🔎 San",
     };
 
