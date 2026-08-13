@@ -303,3 +303,64 @@
   .ns-action-form-row { flex-direction: column; }
   .ns-fact-form { flex-direction: column; }
 }
+
+/* ── Module tab bar ──────────────────────────────────────────────────────────
+   NorthStar previously used .m-tabs/.m-tab, which existed in the markup but had
+   no CSS anywhere in the app — so the nav rendered as bare text with emoji and
+   the active tab was indistinguishable from the rest. Pill tabs, matching the
+   shape Karma's category tabs already use, tinted with the module colour so it
+   reads as NorthStar rather than generic chrome.                              */
+.ns-tabs {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+.ns-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  font-size: 0.78rem;
+  font-weight: 600;
+  /* --text2, not --text3: Karma's tabs are category filters and can afford to
+     recede, but these are the module's primary navigation and have to stay
+     legible against the dark background. */
+  color: var(--text2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.ns-tab:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--mc) 40%, transparent);
+}
+.ns-tab.active {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--mc) 55%, transparent);
+  background: color-mix(in srgb, var(--mc) 12%, transparent);
+}
+/* Keyboard focus must stay visible — these are the module's primary navigation. */
+.ns-tab:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--mc) 70%, transparent);
+  outline-offset: 2px;
+}
+.ns-tab-icon {
+  font-size: 0.9rem;
+  line-height: 1;
+  /* Emoji ignore colour, so dim the inactive ones with opacity instead. */
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+.ns-tab.active .ns-tab-icon,
+.ns-tab:hover .ns-tab-icon { opacity: 1; }
+
+@media (max-width: 560px) {
+  .ns-tabs { gap: 0.3rem; }
+  .ns-tab { padding: 0.35rem 0.7rem; font-size: 0.72rem; }
+}
