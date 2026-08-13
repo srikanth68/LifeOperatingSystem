@@ -1,6 +1,16 @@
 namespace San.Application.Interfaces;
 
-public record ChatTurn(string Role, string Content);
+// ImageDataUrl carries a "data:image/...;base64,..." on turns that have a picture
+// attached. Optional and last, so every existing construction site is unaffected.
+//
+// Only the CURRENT turn ever carries one. Stored history keeps a text marker instead
+// of the image, because re-sending a picture on every subsequent turn would spend
+// thousands of vision tokens per message to re-describe something the model already
+// answered about — and would grow without bound as the conversation continues.
+//
+// Providers that can't see images ignore it and still get the text, so attaching a
+// photo degrades to a normal message rather than failing.
+public record ChatTurn(string Role, string Content, string? ImageDataUrl = null);
 
 public record ToolDefinition(string Name, string Description, Dictionary<string, ToolParameter> Parameters);
 public record ToolParameter(string Type, string Description, bool Required = false);

@@ -6,6 +6,7 @@ import { moduleApi } from '../services/apiHost';
 import { useTimezone, formatInTz, localInputToUtcIso, utcIsoToLocalInput } from '../services/timezone';
 import { getVoiceStatus, startRecording, speak, stopSpeaking, type Recorder, type VoiceStatus } from '../services/voice';
 import { useVoiceCallContext } from '../services/voiceCallContext';
+import { downscaleImage, type PickedImage } from '../services/image';
 import '../styles/modules.css';
 import '../styles/san.css';
 
@@ -25,6 +26,11 @@ const send = (url: string, method: string, body?: unknown) =>
 
 /* ── Types ── */
 interface ChatMsg { id: string; role: 'user' | 'assistant'; content: string; createdAt: string }
+
+// What a send carries. The image is a downscaled data URL and is attached to this turn
+// only — the server stores an "[image attached]" marker in history rather than the
+// picture, so later turns don't re-send it.
+interface Outgoing { content: string; imageDataUrl?: string }
 interface Reminder { id: string; text: string; dueAt: string; done: boolean; notifyTelegram: boolean; notifiedAt: string | null; createdAt: string }
 interface AlertItem {
   id: string; type: string; title: string; description: string;
@@ -258,6 +264,13 @@ function Assistant() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Image attachment. Gemma 4 is multimodal, so a picture rides along with the text on
+  // the same chat call — no separate endpoint, and San can still use its tools in the
+  // same turn. Held as a downscaled data URL until sent, then cleared.
+  const [image, setImage] = useState<PickedImage | null>(null);
+  const [imageErr, setImageErr] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
   // Voice: mic (STT) + speaker (TTS). Buttons only appear if the respective
   // service is configured on the backend (see /api/voice/status).
   const [voice, setVoice] = useState<VoiceStatus>({ sttReady: false, ttsReady: false });
@@ -277,7 +290,7 @@ function Assistant() {
 
   const messagesQ = useQuery<ChatMsg[]>({ queryKey: ['san-messages'], queryFn: () => get(`${API}/api/chat/messages`) });
   const sendMut = useMutation({
-    mutationFn: (content: string) => send(`${API}/api/chat/messages`, 'POST', { content }),
+    mutationFn: (m: Outgoing) => send(`${API}/api/chat/messages`, 'POST', m),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['san-messages'] }),
   });
   const clearMut = useMutation({
@@ -331,7 +344,7 @@ function Assistant() {
       setTranscribing(true);
       try {
         const text = await recorder!.stop();
-        if (text) sendMut.mutate(text); // dictate → send straight to San
+        if (text) sendMut.mutate({ content: text }); // dictate → send straight to San
       } catch (e) { setVoiceErr((e as Error).message); }
       finally { setTranscribing(false); }
     } else {
@@ -345,11 +358,27 @@ function Assistant() {
   if (messagesQ.isError) return <ApiError port={5300} />;
 
   const messages = messagesQ.data ?? [];
+  // A picture alone is a valid message — the server reads it as "what is this?".
   const submit = () => {
     const text = draft.trim();
-    if (!text || sendMut.isPending) return;
+    if ((!text && !image) || sendMut.isPending) return;
     setDraft('');
-    sendMut.mutate(text);
+    setImage(null);
+    setImageErr(null);
+    sendMut.mutate({ content: text, imageDataUrl: image?.dataUrl });
+  };
+
+  const attachImage = async (file: File | undefined) => {
+    if (!file) return;
+    setImageErr(null);
+    try {
+      setImage(await downscaleImage(file));
+    } catch (e) {
+      setImageErr(e instanceof Error ? e.message : 'Could not read that image.');
+    } finally {
+      // Clear the input's value so picking the SAME file again still fires onChange.
+      if (fileRef.current) fileRef.current.value = '';
+    }
   };
 
   return (
@@ -392,7 +421,14 @@ function Assistant() {
                   wait — echo it immediately from the mutation's own variables. */}
               <div className="chat-bubble">
                 <div className="chat-avatar">U</div>
-                <div className="chat-text">{sendMut.variables}</div>
+                <div className="chat-text">
+                  {/* Echo the picture too — it's the slowest kind of turn, and seeing
+                      nothing but "San is thinking" makes it look like the upload failed. */}
+                  {sendMut.variables?.imageDataUrl && (
+                    <img className="chat-image" src={sendMut.variables.imageDataUrl} alt="Attached" />
+                  )}
+                  {sendMut.variables?.content}
+                </div>
               </div>
               <div className="chat-bubble">
                 <div className="chat-avatar">S</div>
@@ -401,7 +437,31 @@ function Assistant() {
             </>
           )}
         </div>
+        {/* Sits above the input rather than inside it: a thumbnail in a 40px-tall row
+            would be unreadable, and this makes it obvious what's about to be sent. */}
+        {image && (
+          <div className="chat-attach">
+            <img src={image.dataUrl} alt="Attached" />
+            <span className="chat-attach-meta">
+              {image.width}×{image.height} · {Math.round(image.bytes / 1024)} KB
+            </span>
+            <button className="chat-attach-x" onClick={() => setImage(null)} title="Remove image">✕</button>
+          </div>
+        )}
         <div className="chat-bar">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={e => attachImage(e.target.files?.[0])}
+          />
+          <button
+            className="chat-voice-btn"
+            onClick={() => fileRef.current?.click()}
+            disabled={inputBusy}
+            title="Attach an image"
+          >🖼</button>
           {voice.ttsReady && (
             <button
               className="chat-voice-btn"
@@ -436,28 +496,17 @@ function Assistant() {
               title="Start a hands-free voice call with San"
             >📞</button>
           )}
-          <button className="chat-send" onClick={submit} disabled={sendMut.isPending || !draft.trim()}><SendIcon /></button>
+          <button className="chat-send" onClick={submit} disabled={sendMut.isPending || (!draft.trim() && !image)}><SendIcon /></button>
         </div>
-        {voiceErr && <div style={{ color: 'var(--debt, #e5484d)', fontSize: '0.75rem', padding: '0.4rem 0.6rem' }}>{voiceErr}</div>}
+        {(voiceErr || imageErr) && (
+          <div style={{ color: 'var(--debt, #e5484d)', fontSize: '0.75rem', padding: '0.4rem 0.6rem' }}>{voiceErr || imageErr}</div>
+        )}
       </div>
       {/* The call overlay itself now renders at the App root (services/voiceCallContext.tsx
-          + components/VoiceCallUI.tsx) so it's reachable from every module, not just here. */}
-      <div className="card">
-        <h3>What San can do</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', marginTop: '0.5rem' }}>
-          {[
-            { icon: '💬', text: 'Answer natural language questions about your finances, health, and properties' },
-            { icon: '🔗', text: 'Cross-module insights pulled live from Vault, Vitara, and Aasthi' },
-            { icon: '📅', text: 'Reminders and alerts, delivered to Telegram' },
-            { icon: '📊', text: 'A unified activity feed across all connected modules' },
-          ].map(f => (
-            <div key={f.text} className="module-feature-item" style={{ '--mc': MC } as React.CSSProperties}>
-              <span className="feat-icon">{f.icon}</span>
-              <span>{f.text}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+          + components/VoiceCallUI.tsx) so it's reachable from every module, not just here.
+          The "What San can do" card that used to sit here is gone — it described a much
+          smaller San than the one that now exists, and the chat window uses the height
+          better than a static feature list did. */}
     </div>
   );
 }
