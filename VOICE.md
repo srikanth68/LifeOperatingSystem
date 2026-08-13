@@ -5,7 +5,7 @@ no audio ever leaves Everest. San proxies to whatever OpenAI-compatible speech
 services you point it at (same swappable pattern as `LLM_PROVIDER`).
 
 ```
-Browser mic ──record──► San /api/voice/transcribe ──► Whisper (STT) ──► text ──► chat
+Browser mic ──record──► San /api/voice/transcribe ──► ffmpeg ──► Gemma (STT) ──► text ──► chat
 San reply ──text──► San /api/voice/speak ──► Kokoro (TTS) ──► audio ──► browser plays
 ```
 
@@ -40,7 +40,7 @@ navigating the dashboard first.
 
 The overlay names the phase it's in — *Listening → Hearing you → Making out what
 you said → San is thinking → San is speaking* — because on a local stack a turn
-genuinely can take 20-30s (Whisper cold-load + the agent tool loop + TTS). A
+genuinely can take 20-30s (transcription + the agent tool loop + TTS). A
 bare spinner would read as broken; naming the phase makes the wait legible.
 
 **How it decides you're talking** (`vault/frontend/src/services/voiceSession.ts`):
@@ -57,27 +57,69 @@ the mic, trips the interrupt, and the call talks over itself.
 > `voiceSession.ts`. If it cuts you off mid-sentence raise `SILENCE_MS`; if a
 > noisy room keeps it stuck in "Hearing you", raise `SPEECH_MULT`.
 
-## Whisper (STT) and Kokoro (TTS) — part of `docker compose up`
+## STT — Gemma hears the audio itself (no Whisper container)
 
-Both are regular services in `docker-compose.yml`:
+Gemma 4 is multimodal. The same llama.cpp server San already chats with accepts
+audio on `/v1/chat/completions`, so speech-to-text costs **no extra service and
+no second model in RAM**. Confirm the server has it:
+
+```bash
+curl -s http://localhost:8080/props | grep -o '"audio":[^,}]*'
+```
+
+`"audio":true` means you're set. Starting llama-server with
+`-hf unsloth/gemma-4-E4B-it-GGUF:Q4_K_M` pulls the multimodal projector
+automatically — no `--mmproj` flag needed.
+
+**Why ffmpeg is in the image.** Browsers record Opus-in-WebM (Chrome/Firefox) or
+AAC-in-MP4 (Safari). llama.cpp decodes audio with miniaudio, which reads only
+WAV, MP3 and FLAC. So `AudioTranscode` shells out to ffmpeg to convert each
+recording to 16 kHz mono WAV first. Whisper decoded its own input, which is why
+this dependency is new.
+
+**Keeping it literal.** A chat model asked to transcribe will happily *answer*
+the question it just heard. `GemmaTranscriber` pins it down with a
+transcription-engine system prompt, `temperature: 0`, thinking disabled, and a
+cleanup pass that strips narrating openers ("Here is the transcription:") and
+maps a `(no speech)` sentinel to an empty string.
+
+### Falling back to Whisper
+
+Whisper is still in `docker-compose.yml`, behind a profile so it doesn't start
+by default:
+
+```bash
+docker compose --profile whisper up -d whisper
+```
+
+Then set `WHISPER_SERVICE_URL=http://whisper:8000` in `deploy/env/san.env` and
+`docker compose up -d san`. That URL alone flips the engine — `STT_PROVIDER`
+defaults to `whisper` whenever a Whisper URL is configured, `gemma` otherwise.
+Set `STT_PROVIDER` explicitly to override.
+
+`GET /api/voice/status` reports `sttEngine`, so which one actually answered is
+never a guess.
+
+## Kokoro (TTS) — part of `docker compose up`
+
+TTS stays a separate service: Gemma generates text, not audio.
 
 | Service | Image | San reaches it at |
 |---|---|---|
-| `whisper` | `fedirz/faster-whisper-server:latest-cpu` | `http://whisper:8000` |
 | `kokoro` | `ghcr.io/remsky/kokoro-fastapi-cpu:latest` | `http://kokoro:8880` |
 
-Both URLs are already set in `deploy/env/san.env` (`WHISPER_SERVICE_URL`,
-`TTS_SERVICE_URL`). They come up with everything else — nothing to run by hand.
+`TTS_SERVICE_URL` is already set in `deploy/env/san.env`. It comes up with
+everything else — nothing to run by hand.
 
 **Voice**: `TTS_VOICE=bf_emma` (British female, Kokoro's top tier). Kokoro ships
 its voices in the image — unlike Piper there are no model files to download.
 To change it, set `TTS_VOICE` in `deploy/env/san.env` and
 `docker compose up -d san` (env-only, no rebuild).
 
-**Cold start**: both services load their model on first use after idling and
-unload it again after ~5 minutes. The first request after a quiet spell can
-take 5-10s or occasionally fail outright — retry once before assuming the
-service is down.
+**Cold start**: Kokoro loads its model on first use after idling and unloads it
+again after ~5 minutes. The first request after a quiet spell can take 5-10s or
+occasionally fail outright — retry once before assuming the service is down.
+(Gemma STT has no equivalent cold start; the model is already resident for chat.)
 
 ### Falling back to Piper
 
@@ -145,6 +187,6 @@ the chat dies mid-"thinking".
 - **Every piece is optional & independent** — run STT, TTS, both, or neither.
   Call mode simply doesn't appear unless both are up.
 - **Swappable**: any OpenAI-compatible STT/TTS server works; change only the URL.
-- **Nothing leaves the Mac**: mic audio → local nginx → local San → local
-  Whisper/Kokoro → back. The LLM is local Gemma via llama.cpp. No cloud in the
-  voice path.
+- **Nothing leaves the Mac**: mic audio → local nginx → local San → local ffmpeg
+  → local Gemma (or Whisper) / local Kokoro → back. The LLM is local Gemma via
+  llama.cpp. No cloud in the voice path.

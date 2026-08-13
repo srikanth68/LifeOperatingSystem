@@ -12,6 +12,7 @@ using San.Infrastructure.Llm;
 using San.Infrastructure.ModuleClients;
 using San.Infrastructure.Notifications;
 using San.Infrastructure.Outlook;
+using San.Infrastructure.Voice;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -93,6 +94,18 @@ builder.Services.AddHttpClient("nexus",     c => c.BaseAddress = new Uri(nexusUr
 // the model, which on CPU can take well over a minute.
 builder.Services.AddHttpClient("whisper", c => c.Timeout = TimeSpan.FromSeconds(300));
 builder.Services.AddHttpClient("piper",   c => c.Timeout = TimeSpan.FromSeconds(120));
+// Gemma STT talks to the same llama.cpp server as the chat provider, but gets its own
+// named client: a transcription queues behind whatever chat turn is already generating,
+// so its timeout has to cover the wait as well as the work.
+builder.Services.AddHttpClient("gemma-stt", c => c.Timeout = TimeSpan.FromSeconds(300));
+
+// Speech-to-text engine selection — same config-driven pattern as the LLM provider.
+// Gemma 4 hears audio natively, so the default deployment no longer needs a separate
+// Whisper container; WHISPER_SERVICE_URL still switches back to it.
+if (SpeechToTextSelection.Resolve() == SpeechToTextSelection.Whisper)
+    builder.Services.AddScoped<ISpeechToText, WhisperTranscriber>();
+else
+    builder.Services.AddScoped<ISpeechToText, GemmaTranscriber>();
 
 builder.Services.AddScoped<AgentToolExecutor>();
 // MCP gateway client — hands San's agent loop the full Maaya.Mcp tool catalog.

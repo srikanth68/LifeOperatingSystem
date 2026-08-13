@@ -2,32 +2,26 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
+using San.Application.Interfaces;
 
 namespace San.API.Controllers;
 
 // Voice proxy — keeps San device-agnostic and the speech engines swappable, the
 // same way LLM_PROVIDER keeps the model swappable. The browser records/plays audio;
 // San forwards to whatever self-hosted, OpenAI-compatible speech services you point
-// it at (Whisper for STT, Piper/openedai-speech for TTS). No cloud, fully local.
+// it at. No cloud, fully local.
+//
+// STT lives behind ISpeechToText (Gemma's native audio, or a Whisper container).
+// TTS is still a direct proxy — Gemma generates no audio, so a speech engine
+// remains a genuinely separate service there.
 [ApiController, Route("api/voice")]
-public partial class VoiceController(IHttpClientFactory httpFactory, ILogger<VoiceController> logger) : ControllerBase
+public partial class VoiceController(
+    IHttpClientFactory httpFactory,
+    ISpeechToText stt,
+    ILogger<VoiceController> logger) : ControllerBase
 {
     private static string? ServiceUrl(string key) =>
         Environment.GetEnvironmentVariable(key) is { Length: > 0 } v ? v.TrimEnd('/') : null;
-
-    // Never throws — falls back to a bare media type, then to audio/webm.
-    private static System.Net.Http.Headers.MediaTypeHeaderValue ParseContentType(string? raw)
-    {
-        if (!string.IsNullOrWhiteSpace(raw))
-        {
-            if (System.Net.Http.Headers.MediaTypeHeaderValue.TryParse(raw, out var parsed))
-                return parsed;
-            var bare = raw.Split(';')[0].Trim();
-            if (System.Net.Http.Headers.MediaTypeHeaderValue.TryParse(bare, out var fallback))
-                return fallback;
-        }
-        return new System.Net.Http.Headers.MediaTypeHeaderValue("audio/webm");
-    }
 
     // Chat replies carry markdown and emoji meant for the screen, not a TTS engine —
     // read verbatim, Piper says "asterisk asterisk" and stumbles on symbols. Strip
@@ -62,50 +56,41 @@ public partial class VoiceController(IHttpClientFactory httpFactory, ILogger<Voi
     [GeneratedRegex(@"\n{2,}")] private static partial Regex MultiNewlineRegex();
     [GeneratedRegex(@"\n")] private static partial Regex NewlineRegex();
 
-    // Speech → text. Accepts the browser's recorded audio blob, forwards it to a
-    // Whisper server's OpenAI-compatible /v1/audio/transcriptions endpoint.
+    // Speech → text. Accepts the browser's recorded audio blob and hands it to
+    // whichever engine STT_PROVIDER selected. The response shape is unchanged from
+    // when this method spoke to Whisper directly, so no client needs updating.
     [HttpPost("transcribe")]
     [RequestSizeLimit(25_000_000)] // ~25 MB — plenty for a spoken message
-    public async Task<IActionResult> Transcribe(IFormFile? audio)
+    public async Task<IActionResult> Transcribe(IFormFile? audio, CancellationToken ct)
     {
-        var baseUrl = ServiceUrl("WHISPER_SERVICE_URL");
-        if (baseUrl is null)
-            return StatusCode(503, new { error = "Speech-to-text isn't set up yet. Run a Whisper service and set WHISPER_SERVICE_URL in san/.env." });
+        if (!stt.IsConfigured)
+            return StatusCode(503, new { error = $"Speech-to-text isn't set up yet (engine: {stt.EngineName}). Check LLM_BASE_URL, or set WHISPER_SERVICE_URL to use Whisper instead." });
         if (audio is null || audio.Length == 0)
             return BadRequest(new { error = "No audio received." });
 
         try
         {
-            var http = httpFactory.CreateClient("whisper");
-            using var form = new MultipartFormDataContent();
             using var stream = audio.OpenReadStream();
-            var fileContent = new StreamContent(stream);
-            // Browsers send "audio/webm;codecs=opus". The MediaTypeHeaderValue CONSTRUCTOR
-            // rejects any value carrying parameters (throws FormatException) — Parse accepts
-            // them. Using the ctor here meant every real browser recording blew up before
-            // Whisper was ever contacted, surfacing as a misleading "couldn't reach" error.
-            fileContent.Headers.ContentType = ParseContentType(audio.ContentType);
-            form.Add(fileContent, "file", string.IsNullOrWhiteSpace(audio.FileName) ? "audio.webm" : audio.FileName);
-            form.Add(new StringContent(Environment.GetEnvironmentVariable("WHISPER_MODEL") ?? "whisper-1"), "model");
-
-            using var resp = await http.PostAsync($"{baseUrl}/v1/audio/transcriptions", form);
-            var body = await resp.Content.ReadAsStringAsync();
-            if (!resp.IsSuccessStatusCode)
-            {
-                logger.LogWarning("Whisper returned HTTP {Status}: {Body}", (int)resp.StatusCode, Trim(body));
-                return StatusCode(502, new { error = $"Whisper service returned HTTP {(int)resp.StatusCode}.", detail = Trim(body) });
-            }
-
-            // OpenAI-compatible response: { "text": "..." }. Fall back to raw body.
-            string? text = null;
-            try { using var doc = JsonDocument.Parse(body); if (doc.RootElement.TryGetProperty("text", out var t)) text = t.GetString(); }
-            catch { /* not JSON — treat whole body as text */ }
-            return Ok(new { text = (text ?? body).Trim() });
+            var text = await stt.TranscribeAsync(stream, audio.ContentType, audio.FileName, ct);
+            return Ok(new { text, engine = stt.EngineName });
+        }
+        catch (SpeechToTextException ex)
+        {
+            // The engine already phrased this for the user; 502 keeps the existing
+            // client-side handling for "the speech service is unhappy".
+            logger.LogWarning("Transcription failed via {Engine}: {Message} — {Detail}", stt.EngineName, ex.UserMessage, ex.Detail);
+            return StatusCode(502, new { error = ex.UserMessage, detail = ex.Detail });
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Browser navigated away or aborted the fetch — not a failure worth logging
+            // as one. 499 is nginx's "client closed request".
+            return StatusCode(499);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Couldn't reach the Whisper service at {BaseUrl}", baseUrl);
-            return StatusCode(502, new { error = "Couldn't reach the Whisper service.", detail = ex.Message });
+            logger.LogError(ex, "Unexpected transcription failure via {Engine}", stt.EngineName);
+            return StatusCode(502, new { error = "Transcription failed unexpectedly.", detail = ex.Message });
         }
     }
 
@@ -163,7 +148,10 @@ public partial class VoiceController(IHttpClientFactory httpFactory, ILogger<Voi
     [HttpGet("status")]
     public IActionResult Status() => Ok(new
     {
-        sttReady = ServiceUrl("WHISPER_SERVICE_URL") is not null,
+        sttReady = stt.IsConfigured,
+        // Which engine answered is worth exposing: "voice is broken" and "voice is
+        // broken on Gemma specifically" are different bug reports.
+        sttEngine = stt.EngineName,
         ttsReady = (ServiceUrl("TTS_SERVICE_URL") ?? ServiceUrl("PIPER_SERVICE_URL")) is not null,
     });
 

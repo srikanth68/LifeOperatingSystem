@@ -3,7 +3,9 @@ import { authHeaders } from './auth';
 
 const SAN = moduleApi(5300);
 
-export interface VoiceStatus { sttReady: boolean; ttsReady: boolean }
+// sttEngine ("gemma" | "whisper") is informational — which engine answered is a
+// different bug report from "voice is broken", and it costs one field to know.
+export interface VoiceStatus { sttReady: boolean; ttsReady: boolean; sttEngine?: string }
 
 export async function getVoiceStatus(): Promise<VoiceStatus> {
   try {
