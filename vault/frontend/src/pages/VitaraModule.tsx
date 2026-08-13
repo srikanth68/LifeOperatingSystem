@@ -22,6 +22,9 @@ const qc  = makeModuleQueryClient(5 * 60_000);
 // away. `Freshness` renders that age wherever a value is shown.
 interface Dated { day: string; daysAgo: number }
 
+interface ImpactFinding { dimension: string; group: string; samples: number; avgAfter: number; delta: number }
+interface ImpactReport { baseline: number; baselineDays: number; findings: ImpactFinding[]; note?: string }
+
 interface Dashboard {
   date: string;
   profile?: { age?: number; weight?: number; height?: number; biologicalSex?: string };
@@ -201,12 +204,29 @@ function TodayPage({ status }: { status: OuraStatus }) {
 
   if (!d) return <Skel h={400}/>;
 
+  // Hours since Oura last uploaded. Null when it has never synced, which the empty
+  // state already covers — the banner below is for a connection that WAS working.
+  const staleHours = status.lastSyncedAt
+    ? (Date.now() - new Date(status.lastSyncedAt).getTime()) / 3_600_000
+    : null;
+
   const stressColor = d.stress?.summary === 'restored' ? 'var(--stress-low)' : d.stress?.summary === 'normal' ? 'var(--stress-mod)' : 'var(--stress-high)';
   const resLevel = d.resilience?.level;
   const resColor = resLevel === 'exceptional' || resLevel === 'strong' ? 'var(--vitara)' : resLevel === 'solid' ? '#4f9ef8' : resLevel === 'adequate' ? 'var(--gold)' : '#ef4444';
 
   return (
     <div>
+      {/* Everything below is a daily rollup Oura computed at its last sync. Past about
+          a day and a half that stops being "recent" and starts being a dashboard
+          confidently describing a body it hasn't measured — which the small grey
+          timestamp in the status bar was far too quiet to convey. */}
+      {staleHours != null && staleHours >= 36 && (
+        <div className="v-sync-warn">
+          Oura last synced {relTime(status.lastSyncedAt)} — every reading below predates that.
+          {' '}Open the Oura app on your phone to let it upload, then Sync Now.
+        </div>
+      )}
+
       {/* Status bar */}
       <div className="v-status-bar">
         <span className="v-ring-dot"/>
@@ -677,6 +697,8 @@ function ActivityPage() {
         <Metric label="High-Int Min" value={today?.highActivityMinutes?.toFixed(0)} unit="min" subNode={<Delta current={today?.highActivityMinutes} baseline={a.highMin} goodWhen="higher" unit="m"/>}/>
       </div>
 
+      <WorkoutImpactPanel/>
+
       <div className="v-section">Daily Steps<span className="v-section-line"/></div>
       <div className="v-chart">
         <ResponsiveContainer width="100%" height={160}>
@@ -839,6 +861,50 @@ function Delta({ current, baseline, goodWhen, unit }: {
     <span className={`v-delta ${better ? 'v-delta--good' : 'v-delta--bad'}`}>
       {diff > 0 ? '▲' : '▼'} {rounded}{unit ?? ''} vs 14d avg
     </span>
+  );
+}
+
+// Readiness the morning after each kind of session, against the morning after a rest
+// day. The server refuses to report thin or negligible effects, so an empty panel here
+// means "not enough evidence yet" rather than "no effect" — said out loud, because the
+// two are easy to confuse and only one of them is a finding.
+function WorkoutImpactPanel() {
+  const { data, isPending, isError } = useQuery<ImpactReport>({
+    queryKey: ['workout-impact'],
+    queryFn: () => get(`${API}/api/workouts/impact?days=90`),
+  });
+
+  if (isPending) return <Skel h={120}/>;
+  if (isError) return null;   // never block the page on an extra
+  if (!data) return null;
+
+  return (
+    <>
+      <div className="v-section">Recovery Cost<span className="v-section-line"/></div>
+      {data.findings.length === 0 ? (
+        <div className="v-impact-note">{data.note ?? 'Nothing stands out yet.'}</div>
+      ) : (
+        <>
+          <div className="v-impact-note">
+            After a rest day your readiness averages <strong>{data.baseline}</strong> ({data.baselineDays} days).
+          </div>
+          <div className="v-impact-list">
+            {data.findings.map(f => (
+              <div key={`${f.dimension}-${f.group}`} className="v-impact-row">
+                <span className="v-impact-group">{f.group.replace(/_/g, ' ')}</span>
+                <span className="v-impact-dim">{f.dimension}</span>
+                <span className={`v-impact-delta ${f.delta < 0 ? 'v-delta--bad' : 'v-delta--good'}`}>
+                  {f.delta > 0 ? '+' : ''}{f.delta}
+                </span>
+                <span className="v-impact-detail">
+                  next-day {f.avgAfter} · {f.samples} session{f.samples === 1 ? '' : 's'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </>
   );
 }
 
