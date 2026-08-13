@@ -136,11 +136,16 @@ services:
     restart: unless-stopped
     ports: ["8880:8880"]
 
-  # Piper — kept as a lightweight fallback. Point TTS_SERVICE_URL at
-  # http://piper:8000 in san.env to switch back.
+  # Piper — the lightweight TTS fallback. Kokoro handles everything today, so Piper
+  # sits behind a profile: it does NOT start with a plain `docker compose up -d` and
+  # costs no RAM until asked for. San's PIPER_* support stays in the code, so it's
+  # two commands away rather than a rewrite:
+  #     docker compose --profile piper up -d piper
+  # then point TTS_SERVICE_URL at http://piper:8000 in deploy/env/san.env.
   piper:
     image: ghcr.io/matatonic/openedai-speech-min:latest
     restart: unless-stopped
+    profiles: ["piper"]
     ports: ["8001:8000"]   # host port for manual testing; San uses the service name
     volumes:
       - ./deploy/data/piper/voices:/app/voices

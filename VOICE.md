@@ -110,7 +110,14 @@ occasionally fail outright — retry once before assuming the service is down.
 ### Falling back to Piper
 
 `piper` (`ghcr.io/matatonic/openedai-speech-min:latest`) is still in
-`docker-compose.yml` as a fallback. To switch, set in `deploy/env/san.env`:
+`docker-compose.yml`, behind a profile so it doesn't start by default — San's
+`PIPER_*` support is untouched in the code. Bring it up deliberately:
+
+```bash
+docker compose --profile piper up -d piper
+```
+
+Then set in `deploy/env/san.env`:
 
 ```
 TTS_SERVICE_URL=http://piper:8000
@@ -139,7 +146,8 @@ don't replace it, or you'll lose the other voices). Right after `tts-1:`:
     speaker:
 ```
 
-Then `docker compose restart piper`.
+Then `docker compose --profile piper restart piper`. (The `--profile` flag is
+needed on every compose command that has to see the service, restart included.)
 
 ## Apply
 
