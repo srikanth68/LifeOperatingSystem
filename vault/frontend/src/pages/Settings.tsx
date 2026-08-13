@@ -13,7 +13,6 @@ interface LinkedItem {
 export default function Settings() {
   const [items, setItems] = useState<LinkedItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
-  const [saved, setSaved] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
