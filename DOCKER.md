@@ -64,6 +64,32 @@ For any MCP-capable agent (Claude, custom) that should drive Maaya's tools:
 - **Nexus + llama.cpp reachability**: Sentinel and Gemma must listen on
   `0.0.0.0` (or at least the Docker bridge) on the host — `127.0.0.1`-only
   binds are NOT reachable via `host.docker.internal` on macOS.
+- **"Everything is down" but every module answers on its own port** — the
+  dashboard shows modules offline and login falls back to the password form
+  (no PIN pad), yet `curl http://<host>:5000/api/auth/probe` returns 200. That
+  is nginx, not the backends. It resolves each module hostname **once at worker
+  startup**; `up -d --build` recreates the backend containers on new bridge IPs
+  and leaves the frontend container running, so nginx keeps dialling dead
+  addresses and answers 502 for everything. A module that happens to be
+  reassigned its old IP keeps working, which makes it look random.
+
+  ```bash
+  docker compose restart frontend    # re-resolve; fixes it immediately
+  ```
+
+  `nginx-locations.conf` now sets `resolver 127.0.0.11 valid=10s` and puts each
+  upstream in a variable, which forces per-request resolution and stops the
+  problem recurring — but that config is baked into the image, so it only takes
+  effect after `docker compose up -d --build frontend`.
+
+  Quick way to tell this apart from a genuinely dead backend: compare the module
+  through nginx against the module direct.
+
+  ```bash
+  curl -s -o /dev/null -w '%{http_code}\n' http://<host>:3000/svc/vault/api/auth/probe
+  ```
+
+  502 through nginx + 200 direct on `:5000` means stale DNS, not a down service.
 - **Services "flip-flopping"** (TTS down, then a module down, then the LLM down,
   each recovering on retry) is almost always **host RAM pressure, not the
   services**. Everest has 16 GB; check `Activity Monitor → Memory` for swap use
