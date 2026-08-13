@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Vitara.Application;
 using Vitara.Application.Interfaces;
 using Vitara.Domain.Entities;
 
@@ -18,6 +19,22 @@ public class WorkoutsController(IVitaraRepository repo) : ControllerBase
         var to = DateOnly.FromDateTime(DateTime.Now);
         // +1 tolerates anything already filed under tomorrow by an earlier build.
         return Ok(await repo.GetWorkoutsAsync(to.AddDays(-days), to.AddDays(1)));
+    }
+
+    // How each kind of session shows up in the next morning's readiness. Needs a
+    // longer window than the dashboard's 30 days: the analysis compares training
+    // mornings against REST mornings, and a short window on a consistent training week
+    // can contain too few rest days to say anything at all.
+    [HttpGet("impact")]
+    public async Task<IActionResult> Impact([FromQuery] int days = 90)
+    {
+        var to = DateOnly.FromDateTime(DateTime.Now);
+        var from = to.AddDays(-days);
+        var workouts = await repo.GetWorkoutsAsync(from, to.AddDays(1));
+        // One day past the window on each side: a workout on the first day is only
+        // interpretable if the morning after it is in range.
+        var readiness = await repo.GetReadinessAsync(from, to.AddDays(1));
+        return Ok(WorkoutImpact.Analyze(workouts, readiness));
     }
 
     [HttpPost]
