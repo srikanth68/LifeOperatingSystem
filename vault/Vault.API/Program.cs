@@ -54,7 +54,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("AllowFrontend");
-app.UseMaayaAuth();
+// isAuthServer: Vault owns login, so it's the one module that reports at boot whether
+// the password hash and PIN are actually usable.
+app.UseMaayaAuth(isAuthServer: true);
 app.MapControllers();
 
 // Default: launchSettings port (dev). BIND_URL=http://0.0.0.0:5000 in containers.

@@ -16,6 +16,10 @@ export interface ProbeResult {
   trusted: boolean;
   method: 'pin' | 'credentials';
   pinLength: number;
+  // Why the server chose that method, or how the probe itself failed. The credentials
+  // form is the fallback for every error path, so without this a probe that never
+  // arrived is indistinguishable from one that deliberately said "use a password".
+  reason?: 'ok' | 'untrusted_network' | 'pin_not_configured' | 'probe_failed' | 'probe_error';
 }
 
 export const auth = {
@@ -77,10 +81,20 @@ export const auth = {
   async probe(): Promise<ProbeResult> {
     try {
       const res = await fetch(`${AUTH_API}/probe`);
-      if (!res.ok) return { trusted: false, method: 'credentials', pinLength: 0 };
-      return await res.json();
-    } catch {
-      return { trusted: false, method: 'credentials', pinLength: 0 };
+      if (!res.ok) {
+        console.warn(`[auth] probe returned HTTP ${res.status} — falling back to the password form.`);
+        return { trusted: false, method: 'credentials', pinLength: 0, reason: 'probe_failed' };
+      }
+      const result: ProbeResult = await res.json();
+      if (result.method !== 'pin')
+        console.warn(`[auth] server chose the password form: ${result.reason ?? 'no reason given'}.`);
+      return result;
+    } catch (e) {
+      // Vault unreachable, nginx not routing /svc/vault, or the page blocked the
+      // request. Worth a console line: on screen this is indistinguishable from a
+      // deliberate "use your password".
+      console.warn('[auth] probe could not reach Vault — falling back to the password form.', e);
+      return { trusted: false, method: 'credentials', pinLength: 0, reason: 'probe_error' };
     }
   },
 
@@ -99,17 +113,9 @@ export const auth = {
     return tokens;
   },
 
-  async autoLogin(): Promise<AuthTokens | null> {
-    try {
-      const res = await fetch(`${AUTH_API}/auto`, { method: 'POST' });
-      if (!res.ok) return null;
-      const tokens: AuthTokens = await res.json();
-      auth.save(tokens);
-      return tokens;
-    } catch {
-      return null;
-    }
-  },
+  // autoLogin() removed along with the server's POST /api/auth/auto — it logged you in
+  // on network trust alone, which behind the nginx proxy meant everyone. Nothing called
+  // it: App.tsx probes, then shows the PIN pad or the credentials form.
 
   async logout() {
     const token = auth.getToken();
