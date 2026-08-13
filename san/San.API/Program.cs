@@ -87,25 +87,17 @@ builder.Services.AddHttpClient("northstar", c => c.BaseAddress = new Uri(northst
 builder.Services.AddHttpClient("sutra",     c => c.BaseAddress = new Uri(sutraUrl));
 builder.Services.AddHttpClient("karma",     c => c.BaseAddress = new Uri(karmaUrl));
 builder.Services.AddHttpClient("nexus",     c => c.BaseAddress = new Uri(nexusUrl));
-// Voice engines (self-hosted, OpenAI-compatible). Absolute URLs are built per-request
-// from WHISPER_SERVICE_URL / PIPER_SERVICE_URL, so no base address here — the clients
-// just carry sensible timeouts (speech synthesis of a long reply can take a few seconds).
-// Whisper gets a long timeout: the first transcription after a cold start also loads
-// the model, which on CPU can take well over a minute.
-builder.Services.AddHttpClient("whisper", c => c.Timeout = TimeSpan.FromSeconds(300));
-builder.Services.AddHttpClient("piper",   c => c.Timeout = TimeSpan.FromSeconds(120));
-// Gemma STT talks to the same llama.cpp server as the chat provider, but gets its own
-// named client: a transcription queues behind whatever chat turn is already generating,
-// so its timeout has to cover the wait as well as the work.
-builder.Services.AddHttpClient("gemma-stt", c => c.Timeout = TimeSpan.FromSeconds(300));
+// TTS (self-hosted, OpenAI-compatible). The absolute URL is built per-request from
+// TTS_SERVICE_URL / PIPER_SERVICE_URL, so no base address here — just a timeout with
+// room for synthesising a long reply.
+builder.Services.AddHttpClient("piper", c => c.Timeout = TimeSpan.FromSeconds(120));
 
-// Speech-to-text engine selection — same config-driven pattern as the LLM provider.
-// Gemma 4 hears audio natively, so the default deployment no longer needs a separate
-// Whisper container; WHISPER_SERVICE_URL still switches back to it.
-if (SpeechToTextSelection.Resolve() == SpeechToTextSelection.Whisper)
-    builder.Services.AddScoped<ISpeechToText, WhisperTranscriber>();
-else
-    builder.Services.AddScoped<ISpeechToText, GemmaTranscriber>();
+// Speech → text. Gemma 4 hears audio natively on the same llama.cpp server as chat,
+// so STT is not a separate service; it gets its own named client only because a
+// transcription queues behind whatever chat turn is already generating, and the
+// timeout has to cover that wait as well as the work.
+builder.Services.AddHttpClient("gemma-stt", c => c.Timeout = TimeSpan.FromSeconds(300));
+builder.Services.AddScoped<ISpeechToText, GemmaTranscriber>();
 
 builder.Services.AddScoped<AgentToolExecutor>();
 // MCP gateway client — hands San's agent loop the full Maaya.Mcp tool catalog.

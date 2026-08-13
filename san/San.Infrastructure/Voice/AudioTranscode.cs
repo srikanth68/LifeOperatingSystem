@@ -6,8 +6,8 @@ namespace San.Infrastructure.Voice;
 // Browsers hand us whatever MediaRecorder supports — in practice audio/webm;codecs=opus
 // on Chrome/Firefox and audio/mp4 (AAC) on Safari. llama.cpp decodes audio with
 // miniaudio, which reads WAV, MP3 and FLAC and nothing else, so Opus and AAC have to
-// be converted before Gemma can hear them. Whisper did its own decoding, which is why
-// this step is new rather than something that went missing.
+// be converted before Gemma can hear them. A dedicated speech server would have done
+// this decoding itself; doing STT on the chat model means doing it here.
 //
 // ffmpeg is invoked as a process rather than linked as a library: it's one apt package
 // in the image (see Dockerfile), and shelling out keeps the audio handling entirely

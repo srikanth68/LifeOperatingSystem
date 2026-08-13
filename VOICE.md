@@ -57,7 +57,7 @@ the mic, trips the interrupt, and the call talks over itself.
 > `voiceSession.ts`. If it cuts you off mid-sentence raise `SILENCE_MS`; if a
 > noisy room keeps it stuck in "Hearing you", raise `SPEECH_MULT`.
 
-## STT — Gemma hears the audio itself (no Whisper container)
+## STT — Gemma hears the audio itself
 
 Gemma 4 is multimodal. The same llama.cpp server San already chats with accepts
 audio on `/v1/chat/completions`, so speech-to-text costs **no extra service and
@@ -74,8 +74,8 @@ automatically — no `--mmproj` flag needed.
 **Why ffmpeg is in the image.** Browsers record Opus-in-WebM (Chrome/Firefox) or
 AAC-in-MP4 (Safari). llama.cpp decodes audio with miniaudio, which reads only
 WAV, MP3 and FLAC. So `AudioTranscode` shells out to ffmpeg to convert each
-recording to 16 kHz mono WAV first. Whisper decoded its own input, which is why
-this dependency is new.
+recording to 16 kHz mono WAV first. It's the only new dependency the switch
+needed — a dedicated speech server used to decode its own input.
 
 **Keeping it literal.** A chat model asked to transcribe will happily *answer*
 the question it just heard. `GemmaTranscriber` pins it down with a
@@ -83,22 +83,8 @@ transcription-engine system prompt, `temperature: 0`, thinking disabled, and a
 cleanup pass that strips narrating openers ("Here is the transcription:") and
 maps a `(no speech)` sentinel to an empty string.
 
-### Falling back to Whisper
-
-Whisper is still in `docker-compose.yml`, behind a profile so it doesn't start
-by default:
-
-```bash
-docker compose --profile whisper up -d whisper
-```
-
-Then set `WHISPER_SERVICE_URL=http://whisper:8000` in `deploy/env/san.env` and
-`docker compose up -d san`. That URL alone flips the engine — `STT_PROVIDER`
-defaults to `whisper` whenever a Whisper URL is configured, `gemma` otherwise.
-Set `STT_PROVIDER` explicitly to override.
-
-`GET /api/voice/status` reports `sttEngine`, so which one actually answered is
-never a guess.
+`GET /api/voice/status` reports `sttEngine` — the quickest confirmation that a
+deployment is running the build you think it is.
 
 ## Kokoro (TTS) — part of `docker compose up`
 
@@ -186,7 +172,7 @@ the chat dies mid-"thinking".
 
 - **Every piece is optional & independent** — run STT, TTS, both, or neither.
   Call mode simply doesn't appear unless both are up.
-- **Swappable**: any OpenAI-compatible STT/TTS server works; change only the URL.
+- **Swappable**: any OpenAI-compatible TTS server works; change only the URL.
 - **Nothing leaves the Mac**: mic audio → local nginx → local San → local ffmpeg
-  → local Gemma (or Whisper) / local Kokoro → back. The LLM is local Gemma via
-  llama.cpp. No cloud in the voice path.
+  → local Gemma / local Kokoro → back. The LLM is local Gemma via llama.cpp.
+  No cloud in the voice path.

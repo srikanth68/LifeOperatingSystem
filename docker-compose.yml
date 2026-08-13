@@ -123,23 +123,11 @@ services:
     depends_on: [vault]
 
   # ── Voice ──
-  # TTS runs as its own container (Gemma generates text, not audio). STT no longer
-  # does: Gemma 4 is multimodal and hears audio natively on the same llama.cpp server
-  # San already chats with, so speech-to-text costs no extra service and no second
-  # model resident in RAM.
+  # TTS runs as its own container (Gemma generates text, not audio). STT does not:
+  # Gemma 4 is multimodal and hears audio natively on the same llama.cpp server San
+  # already chats with, so speech-to-text costs no extra service and no second model
+  # resident in RAM. There is no whisper container — see VOICE.md.
   #
-  # Whisper is kept behind a profile rather than deleted — it's the fallback if
-  # Gemma's transcription quality disappoints. It does NOT start with a plain
-  # `docker compose up -d`; bring it up deliberately:
-  #     docker compose --profile whisper up -d whisper
-  # and set WHISPER_SERVICE_URL=http://whisper:8000 in deploy/env/san.env, which is
-  # what actually switches San back to it (see STT_PROVIDER in san/.env.template).
-  whisper:
-    image: fedirz/faster-whisper-server:latest-cpu
-    restart: unless-stopped
-    profiles: ["whisper"]
-    ports: ["9000:8000"]   # host port for manual testing; San uses the service name
-
   # Kokoro (82M) — noticeably more natural than Piper, and its CPU image is built
   # for arm64 so it actually runs on Apple Silicon (unlike XTTS). OpenAI-compatible,
   # so San needs no code change — just TTS_SERVICE_URL. This is the active TTS.

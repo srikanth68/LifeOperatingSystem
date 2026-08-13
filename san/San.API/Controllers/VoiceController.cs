@@ -11,7 +11,7 @@ namespace San.API.Controllers;
 // San forwards to whatever self-hosted, OpenAI-compatible speech services you point
 // it at. No cloud, fully local.
 //
-// STT lives behind ISpeechToText (Gemma's native audio, or a Whisper container).
+// STT lives behind ISpeechToText, which Gemma answers using its native audio input.
 // TTS is still a direct proxy — Gemma generates no audio, so a speech engine
 // remains a genuinely separate service there.
 [ApiController, Route("api/voice")]
@@ -56,15 +56,14 @@ public partial class VoiceController(
     [GeneratedRegex(@"\n{2,}")] private static partial Regex MultiNewlineRegex();
     [GeneratedRegex(@"\n")] private static partial Regex NewlineRegex();
 
-    // Speech → text. Accepts the browser's recorded audio blob and hands it to
-    // whichever engine STT_PROVIDER selected. The response shape is unchanged from
-    // when this method spoke to Whisper directly, so no client needs updating.
+    // Speech → text. Accepts the browser's recorded audio blob. The response shape is
+    // unchanged from when this proxied to a speech service, so no client needs updating.
     [HttpPost("transcribe")]
     [RequestSizeLimit(25_000_000)] // ~25 MB — plenty for a spoken message
     public async Task<IActionResult> Transcribe(IFormFile? audio, CancellationToken ct)
     {
         if (!stt.IsConfigured)
-            return StatusCode(503, new { error = $"Speech-to-text isn't set up yet (engine: {stt.EngineName}). Check LLM_BASE_URL, or set WHISPER_SERVICE_URL to use Whisper instead." });
+            return StatusCode(503, new { error = "Speech-to-text isn't set up yet — LLM_BASE_URL isn't configured, so there's no model to hear the audio." });
         if (audio is null || audio.Length == 0)
             return BadRequest(new { error = "No audio received." });
 
@@ -149,8 +148,8 @@ public partial class VoiceController(
     public IActionResult Status() => Ok(new
     {
         sttReady = stt.IsConfigured,
-        // Which engine answered is worth exposing: "voice is broken" and "voice is
-        // broken on Gemma specifically" are different bug reports.
+        // Names the engine that would answer. Cheap, and it's the quickest way to
+        // confirm a deployment is actually running the build you think it is.
         sttEngine = stt.EngineName,
         ttsReady = (ServiceUrl("TTS_SERVICE_URL") ?? ServiceUrl("PIPER_SERVICE_URL")) is not null,
     });
