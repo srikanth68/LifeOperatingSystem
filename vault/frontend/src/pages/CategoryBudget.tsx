@@ -14,7 +14,6 @@ export default function CategoryBudget() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [newKeyword, setNewKeyword] = useState<Record<string, { keyword: string; isIncome: boolean; label: string }>>({});
 
   const [form, setForm] = useState({ name: '', budget: '', color: COLORS[0], notes: '' });

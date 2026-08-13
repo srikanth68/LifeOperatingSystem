@@ -59,8 +59,11 @@ For any MCP-capable agent (Claude, custom) that should drive Maaya's tools:
   (Synced Oura data keeps flowing regardless; the token lives in vitara.db.)
 - **Vault split-db**: there were historically two `vault.db` files (API/Worker).
   The migration takes the API one; in Docker both processes share `/data/vault/vault.db`.
-- **Frontend build** uses `npx vite build` (skips `tsc`) because of a few known
-  pre-existing type errors that don't affect the bundle.
+- **Frontend build** runs `npm run build` (`tsc -b && vite build`), so a type
+  error fails the image build instead of shipping. It previously skipped `tsc`
+  to work around pre-existing errors; those are fixed. If the frontend image
+  suddenly fails to build, read the TypeScript output — that's the check doing
+  its job, not a broken toolchain.
 - **Nexus + llama.cpp reachability**: Sentinel and Gemma must listen on
   `0.0.0.0` (or at least the Docker bridge) on the host — `127.0.0.1`-only
   binds are NOT reachable via `host.docker.internal` on macOS.

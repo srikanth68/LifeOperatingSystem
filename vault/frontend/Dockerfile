@@ -1,13 +1,18 @@
 # Maaya frontend — static Vite build served by nginx (HTTP :80 + HTTPS :443).
-# Uses `npx vite build` (not `npm run build`) intentionally: the repo carries a
-# few known pre-existing tsc errors that don't affect the runtime bundle.
+#
+# `npm run build` is `tsc -b && vite build`, so a type error fails the image build
+# rather than shipping. This used to be `npx vite build` to skip a handful of
+# pre-existing tsc errors; those are fixed (the missing vite-env.d.ts that left
+# import.meta.env untyped, dead useState declarations, and an import path carrying a
+# .tsx extension), so the check is back on. Skipping it is what let them accumulate
+# unnoticed in the first place.
 
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN npx vite build
+RUN npm run build
 
 FROM nginx:alpine
 # Self-signed TLS cert so the mic (getUserMedia) works over Meshnet/.nord, which

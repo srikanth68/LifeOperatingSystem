@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { summaryApi, syncApi } from '@/services/api';
+import { syncApi } from '@/services/api';
 import { makeModuleQueryClient } from '../services/moduleQuery';
 import { authHeaders } from '../services/auth';
 import { getThemePref, setThemePref, type ThemePref } from '../services/theme';
