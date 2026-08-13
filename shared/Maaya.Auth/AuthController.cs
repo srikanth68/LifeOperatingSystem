@@ -13,15 +13,17 @@ public class AuthController(TokenService tokenService, RefreshTokenStore refresh
     public IActionResult Login([FromBody] LoginRequest request)
     {
         var expectedUser = Environment.GetEnvironmentVariable("AUTH_USERNAME") ?? "admin";
-        var expectedHash = Environment.GetEnvironmentVariable("AUTH_PASSWORD_HASH") ?? "";
+        // Undoes compose-style "$$" doubling when that's what makes the value a valid
+        // bcrypt hash — see AuthSecrets. Without this a hash written for an
+        // `environment:` block but delivered via `env_file:` rejects every password.
+        var expectedHash = AuthSecrets.PasswordHash();
 
         if (string.IsNullOrEmpty(expectedHash))
             return StatusCode(503, new { error = "Auth not configured. Set AUTH_PASSWORD_HASH in .env" });
 
-        // A valid bcrypt hash is exactly 60 chars starting with "$2". If the container
-        // received something else, the env var got mangled in transit (e.g. compose
-        // $-interpolation) — logged so we can tell that apart from a wrong password.
-        var hashLooksValid = expectedHash.Length == 60 && expectedHash.StartsWith("$2");
+        // Anything still not bcrypt-shaped after normalisation is corrupted in a way we
+        // can't repair — logged so it's distinguishable from a merely wrong password.
+        var hashLooksValid = AuthSecrets.LooksLikeBcrypt(expectedHash);
         if (!hashLooksValid)
             logger.LogWarning("AUTH_PASSWORD_HASH looks malformed: length={Length}, prefix={Prefix} (expected 60 chars starting with $2). The env var may have been corrupted.",
                 expectedHash.Length, expectedHash.Length >= 4 ? expectedHash[..4] : expectedHash);
@@ -130,11 +132,23 @@ public class AuthController(TokenService tokenService, RefreshTokenStore refresh
         var remoteIp = HttpContext.Connection.RemoteIpAddress;
         var trusted = remoteIp is not null && TrustedNetwork.IsTrusted(remoteIp);
         var pin = Environment.GetEnvironmentVariable("AUTH_PIN") ?? "";
+        var usePin = trusted && pin.Length > 0;
+
+        // Why, not just what. The client falls back to the credentials form on ANY
+        // failure — a probe that never arrived and a deliberate "credentials" answer
+        // look identical from the browser, which makes "the PIN pad vanished"
+        // undiagnosable without shell access to the container. Naming the reason costs
+        // one string and puts the answer in the network tab.
+        var reason = usePin ? "ok"
+            : !trusted ? "untrusted_network"
+            : "pin_not_configured";
+
         return Ok(new
         {
             trusted,
-            method = trusted && pin.Length > 0 ? "pin" : "credentials",
-            pinLength = trusted && pin.Length > 0 ? pin.Length : 0,
+            method = usePin ? "pin" : "credentials",
+            pinLength = usePin ? pin.Length : 0,
+            reason,
         });
     }
 
@@ -156,16 +170,14 @@ public class AuthController(TokenService tokenService, RefreshTokenStore refresh
         return IssueTokens();
     }
 
-    [AllowAnonymous]
-    [HttpPost("auto")]
-    public IActionResult AutoLogin()
-    {
-        var remoteIp = HttpContext.Connection.RemoteIpAddress;
-        if (remoteIp is null || !TrustedNetwork.IsTrusted(remoteIp))
-            return Unauthorized(new { error = "Untrusted network.", trusted = false });
-
-        return IssueTokens();
-    }
+    // REMOVED: POST /api/auth/auto — issued a full token set on network trust alone,
+    // with no PIN and no password. Behind the nginx proxy that check could never fail:
+    // RemoteIpAddress is the proxy container's address on the Docker bridge (172.x),
+    // which sits inside the always-trusted 172.16.0.0/12 range, so the endpoint handed
+    // working credentials to anyone who could reach the dashboard's port. Nothing
+    // called it — the frontend probes, then asks for a PIN or a password — so deleting
+    // it removes the bypass outright rather than trying to make the IP check honest.
+    // See the note on TrustedNetwork for the part that is still overtrusting.
 
     private IActionResult IssueTokens()
     {

@@ -3,6 +3,23 @@ using System.Net.Sockets;
 
 namespace Maaya.Auth;
 
+// KNOWN LIMITATION — this currently trusts more than it looks like it does.
+//
+// Every browser request reaches a module through the frontend's nginx, so the
+// RemoteIpAddress a controller sees is nginx's own address on the Docker bridge
+// (172.x), not the caller's. That lands inside the always-trusted 172.16.0.0/12 range
+// below, so IsTrusted returns true for any proxied request and AUTH_TRUSTED_NETWORKS
+// never gets consulted. nginx does set X-Forwarded-For (see nginx-locations.conf), but
+// nothing consumes it: AddMaayaAuth installs no ForwardedHeaders middleware.
+//
+// The endpoint that made this dangerous — POST /api/auth/auto, tokens for network
+// trust alone — has been removed, so today the worst case is that the PIN pad is
+// offered to a caller who shouldn't see it. They still need the PIN.
+//
+// Fixing it properly means UseForwardedHeaders with KnownProxies limited to the
+// frontend container, which changes who can log in and therefore wants testing from
+// both the Mac and Meshnet before it ships. Until then, treat the PIN as the real
+// boundary and don't add anything else gated on IsTrusted alone.
 public static class TrustedNetwork
 {
     private static readonly Lazy<List<(IPAddress Network, int Prefix)>> Cidrs = new(ParseConfig);
