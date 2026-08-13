@@ -22,7 +22,7 @@ namespace San.Infrastructure.Llm;
 //   LLM_BASE_URL=http://host.docker.internal:8080   (llama.cpp on the host)
 //   LLM_MODEL=gemma-4                               (echoed; llama.cpp ignores it)
 //   LLM_API_KEY=...                                 (only if --api-key was set)
-public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config, ILogger<LlamaCppAgentChatProvider> logger) : IChatProvider
+public partial class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config, ILogger<LlamaCppAgentChatProvider> logger) : IChatProvider
 {
     public string ProviderName => "llamacpp-agent";
     public string ModelName => Environment.GetEnvironmentVariable("LLM_MODEL")
@@ -60,7 +60,7 @@ public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config, I
         CancellationToken ct)
     {
         var messages = new List<object> { new { role = "system", content = systemPrompt } };
-        messages.AddRange(history.Select(h => (object)new { role = h.Role, content = h.Content }));
+        messages.AddRange(history.Select(ToMessage));
 
         var toolsJson = tools is { Count: > 0 } ? tools.Select(ToOpenAiTool).ToArray() : null;
 
@@ -207,14 +207,49 @@ public class LlamaCppAgentChatProvider(HttpClient http, IConfiguration config, I
 
     // Indented so a prompt is readable in `docker compose logs`. Falls back to the raw
     // string rather than throwing — a logging helper must never break the call it logs.
+    //
+    // Base64 image payloads are elided: a single attached photo is hundreds of
+    // kilobytes of one unbroken line, which buries the prompt this log exists to show
+    // and can outrun the log driver entirely.
     private static string Pretty(string json)
     {
         try
         {
             using var doc = JsonDocument.Parse(json);
-            return JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+            var text = JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+            return DataUrlRegex().Replace(text, m => $"data:{m.Groups[1].Value};base64,<{m.Groups[2].Value.Length} chars elided>");
         }
         catch (JsonException) { return json; }
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"data:(image/[a-z+.-]+);base64,([A-Za-z0-9+/=\\]+)")]
+    private static partial System.Text.RegularExpressions.Regex DataUrlRegex();
+
+    // A turn with a picture becomes OpenAI's multi-part content array; everything else
+    // stays a plain string. Both shapes are valid on the same endpoint, and llama.cpp
+    // only accepts the array form when the server was started with a multimodal
+    // projector — which `-hf unsloth/gemma-4-*` does automatically (/props reports
+    // "vision": true).
+    //
+    // Image FIRST, then the text. Gemma is markedly better at "look, then read the
+    // question" than the reverse, and it matches the order the chat template expects.
+    private static object ToMessage(ChatTurn h)
+    {
+        if (string.IsNullOrWhiteSpace(h.ImageDataUrl))
+            return new { role = h.Role, content = h.Content };
+
+        return new
+        {
+            role = h.Role,
+            content = new object[]
+            {
+                new { type = "image_url", image_url = new { url = h.ImageDataUrl } },
+                // A picture sent with no words is still a question — "what is this?" is
+                // what the user meant, and an empty text part makes some templates drop
+                // the turn entirely.
+                new { type = "text", text = string.IsNullOrWhiteSpace(h.Content) ? "What is this?" : h.Content },
+            },
+        };
     }
 
     private static object ToOpenAiTool(ToolDefinition t) => new

@@ -63,7 +63,14 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
     [HttpPost("messages")]
     public async Task<IActionResult> Send([FromBody] ChatSendRequest req)
     {
-        if (string.IsNullOrWhiteSpace(req.Content)) return BadRequest("Message content is required.");
+        var hasImage = !string.IsNullOrWhiteSpace(req.ImageDataUrl);
+        // A picture on its own is a complete message — "what is this?" is implied, and
+        // the provider fills that in. Only a turn with neither text nor image is empty.
+        if (string.IsNullOrWhiteSpace(req.Content) && !hasImage)
+            return BadRequest("Message content is required.");
+
+        if (!ImageAttachment.TryValidate(req.ImageDataUrl, out var imageError))
+            return BadRequest(imageError);
 
         var turnSw = Stopwatch.StartNew();
 
@@ -73,7 +80,14 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         var priorHistory = await repo.GetChatHistoryAsync(1);
         DateTime? lastSeenUtc = priorHistory.Count > 0 ? priorHistory[^1].CreatedAt : null;
 
-        var userMsg = await repo.AddChatMessageAsync(new ChatMessage { Role = "user", Content = req.Content });
+        // The transcript records that a picture was sent, not the picture. Persisting the
+        // base64 would bloat san.db without bound and, worse, ChatWindow would then
+        // re-send it inside every later turn's history.
+        var userMsg = await repo.AddChatMessageAsync(new ChatMessage
+        {
+            Role = "user",
+            Content = hasImage ? ImageAttachment.DescribeForHistory(req.Content) : req.Content,
+        });
 
         // Fetch generously, then send only what fits the token budget. Bounding by
         // message count meant a turn's prompt size depended entirely on how long the
@@ -82,6 +96,18 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         var history = await repo.GetChatHistoryAsync(100);
         var windowed = ChatWindow.Select(history, m => m.Content, m => m.Role);
         var turns = windowed.Select(m => new ChatTurn(m.Role, m.Content)).ToList();
+
+        // Attach the image to the newest user turn — the one just saved. Done here
+        // rather than when building the list because history came out of the database,
+        // where the image deliberately isn't stored. If windowing dropped the message
+        // (it can't today: the newest is always kept) the turn is simply appended.
+        if (hasImage)
+        {
+            var last = turns.FindLastIndex(t => t.Role == "user");
+            if (last >= 0) turns[last] = turns[last] with { ImageDataUrl = req.ImageDataUrl };
+            else turns.Add(new ChatTurn("user", req.Content, req.ImageDataUrl));
+            logger.LogInformation("Chat turn carries an image ({Kb} KB encoded).", req.ImageDataUrl!.Length / 1024);
+        }
 
         if (windowed.Count < history.Count)
             logger.LogInformation("Chat history trimmed to {Kept} of {Total} message(s) (~{Tokens} tokens).",

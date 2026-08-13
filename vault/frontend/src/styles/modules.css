@@ -188,10 +188,13 @@
 }
 
 /* ── San chat ── */
+/* Sized off the viewport now that the feature-list card below it is gone. The clamp
+   keeps it usable at both ends: never shorter than the old fixed 380px on a laptop,
+   never so tall on a large display that the input drifts off the bottom of the page. */
 .chat-shell {
   display: flex;
   flex-direction: column;
-  height: 380px;
+  height: clamp(380px, 72vh, 900px);
   background: rgba(5,9,22,0.6);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
@@ -226,8 +229,43 @@
   font-size: 0.84rem;
   color: var(--text2);
   line-height: 1.6;
-  max-width: 440px;
+  /* Was a flat 440px, which wrapped San's longer answers into a narrow column with
+     most of the window empty beside it. Bounded in ch so the measure stays readable
+     as the window grows rather than running to the full width. */
+  max-width: min(78ch, 760px);
 }
+
+/* ── Image attachment ── */
+.chat-image {
+  display: block;
+  max-width: 320px;
+  max-height: 320px;
+  width: auto;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--border);
+}
+.chat-attach {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+  background: rgba(255,255,255,0.02);
+}
+.chat-attach img {
+  width: 44px; height: 44px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.chat-attach-meta { font-size: 0.72rem; color: var(--text3); flex: 1; }
+.chat-attach-x {
+  background: none; border: none; cursor: pointer;
+  color: var(--text3); font-size: 0.85rem; padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+}
+.chat-attach-x:hover { color: var(--text); background: rgba(255,255,255,0.08); }
 .chat-bar {
   display: flex;
   gap: 0.5rem;
