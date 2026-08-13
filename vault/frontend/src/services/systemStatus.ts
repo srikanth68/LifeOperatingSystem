@@ -23,33 +23,75 @@ export interface SystemStatus {
   loading: boolean;
 }
 
+// ONE poller for the whole app, shared by every consumer.
+//
+// This used to be a plain hook, which meant each component calling it got its own
+// useState and its own interval — two consumers, two independent probe loops on
+// separate timers hitting all eight modules. They disagreed constantly: the sidebar
+// badge said "All Systems Operational" while the dashboard listed modules as
+// offline, because the two had polled at different moments and one had timed out.
+// It also doubled the request rate, which made those timeouts more likely.
+//
+// Now a single loop runs while at least one component is mounted, and every consumer
+// renders the same answer.
+
+let shared: SystemStatus = { online: 0, total: MODULES.length, offline: [], reachable: {}, loading: true };
+const subscribers = new Set<(s: SystemStatus) => void>();
+let timer: ReturnType<typeof setInterval> | null = null;
+let inFlight = false;
+
+async function probe() {
+  // A slow round can outlast the interval; overlapping runs would double the load
+  // for no extra freshness.
+  if (inFlight) return;
+  inFlight = true;
+  try {
+    const results = await Promise.all(MODULES.map(async m => {
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 8000);
+        await fetch(m.url, { headers: authHeaders(), signal: ctrl.signal });
+        clearTimeout(t);
+        return { id: m.id, label: m.label, ok: true };
+      } catch {
+        return { id: m.id, label: m.label, ok: false };
+      }
+    }));
+    const offline = results.filter(r => !r.ok).map(r => r.label);
+    shared = {
+      online: results.length - offline.length,
+      total: results.length,
+      offline,
+      reachable: Object.fromEntries(results.map(r => [r.id, r.ok])),
+      loading: false,
+    };
+    subscribers.forEach(fn => fn(shared));
+  } finally {
+    inFlight = false;
+  }
+}
+
 export function useSystemStatus(pollMs = 30_000): SystemStatus {
-  const [status, setStatus] = useState<SystemStatus>({ online: 0, total: MODULES.length, offline: [], reachable: {}, loading: true });
+  const [status, setStatus] = useState<SystemStatus>(shared);
 
   useEffect(() => {
-    let cancelled = false;
+    subscribers.add(setStatus);
+    // Late mounters get the last known answer immediately rather than flashing
+    // "checking" or, worse, "offline" until the next tick.
+    setStatus(shared);
 
-    const check = async () => {
-      const results = await Promise.all(MODULES.map(async m => {
-        try {
-          const ctrl = new AbortController();
-          const t = setTimeout(() => ctrl.abort(), 4000);
-          await fetch(m.url, { headers: authHeaders(), signal: ctrl.signal });
-          clearTimeout(t);
-          return { id: m.id, label: m.label, ok: true };
-        } catch {
-          return { id: m.id, label: m.label, ok: false };
-        }
-      }));
-      if (cancelled) return;
-      const offline = results.filter(r => !r.ok).map(r => r.label);
-      const reachable = Object.fromEntries(results.map(r => [r.id, r.ok]));
-      setStatus({ online: results.length - offline.length, total: results.length, offline, reachable, loading: false });
+    if (timer === null) {
+      probe();
+      timer = setInterval(probe, pollMs);
+    }
+
+    return () => {
+      subscribers.delete(setStatus);
+      if (subscribers.size === 0 && timer !== null) {
+        clearInterval(timer);
+        timer = null;
+      }
     };
-
-    check();
-    const iv = setInterval(check, pollMs);
-    return () => { cancelled = true; clearInterval(iv); };
   }, [pollMs]);
 
   return status;
