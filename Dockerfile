@@ -29,9 +29,8 @@ ARG TZ=America/New_York
 ENV TZ=${TZ}
 # ffmpeg: San's voice input. Browsers record Opus-in-WebM (or AAC-in-MP4 on Safari),
 # and llama.cpp decodes audio with miniaudio, which reads only WAV/MP3/FLAC — so the
-# recording has to be converted to 16 kHz mono WAV before Gemma can hear it. Whisper
-# decoded its own input, which is why this became necessary only after STT moved onto
-# the local model. Costs ~80 MB in the image; buys removing the whisper container.
+# recording has to be converted to 16 kHz mono WAV before Gemma can hear it. Costs
+# ~80 MB in the image; buys speech-to-text with no speech service at all.
 RUN apt-get update && apt-get install -y --no-install-recommends tzdata ffmpeg && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out /app
 # Default command is overridden per service in docker-compose.yml.

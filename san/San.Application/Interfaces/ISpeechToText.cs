@@ -1,13 +1,13 @@
 namespace San.Application.Interfaces;
 
 // Speech → text, behind an interface for the same reason IChatProvider exists: the
-// engine is a deployment choice, not a code one. Two implementations ship —
-// Whisper (a separate container) and Gemma (the multimodal model San already runs,
-// which understands audio natively and so removes a whole service from the stack).
+// engine is a deployment choice, not a code one. One implementation ships —
+// GemmaTranscriber, which uses the multimodal model San already runs, so no separate
+// speech service exists to go down, cold-start, or hold a second model in RAM.
 public interface ISpeechToText
 {
-    // Shown in logs and on /api/voice/status so "which engine actually answered?"
-    // is never a guess.
+    // Reported on /api/voice/status and in logs — the quickest confirmation that a
+    // deployment is running the build you think it is.
     string EngineName { get; }
 
     // False when the engine's URL isn't configured — the controller turns this into

@@ -64,7 +64,7 @@ For any MCP-capable agent (Claude, custom) that should drive Maaya's tools:
 - **Nexus + llama.cpp reachability**: Sentinel and Gemma must listen on
   `0.0.0.0` (or at least the Docker bridge) on the host — `127.0.0.1`-only
   binds are NOT reachable via `host.docker.internal` on macOS.
-- **Services "flip-flopping"** (TTS down, then Whisper down, then the LLM down,
+- **Services "flip-flopping"** (TTS down, then a module down, then the LLM down,
   each recovering on retry) is almost always **host RAM pressure, not the
   services**. Everest has 16 GB; check `Activity Monitor → Memory` for swap use
   and `docker stats` for the containers. The usual hog is host-level

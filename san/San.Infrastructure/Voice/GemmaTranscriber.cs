@@ -6,8 +6,8 @@ using San.Application.Interfaces;
 
 namespace San.Infrastructure.Voice;
 
-// Speech → text using the multimodal model San already runs, instead of a second
-// container running Whisper.
+// Speech → text using the multimodal model San already runs, instead of a dedicated
+// speech-recognition service.
 //
 // Gemma 4 is natively multimodal — llama-server started with `-hf unsloth/gemma-4-*`
 // pulls the projector automatically and reports `"audio": true` on /props, so audio
@@ -21,7 +21,6 @@ namespace San.Infrastructure.Voice;
 // keep it doing the boring literal thing.
 //
 // Config (env):
-//   STT_PROVIDER=gemma
 //   LLM_BASE_URL=http://host.docker.internal:8080   (shared with the chat provider)
 //   STT_MODEL=gemma-4                               (echoed; llama.cpp ignores it)
 public partial class GemmaTranscriber(IHttpClientFactory httpFactory, ILogger<GemmaTranscriber> logger) : ISpeechToText
@@ -49,7 +48,7 @@ public partial class GemmaTranscriber(IHttpClientFactory httpFactory, ILogger<Ge
     public async Task<string> TranscribeAsync(Stream audio, string? contentType, string? fileName, CancellationToken ct = default)
     {
         var baseUrl = BaseUrl
-            ?? throw new SpeechToTextException("Speech-to-text isn't set up — LLM_BASE_URL is not configured.");
+            ?? throw new SpeechToTextException("Speech-to-text isn't set up — LLM_BASE_URL isn't configured, so there's no model to hear the audio.");
 
         var wav = await AudioTranscode.ToWavAsync(audio, AudioTranscode.ExtensionFor(contentType, fileName), ct);
         var seconds = (wav.Length - 44) / 32000.0; // 16 kHz mono 16-bit, minus the header

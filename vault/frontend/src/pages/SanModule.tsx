@@ -323,7 +323,7 @@ function Assistant() {
     setVoiceErr(null);
     if (recording) {
       // The mic itself stops instantly on click — flip the button back right
-      // away and show a separate "transcribing" state for the Whisper
+      // away and show a separate "transcribing" state for the server
       // round-trip, instead of leaving the red stop button stuck for it.
       const recorder = recorderRef.current;
       recorderRef.current = null;

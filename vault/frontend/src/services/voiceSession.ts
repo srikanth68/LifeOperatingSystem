@@ -13,7 +13,7 @@ const SAN = moduleApi(5300);
 // start, so a quiet room and a noisy one both work without a magic constant.
 //
 // Every phase is surfaced through onState because the local stack is genuinely
-// slow (Whisper cold-load + the agent tool loop + TTS can total 20-30s per turn).
+// slow (transcription + the agent tool loop + TTS can total 20-30s per turn).
 // A silent spinner would read as broken; naming the phase makes the wait legible.
 
 export type CallState =
@@ -21,7 +21,7 @@ export type CallState =
   | 'calibrating'  // sampling the room's noise floor
   | 'listening'    // waiting for the user to start talking
   | 'capturing'    // recording the user's utterance
-  | 'transcribing' // Whisper is working
+  | 'transcribing' // the model is turning the audio into text
   | 'thinking'     // San is working
   | 'speaking';    // playing San's reply
 

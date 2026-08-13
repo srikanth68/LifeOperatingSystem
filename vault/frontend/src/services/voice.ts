@@ -3,8 +3,8 @@ import { authHeaders } from './auth';
 
 const SAN = moduleApi(5300);
 
-// sttEngine ("gemma" | "whisper") is informational — which engine answered is a
-// different bug report from "voice is broken", and it costs one field to know.
+// sttEngine ("gemma") is informational — the quickest confirmation that the server
+// is running the build you think it is. Optional: older San builds don't send it.
 export interface VoiceStatus { sttReady: boolean; ttsReady: boolean; sttEngine?: string }
 
 export async function getVoiceStatus(): Promise<VoiceStatus> {
@@ -16,7 +16,7 @@ export async function getVoiceStatus(): Promise<VoiceStatus> {
 }
 
 // Records mic audio until stop() is called, then returns the transcribed text
-// from San's Whisper proxy. Returns a controller so the caller can stop it.
+// from San's transcribe endpoint. Returns a controller so the caller can stop it.
 export interface Recorder { stop: () => Promise<string> }
 
 export async function startRecording(): Promise<Recorder> {
