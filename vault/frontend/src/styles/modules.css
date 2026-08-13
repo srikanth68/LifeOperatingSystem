@@ -374,3 +374,33 @@
 @media (max-width: 600px) {
   .placeholder-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Vitara freshness badge ──
+   Marks a reading that isn't today's. Deliberately quiet at 1-2 days (Oura syncs once
+   daily, so yesterday's number is normal and shouldn't look like an alarm) and amber
+   from 3 days, where a stale figure stops being "latest" and starts being history
+   presented as a vital. */
+.v-stale {
+  margin-left: 0.4rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text3);
+  background: rgba(255,255,255,0.06);
+  border-radius: 4px;
+  padding: 0.1rem 0.32rem;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.v-stale--old {
+  color: #f5a524;
+  background: rgba(245,165,36,0.12);
+}
+
+/* Delta vs baseline. Colour encodes better/worse for THAT metric, not up/down —
+   a falling resting heart rate is good news and must not render red. */
+.v-delta { font-variant-numeric: tabular-nums; }
+.v-delta--good { color: #06c8a0; }
+.v-delta--bad  { color: #f5a524; }
+.v-delta--flat { color: var(--text3); }

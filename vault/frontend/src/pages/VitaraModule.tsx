@@ -15,19 +15,27 @@ const qc  = makeModuleQueryClient(5 * 60_000);
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+// Every metric block carries its OWN day and age. Oura syncs once daily and a night
+// the ring wasn't worn leaves a gap, so "latest" can be several days old — the API has
+// always said so per block, and this interface used to drop it on the floor, which let
+// the dashboard present four-day-old numbers as today's vitals with nothing to give it
+// away. `Freshness` renders that age wherever a value is shown.
+interface Dated { day: string; daysAgo: number }
+
 interface Dashboard {
   date: string;
   profile?: { age?: number; weight?: number; height?: number; biologicalSex?: string };
-  sleep?: { score?: number; totalMinutes: number; deepMinutes: number; remMinutes: number; lightMinutes: number; efficiency: number; hrv?: number; lowestHr?: number; breathingRate?: number; spo2?: number; skinTemp?: number };
-  readiness?: { score?: number; level?: string; restingHr?: number; hrvBalance?: number; recoveryIndex?: number; activityBalance?: number; sleepBalance?: number; tempDeviation?: number };
-  activity?: { score?: number; steps: number; activeCalories: number; totalCalories: number; highMinutes: number; mediumMinutes: number; lowMinutes: number; distance: number };
-  stress?: { summary?: string; stressMinutes?: number; recoveryMinutes?: number };
-  resilience?: { level?: string; sleepRecovery?: number; daytimeRecovery?: number; stressScore?: number };
-  spo2Data?: { average?: number; breathingDisturbance?: number };
+  sleep?: Dated & { score?: number; totalMinutes: number; deepMinutes: number; remMinutes: number; lightMinutes: number; efficiency: number; hrv?: number; lowestHr?: number; breathingRate?: number; spo2?: number; skinTemp?: number };
+  readiness?: Dated & { score?: number; level?: string; restingHr?: number; hrvBalance?: number; recoveryIndex?: number; activityBalance?: number; sleepBalance?: number; tempDeviation?: number };
+  activity?: Dated & { score?: number; steps: number; activeCalories: number; totalCalories: number; highMinutes: number; mediumMinutes: number; lowMinutes: number; distance: number };
+  stress?: Dated & { summary?: string; stressMinutes?: number; recoveryMinutes?: number };
+  resilience?: Dated & { level?: string; sleepRecovery?: number; daytimeRecovery?: number; stressScore?: number };
+  spo2Data?: Dated & { average?: number; breathingDisturbance?: number };
   cardiovascularAge?: number;
   vo2Max?: number;
   weeklyAvg: { hrv: number; rhr: number; sleepScore: number; readinessScore: number; steps: number; activityScore: number };
   recentWorkouts?: { activity: string; calories?: number; distance?: number; intensity?: string; startTime?: string }[];
+  latestHeartRate?: { timestamp: string; bpm: number };
   heartRateSamples?: { timestamp: string; bpm: number }[];
 }
 interface Sleep {
@@ -215,51 +223,58 @@ function TodayPage({ status }: { status: OuraStatus }) {
       {/* Hero cards */}
       <div className="v-hero">
         <div className="v-hero-card v-hero-card--accent">
-          <div className="v-hero-label">Readiness</div>
+          <div className="v-hero-label">Readiness<Freshness daysAgo={d.readiness?.daysAgo}/></div>
           <ScoreRing score={d.readiness?.score} color={scoreColor(d.readiness?.score)} label={d.readiness?.level?.replace('_', ' ') ?? ''} />
         </div>
         <div className="v-hero-card">
-          <div className="v-hero-label">Sleep</div>
+          <div className="v-hero-label">Sleep<Freshness daysAgo={d.sleep?.daysAgo}/></div>
           <ScoreRing score={d.sleep?.score} color={scoreColor(d.sleep?.score)} label={d.sleep ? fmtMin(d.sleep.totalMinutes) : '--'} />
         </div>
         <div className="v-hero-card">
-          <div className="v-hero-label">Activity</div>
+          <div className="v-hero-label">Activity<Freshness daysAgo={d.activity?.daysAgo}/></div>
           <ScoreRing score={d.activity?.score} color={scoreColor(d.activity?.score)} label={d.activity ? `${d.activity.steps.toLocaleString()} steps` : '--'} />
         </div>
       </div>
 
       {/* Metrics grid */}
       <div className="v-metrics">
+        {/* Leads with the newest actual reading rather than the daily resting rollup —
+            resting HR is a number Oura computes once a night, so it was never "current".
+            Resting and the 7d average both move down to context. */}
         <div className="v-metric">
           <div className="v-metric-label">Heart Rate</div>
           <div className="v-metric-val" style={{ color: 'var(--heart)' }}>
-            {d.readiness?.restingHr ?? '--'}<span className="v-metric-unit"> bpm</span>
+            {d.latestHeartRate?.bpm ?? d.readiness?.restingHr ?? '--'}<span className="v-metric-unit"> bpm</span>
           </div>
-          <div className="v-metric-sub">avg {d.weeklyAvg.rhr} bpm (7d)</div>
+          <div className="v-metric-sub">
+            {d.latestHeartRate
+              ? `${relTime(d.latestHeartRate.timestamp)} · resting ${d.readiness?.restingHr ?? '--'}`
+              : `resting · avg ${d.weeklyAvg.rhr} bpm (7d)`}
+          </div>
         </div>
         <div className="v-metric">
-          <div className="v-metric-label">HRV</div>
+          <div className="v-metric-label">HRV<Freshness daysAgo={d.sleep?.daysAgo}/></div>
           <div className="v-metric-val" style={{ color: '#818cf8' }}>
             {d.sleep?.hrv ?? '--'}<span className="v-metric-unit"> ms</span>
           </div>
           <div className="v-metric-sub">avg {d.weeklyAvg.hrv} ms (7d)</div>
         </div>
         <div className="v-metric">
-          <div className="v-metric-label">Stress</div>
+          <div className="v-metric-label">Stress<Freshness daysAgo={d.stress?.daysAgo}/></div>
           <div className="v-metric-val" style={{ color: stressColor, textTransform: 'capitalize' }}>
             {d.stress?.summary ?? '--'}
           </div>
           {d.stress?.recoveryMinutes != null && <div className="v-metric-sub">{d.stress.recoveryMinutes}m recovery</div>}
         </div>
         <div className="v-metric">
-          <div className="v-metric-label">Resilience</div>
+          <div className="v-metric-label">Resilience<Freshness daysAgo={d.resilience?.daysAgo}/></div>
           <div className="v-metric-val" style={{ color: resColor, textTransform: 'capitalize' }}>
             {resLevel ?? '--'}
           </div>
           {d.resilience?.sleepRecovery != null && <div className="v-metric-sub">sleep recovery {d.resilience.sleepRecovery}</div>}
         </div>
         <div className="v-metric">
-          <div className="v-metric-label">SpO2</div>
+          <div className="v-metric-label">SpO2<Freshness daysAgo={d.spo2Data?.daysAgo}/></div>
           <div className="v-metric-val" style={{ color: '#06c8a0' }}>
             {d.spo2Data?.average != null ? `${d.spo2Data.average.toFixed(1)}` : (d.sleep?.spo2 != null ? d.sleep.spo2.toFixed(1) : '--')}<span className="v-metric-unit"> %</span>
           </div>
@@ -383,6 +398,8 @@ function SleepPage() {
   for (const s of data) { const ex = byDay.get(s.day); if (!ex || s.totalSleepMinutes > ex.totalSleepMinutes) byDay.set(s.day, s); }
   const nights = [...byDay.values()].sort((x, y) => y.day.localeCompare(x.day));
 
+  const lastNight = nights[0];
+
   const rows = nights.map(s => {
     const start = new Date(s.bedtimeStart), end = new Date(s.bedtimeEnd);
     const anchor = timelineAnchor(start);
@@ -396,13 +413,17 @@ function SleepPage() {
 
   return (
     <div>
+      {/* Last night first, the 14-day average underneath as context. A fortnight's
+          mean is the wrong headline for a health metric you check each morning: it
+          barely moves, so it can't answer "how did I sleep?" — and it hid a bad night
+          entirely by averaging it away. */}
       <div className="v-metrics">
-        <Metric label="Avg Score" value={a.score?.toFixed(0)} unit="/ 100" color={scoreColor(a.score)}/>
-        <Metric label="Avg HRV" value={a.hrv?.toFixed(0)} unit="ms"/>
-        <Metric label="Deep Sleep" value={a.deep?.toFixed(0)} unit="min"/>
-        <Metric label="REM Sleep" value={a.rem?.toFixed(0)} unit="min"/>
-        <Metric label="Total Sleep" value={a.total != null ? fmtMin(Math.round(a.total)) : undefined}/>
-        <Metric label="Efficiency" value={a.eff != null ? (a.eff * 100).toFixed(0) : undefined} unit="%"/>
+        <Metric label="Last Night" value={lastNight?.score?.toFixed(0)} unit="/ 100" color={scoreColor(lastNight?.score)} subNode={<Delta current={lastNight?.score} baseline={a.score} goodWhen="higher"/>}/>
+        <Metric label="HRV" value={lastNight?.avgHrv?.toFixed(0)} unit="ms" subNode={<Delta current={lastNight?.avgHrv} baseline={a.hrv} goodWhen="higher" unit="ms"/>}/>
+        <Metric label="Deep Sleep" value={lastNight?.deepMinutes?.toFixed(0)} unit="min" subNode={<Delta current={lastNight?.deepMinutes} baseline={a.deep} goodWhen="higher" unit="m"/>}/>
+        <Metric label="REM Sleep" value={lastNight?.remMinutes?.toFixed(0)} unit="min" subNode={<Delta current={lastNight?.remMinutes} baseline={a.rem} goodWhen="higher" unit="m"/>}/>
+        <Metric label="Total Sleep" value={lastNight ? fmtMin(lastNight.totalSleepMinutes) : undefined} sub={a.total != null ? `14d avg ${fmtMin(Math.round(a.total))}` : undefined}/>
+        <Metric label="Efficiency" value={lastNight != null ? (lastNight.efficiency * 100).toFixed(0) : undefined} unit="%" sub={a.eff != null ? `14d avg ${(a.eff * 100).toFixed(0)}%` : undefined}/>
       </div>
 
       <div className="v-section">Sleep Timeline<span className="v-section-line"/></div>
@@ -642,6 +663,7 @@ function ActivityPage() {
   if (!data?.length) return <div className="v-empty"><LogWorkoutForm/><div style={{ marginTop: '1rem' }}>No activity data yet — log a workout above.</div></div>;
 
   const a = { steps: avg(data.map(d => d.steps)), cal: avg(data.map(d => d.activeCalories)), score: avg(data.map(d => d.score)), highMin: avg(data.map(d => d.highActivityMinutes)) };
+  const today = latest(data);   // endpoints return oldest-first
   const stepsChart = data.map(d => ({ day: shortDay(d.day), steps: d.steps, cal: d.activeCalories }));
 
   return (
@@ -649,10 +671,10 @@ function ActivityPage() {
       <LogWorkoutForm/>
 
       <div className="v-metrics">
-        <Metric label="Avg Steps" value={a.steps != null ? Math.round(a.steps).toLocaleString() : undefined}/>
-        <Metric label="Active Cal" value={a.cal?.toFixed(0)} unit="kcal"/>
-        <Metric label="Avg Score" value={a.score?.toFixed(0)} unit="/ 100" color={scoreColor(a.score)}/>
-        <Metric label="High-Int Min" value={a.highMin?.toFixed(0)} unit="min"/>
+        <Metric label="Steps" value={today?.steps.toLocaleString()} subNode={<Delta current={today?.steps} baseline={a.steps} goodWhen="higher"/>}/>
+        <Metric label="Active Cal" value={today?.activeCalories.toFixed(0)} unit="kcal" subNode={<Delta current={today?.activeCalories} baseline={a.cal} goodWhen="higher"/>}/>
+        <Metric label="Score" value={today?.score?.toFixed(0)} unit="/ 100" color={scoreColor(today?.score)} subNode={<Delta current={today?.score} baseline={a.score} goodWhen="higher"/>}/>
+        <Metric label="High-Int Min" value={today?.highActivityMinutes?.toFixed(0)} unit="min" subNode={<Delta current={today?.highActivityMinutes} baseline={a.highMin} goodWhen="higher" unit="m"/>}/>
       </div>
 
       <div className="v-section">Daily Steps<span className="v-section-line"/></div>
@@ -706,15 +728,16 @@ function ReadinessPage() {
   if (!data?.length) return <div className="v-empty">No readiness data</div>;
 
   const a = { score: avg(data.map(r => r.score)), rhr: avg(data.map(r => r.restingHeartRate)), hrv: avg(data.map(r => r.hrvBalance)), recov: avg(data.map(r => r.recoveryIndex)) };
+  const today = latest(data);
   const levels = data.reduce((acc, r) => { const l = r.level ?? 'unknown'; acc[l] = (acc[l] ?? 0) + 1; return acc; }, {} as Record<string, number>);
 
   return (
     <div>
       <div className="v-metrics">
-        <Metric label="Avg Score" value={a.score?.toFixed(0)} unit="/ 100" color={scoreColor(a.score)}/>
-        <Metric label="Avg RHR" value={a.rhr?.toFixed(0)} unit="bpm"/>
-        <Metric label="HRV Balance" value={a.hrv?.toFixed(0)} unit="/ 100"/>
-        <Metric label="Recovery" value={a.recov?.toFixed(0)} unit="/ 100"/>
+        <Metric label="Score" value={today?.score?.toFixed(0)} unit="/ 100" color={scoreColor(today?.score)} subNode={<Delta current={today?.score} baseline={a.score} goodWhen="higher"/>}/>
+        <Metric label="Resting HR" value={today?.restingHeartRate?.toFixed(0)} unit="bpm" subNode={<Delta current={today?.restingHeartRate} baseline={a.rhr} goodWhen="lower" unit="bpm"/>}/>
+        <Metric label="HRV Balance" value={today?.hrvBalance?.toFixed(0)} unit="/ 100" subNode={<Delta current={today?.hrvBalance} baseline={a.hrv} goodWhen="higher"/>}/>
+        <Metric label="Recovery" value={today?.recoveryIndex?.toFixed(0)} unit="/ 100" subNode={<Delta current={today?.recoveryIndex} baseline={a.recov} goodWhen="higher"/>}/>
       </div>
 
       <div className="v-levels">
@@ -780,7 +803,48 @@ function ProtocolsPage() {
 
 // ── Shared Metric Card ───────────────────────────────────────────────────────
 
-function Metric({ label, value, unit, color, sub }: { label: string; value?: string; unit?: string; color?: string; sub?: string }) {
+// How old a reading is, shown only when it isn't today's. Silence means current, so
+// the common case stays uncluttered and an appearing badge actually means something.
+// Anything three days or older is styled as a warning: at that point the number is
+// history being read as a vital, which is the specific way this dashboard could mislead.
+function Freshness({ daysAgo }: { daysAgo?: number }) {
+  if (daysAgo == null || daysAgo <= 0) return null;
+  return (
+    <span className={`v-stale${daysAgo >= 3 ? ' v-stale--old' : ''}`}>
+      {daysAgo === 1 ? 'yesterday' : `${daysAgo}d ago`}
+    </span>
+  );
+}
+
+// Latest reading in an oldest-first series — the shape every Vitara list endpoint
+// returns (all repository queries OrderBy(day) ascending).
+const latest = <T,>(arr?: T[]): T | undefined => arr?.[arr.length - 1];
+
+// "62ms, 14d avg 54" makes you do the arithmetic; "62ms, +8 vs 14d avg" is the thing
+// you actually wanted to know. Direction is colour-coded by whether up is GOOD for that
+// metric, which differs — a rising HRV is good news, a rising resting heart rate is not.
+//
+// Deliberately silent when the change is negligible: day-to-day noise dressed up as a
+// green arrow trains you to ignore the arrows that mean something.
+function Delta({ current, baseline, goodWhen, unit }: {
+  current?: number; baseline?: number; goodWhen: 'higher' | 'lower'; unit?: string;
+}) {
+  if (current == null || baseline == null || baseline === 0) return null;
+  const diff = current - baseline;
+  if (Math.abs(diff) < Math.abs(baseline) * 0.02) return <span className="v-delta v-delta--flat">≈ 14d avg</span>;
+
+  const better = goodWhen === 'higher' ? diff > 0 : diff < 0;
+  const rounded = Math.abs(diff) >= 10 ? Math.round(Math.abs(diff)) : Math.round(Math.abs(diff) * 10) / 10;
+  return (
+    <span className={`v-delta ${better ? 'v-delta--good' : 'v-delta--bad'}`}>
+      {diff > 0 ? '▲' : '▼'} {rounded}{unit ?? ''} vs 14d avg
+    </span>
+  );
+}
+
+function Metric({ label, value, unit, color, sub, subNode }: {
+  label: string; value?: string; unit?: string; color?: string; sub?: string; subNode?: React.ReactNode;
+}) {
   return (
     <div className="v-metric">
       <div className="v-metric-label">{label}</div>
@@ -788,7 +852,7 @@ function Metric({ label, value, unit, color, sub }: { label: string; value?: str
         {value ?? '--'}
         {value != null && unit && <span className="v-metric-unit"> {unit}</span>}
       </div>
-      {sub && <div className="v-metric-sub">{sub}</div>}
+      {subNode ? <div className="v-metric-sub">{subNode}</div> : sub && <div className="v-metric-sub">{sub}</div>}
     </div>
   );
 }

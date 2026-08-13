@@ -24,6 +24,15 @@ public class DashboardController(IVitaraRepository repo) : ControllerBase
         var workouts   = await repo.GetWorkoutsAsync(weekAgo, today);
         var heartRate  = await repo.GetHeartRateAsync(DateTime.UtcNow.AddHours(-24), DateTime.UtcNow);
 
+        // Samples come back oldest-first. Downsample, then take from the END: the old
+        // `.Take(120)` kept the OLDEST 120 points, so as soon as a day held more than
+        // ~720 raw samples the chart silently stopped at some hours-old moment and the
+        // newest readings — the ones that make it a "current" vital — were the first
+        // thing discarded. Oura's own sampling stays under that; a HealthKit workout
+        // feed does not.
+        var hrSeries = heartRate.Where((_, i) => i % 6 == 0).TakeLast(120).ToList();
+        var latestHr = heartRate.LastOrDefault();
+
         var todaySleep = sleep.LastOrDefault();
         var todayRead  = readiness.LastOrDefault();
         var todayAct   = activity.LastOrDefault();
@@ -120,7 +129,12 @@ public class DashboardController(IVitaraRepository repo) : ControllerBase
                 activityScore = Math.Round(activity.Where(a => a.Score.HasValue).Select(a => (double)a.Score!.Value).DefaultIfEmpty(0).Average(), 0),
             },
             recentWorkouts = workouts.Take(3).Select(w => new { w.Activity, w.Calories, w.Distance, w.Intensity, w.StartTime }),
-            heartRateSamples = heartRate.Where((_, i) => i % 6 == 0).Take(120).Select(h => new { h.Timestamp, h.Bpm }),
+            // The single most recent reading, which is the only genuinely "right now"
+            // number on this whole endpoint — everything else is a daily rollup Oura
+            // computes once. Carries its own timestamp because a ring that hasn't synced
+            // since this morning must not have its last reading shown as current.
+            latestHeartRate = latestHr is null ? null : new { latestHr.Timestamp, latestHr.Bpm },
+            heartRateSamples = hrSeries.Select(h => new { h.Timestamp, h.Bpm }),
         });
     }
 }
