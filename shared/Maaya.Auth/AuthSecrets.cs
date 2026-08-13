@@ -28,7 +28,10 @@ public static class AuthSecrets
     // the log than "login failed".
     public static bool NeededUndoubling(string raw) => !LooksLikeBcrypt(raw) && LooksLikeBcrypt(raw.Replace("$$", "$"));
 
-    private static string Normalize(string raw)
+    // Public for the sake of tests: PasswordHash() reads process-wide environment,
+    // which several tests cannot safely share, whereas the interesting logic is this
+    // pure transform.
+    public static string Normalize(string raw)
     {
         if (LooksLikeBcrypt(raw)) return raw;
         var collapsed = raw.Replace("$$", "$");

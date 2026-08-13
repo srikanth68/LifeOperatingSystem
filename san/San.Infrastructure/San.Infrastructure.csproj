@@ -17,6 +17,14 @@
     <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- GemmaTranscriber.Clean is the transcript cleanup that keeps a chat model from
+         answering the question it just heard instead of writing it down. It's internal
+         because nothing outside the transcriber should call it, and it's the piece most
+         worth testing directly. -->
+    <InternalsVisibleTo Include="San.Tests" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
