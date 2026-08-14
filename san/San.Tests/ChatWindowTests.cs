@@ -105,6 +105,42 @@ public class ChatWindowTests
         Assert.Single(kept);
     }
 
+    // The single biggest lever on voice latency. Measured against the live server at
+    // San's real prompt size: 78 messages of history cost 17-48s per spoken turn, 24
+    // cost 5-6s, 12 cost 3.5-5.5s. The window slides either way — a small one just
+    // leaves little behind the divergence point to re-read.
+    [Fact]
+    public void VoiceBudgetKeepsFarLessHistory()
+    {
+        var history = Conversation(60, 160);
+        var typed = Select(history);
+        var spoken = ChatWindow.Select(history, m => m.Content, m => m.Role, ChatWindow.VoiceTokenBudget);
+
+        Assert.True(spoken.Count < typed.Count,
+            $"voice window ({spoken.Count}) should be smaller than typed ({typed.Count})");
+        Assert.True(spoken.Sum(m => ChatWindow.EstimateTokens(m.Content)) <= ChatWindow.VoiceTokenBudget + 200);
+    }
+
+    // Smaller must not mean broken: the floor and the open-on-a-user-turn rule still hold.
+    [Fact]
+    public void VoiceWindowStillObeysTheStructuralRules()
+    {
+        var spoken = ChatWindow.Select(Conversation(60, 160), m => m.Content, m => m.Role,
+            ChatWindow.VoiceTokenBudget);
+        Assert.Equal("user", spoken[0].Role);
+        Assert.True(spoken.Count >= 5, $"expected the floor to hold, got {spoken.Count}");
+    }
+
+    [Fact]
+    public void AnExplicitBudgetOverridesTheDefault()
+    {
+        var history = Conversation(60, 160);
+        var tiny = ChatWindow.Select(history, m => m.Content, m => m.Role, 50);
+        var big = ChatWindow.Select(history, m => m.Content, m => m.Role, 100_000);
+        Assert.True(tiny.Count < big.Count);
+        Assert.Equal(history.Count, big.Count);
+    }
+
     [Fact]
     public void RoleMatchingIgnoresCase()
     {
