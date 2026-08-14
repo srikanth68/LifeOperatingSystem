@@ -32,6 +32,13 @@ public partial class LlamaCppAgentChatProvider(HttpClient http, IConfiguration c
     // scaffolding, nor scrape the reply for one.
     public bool HandlesToolsNatively => true;
 
+    // Slot 0 by default. Override only if something else is using the server's slots;
+    // a server started with --parallel 1 has just slot 0, and pinning to it is still
+    // correct. An out-of-range slot makes llama.cpp reject the request, so this is
+    // deliberately not something to guess at.
+    private static int Slot =>
+        int.TryParse(Environment.GetEnvironmentVariable("LLM_SLOT"), out var s) && s >= 0 ? s : 0;
+
     private static string BaseUrl =>
         (Environment.GetEnvironmentVariable("LLM_BASE_URL")
          ?? Environment.GetEnvironmentVariable("LLAMACPP_BASE_URL")
@@ -145,6 +152,19 @@ public partial class LlamaCppAgentChatProvider(HttpClient http, IConfiguration c
             // where that 15x lands directly on the user's wait; on for background work
             // that genuinely has to weigh content before acting (see IChatProvider).
             ["chat_template_kwargs"] = new Dictionary<string, object> { ["enable_thinking"] = enableThinking },
+            // Pin every chat turn to the same llama.cpp slot.
+            //
+            // The prompt cache is PER SLOT. llama-server was running four of them, so
+            // consecutive turns landed on whichever was free and each one re-prefilled
+            // the entire prompt from cold — measured at ~6.2K tokens and ~30s per turn,
+            // of which 3358 tokens were tool schemas that never change between calls.
+            // Decode was only 25-45 tokens; almost none of that 30s was generation.
+            //
+            // Pinning keeps the stable prefix resident in one slot, so a turn re-reads
+            // only what actually changed. STT deliberately uses a DIFFERENT slot
+            // (see GemmaTranscriber) — sharing one would make each evict the other's
+            // cache on every voice turn, which is the worst of both worlds.
+            ["id_slot"] = Slot,
         };
         if (toolsJson is not null) payload["tools"] = toolsJson;
 

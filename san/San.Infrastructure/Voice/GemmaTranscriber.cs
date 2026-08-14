@@ -35,6 +35,11 @@ public partial class GemmaTranscriber(IHttpClientFactory httpFactory, ILogger<Ge
 
     public bool IsConfigured => BaseUrl is not null;
 
+    // Slot 1: kept away from the chat slot so the two never evict each other. Falls back
+    // to 0 on a single-slot server, where there is nothing to separate.
+    private static int Slot =>
+        int.TryParse(Environment.GetEnvironmentVariable("STT_SLOT"), out var s) && s >= 0 ? s : 1;
+
     // Written as a machine spec rather than a polite request. "Output ONLY" and the
     // explicit no-answering clause are both load-bearing: without them the model
     // replies to questions in the audio instead of writing them down.
@@ -79,6 +84,12 @@ public partial class GemmaTranscriber(IHttpClientFactory httpFactory, ILogger<Ge
             // Generous relative to speech: ~1 token per word, and the cap only exists
             // to bound a model that starts rambling instead of transcribing.
             ["max_tokens"] = 800,
+            // A different slot from chat, on purpose. Both hit the same llama-server, and
+            // the prompt cache is per slot — sharing one would mean every voice turn's
+            // transcription evicted the chat prefix and vice versa, so neither would ever
+            // hit warm. Audio prompts have no reusable prefix anyway, so this slot is
+            // effectively scratch space.
+            ["id_slot"] = Slot,
         };
 
         var http = httpFactory.CreateClient("gemma-stt");
