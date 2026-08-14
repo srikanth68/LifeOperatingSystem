@@ -30,7 +30,7 @@ interface ChatMsg { id: string; role: 'user' | 'assistant'; content: string; cre
 // What a send carries. The image is a downscaled data URL and is attached to this turn
 // only — the server stores an "[image attached]" marker in history rather than the
 // picture, so later turns don't re-send it.
-interface Outgoing { content: string; imageDataUrl?: string }
+interface Outgoing { content: string; imageDataUrl?: string; mode?: 'voice' }
 interface Reminder { id: string; text: string; dueAt: string; done: boolean; notifyTelegram: boolean; notifiedAt: string | null; createdAt: string }
 interface AlertItem {
   id: string; type: string; title: string; description: string;
@@ -344,7 +344,9 @@ function Assistant() {
       setTranscribing(true);
       try {
         const text = await recorder!.stop();
-        if (text) sendMut.mutate({ content: text }); // dictate → send straight to San
+        // mode 'voice': San shapes the answer for being heard, not read — see
+        // SanOutputConventions.Voice. TTS may be off, but the user still SPOKE.
+        if (text) sendMut.mutate({ content: text, mode: 'voice' }); // dictate → send straight to San
       } catch (e) { setVoiceErr((e as Error).message); }
       finally { setTranscribing(false); }
     } else {

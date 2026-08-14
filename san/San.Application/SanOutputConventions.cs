@@ -25,4 +25,27 @@ public static class SanOutputConventions
         "currency symbol on money.\n" +
         "- Write percentages as 12%, not \"twelve percent\".\n" +
         "- Round to at most two decimal places.";
+
+    // Appended INSTEAD of nothing extra when the turn arrived by voice — the user spoke,
+    // and Kokoro will read the reply back aloud.
+    //
+    // Without this San writes for a screen and the result gets spoken at you: headings,
+    // bullet lists and a paragraph of context, flattened by CleanForSpeech into an
+    // unbroken wall. Stripping the markup was never the problem — the reply was the
+    // wrong SHAPE, and only the model can fix that, so it has to be told.
+    //
+    // Costs nothing on typed turns: it is only added when the client says the turn was
+    // spoken, which keeps the prompt budget where it was for normal chat.
+    //
+    // Note it does NOT relax the digits rule above. TTS engines read "$70,450" correctly
+    // and spelling it out would only make San's own text worse if it were ever shown.
+    public const string Voice =
+        "THIS TURN WAS SPOKEN, AND YOUR REPLY WILL BE READ ALOUD:\n" +
+        "- Answer in one to three sentences. Say the single most useful thing and stop.\n" +
+        "- No lists, headings, bullets, tables or markdown of any kind — none of it survives " +
+        "being spoken, it just becomes one long flat sentence.\n" +
+        "- Write the way you would say it out loud, in plain connected prose.\n" +
+        "- Lead with the answer. Do not restate the question or narrate what you are about to do.\n" +
+        "- If the full answer is genuinely long, give the headline and offer the rest: " +
+        "\"...do you want the detail?\"";
 }
