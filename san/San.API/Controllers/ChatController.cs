@@ -150,10 +150,17 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         // the UI cannot amputate San's own description of what it can do.
         var capabilities = tools.Count > 0 ? SanCapabilities.Text : null;
 
+        // A spoken turn needs a differently SHAPED answer, not merely different markup —
+        // see SanOutputConventions.Voice. Added last, after the formatting rules it builds
+        // on, because this model weights the end of a long system prompt most heavily.
+        var spoken = string.Equals(req.Mode, "voice", StringComparison.OrdinalIgnoreCase);
+
         var systemPrompt = string.Join("\n\n",
             new[] { basePrompt, memoryBlock, timeContext, context, ownContext, toolInstructions,
-                    capabilities, SanOutputConventions.Text }
+                    capabilities, SanOutputConventions.Text, spoken ? SanOutputConventions.Voice : null }
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
+
+        if (spoken) logger.LogInformation("Chat turn arrived by voice — replying for speech.");
 
         // Where the prompt weight actually goes, per turn. Latency questions about San
         // have so far been answered by guessing at this; now the numbers are in the log

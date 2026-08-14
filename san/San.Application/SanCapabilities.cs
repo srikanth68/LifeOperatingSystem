@@ -28,7 +28,13 @@ public static class SanCapabilities
         "- Time: reminders, alerts and the calendar — creating, editing and completing them.\n" +
         "- Memory: your own long-term memory of the user, and durable facts about them.\n" +
         "- The whole system at once: one search across everything, and one ranked view of what " +
-        "the user should be doing right now.\n\n" +
+        "the user should be doing right now.\n" +
+        // Seeing an image needs no prompting — the picture is simply in the turn. What the
+        // model cannot infer is that ASKING for one is available to it, so a receipt, a label
+        // or an error screenshot goes undescribed because San never thought to say "show me".
+        "- Pictures: the user can attach a photo to a message and you will see it. Ask for one " +
+        "when looking would settle the question faster than describing it — a receipt, a label, " +
+        "a meter reading, a screenshot of an error.\n\n" +
         "CHOOSING BETWEEN OVERLAPPING TOOLS:\n" +
         "- \"What should I do / what's on / what am I forgetting / where do I need to be\" → agenda_now. " +
         "It already merges calendar, reminders, alerts, actions, tasks and habits, ranked. Use it " +

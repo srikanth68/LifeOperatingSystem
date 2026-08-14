@@ -61,7 +61,8 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
       onSanText: setCallSan,
       onError: setCallError,
       sendToSan: async (text: string) => {
-        const res = await send(`${SAN}/api/chat/messages`, 'POST', { content: text });
+        // Always spoken here by definition — the whole turn is voice in, voice out.
+        const res = await send(`${SAN}/api/chat/messages`, 'POST', { content: text, mode: 'voice' });
         return res?.assistantMessage?.content ?? '';
       },
     });
