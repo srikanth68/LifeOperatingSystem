@@ -72,6 +72,10 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         if (!ImageAttachment.TryValidate(req.ImageDataUrl, out var imageError))
             return BadRequest(imageError);
 
+        // Needed before the history window is chosen, not just at prompt-assembly time:
+        // a spoken turn gets a far smaller window (see ChatWindow.VoiceTokenBudget).
+        var spoken = string.Equals(req.Mode, "voice", StringComparison.OrdinalIgnoreCase);
+
         var turnSw = Stopwatch.StartNew();
 
         // Timestamp of the last interaction BEFORE this new message — lets San know
@@ -94,7 +98,8 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         // last fifty messages happened to be — a few pasted logs and the context
         // window did the trimming instead, silently and from the wrong end.
         var history = await repo.GetChatHistoryAsync(100);
-        var windowed = ChatWindow.Select(history, m => m.Content, m => m.Role);
+        var windowed = ChatWindow.Select(history, m => m.Content, m => m.Role,
+            spoken ? ChatWindow.VoiceTokenBudget : null);
         var turns = windowed.Select(m => new ChatTurn(m.Role, m.Content)).ToList();
 
         // Attach the image to the newest user turn — the one just saved. Done here
@@ -149,11 +154,6 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         // snapshot. Keeping them out of the persona also means rewriting the prompt in
         // the UI cannot amputate San's own description of what it can do.
         var capabilities = tools.Count > 0 ? SanCapabilities.Text : null;
-
-        // A spoken turn needs a differently SHAPED answer, not merely different markup —
-        // see SanOutputConventions.Voice. Added last, after the formatting rules it builds
-        // on, because this model weights the end of a long system prompt most heavily.
-        var spoken = string.Equals(req.Mode, "voice", StringComparison.OrdinalIgnoreCase);
 
         // THE SYSTEM PROMPT MUST NOT CHANGE BETWEEN TURNS. A performance constraint,
         // measured against the live server, not a style preference.
