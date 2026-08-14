@@ -1,5 +1,6 @@
 import { moduleApi } from './apiHost';
 import { authHeaders } from './auth';
+import { speakChunks } from './speechChunks';
 
 const SAN = moduleApi(5300);
 
@@ -64,11 +65,16 @@ export async function startRecording(): Promise<Recorder> {
   };
 }
 
-// Sends text to San's Piper proxy and plays the returned audio.
 let currentAudio: HTMLAudioElement | null = null;
 
-export async function speak(text: string): Promise<void> {
-  stopSpeaking();
+// Bumped by stopSpeaking(). A chunked utterance spans several fetches and plays, so
+// "stop" cannot just pause the current element — the loop has to know its turn is over.
+// A counter rather than a boolean so a NEW utterance starting immediately after a stop
+// isn't cancelled by the old one's cleanup.
+let speakGeneration = 0;
+
+// Fetches one chunk of speech and returns a playable object URL.
+async function synthChunk(text: string): Promise<string> {
   const res = await fetch(`${SAN}/api/voice/speak`, {
     method: 'POST',
     headers: { ...authHeaders(), 'Content-Type': 'application/json' },
@@ -78,14 +84,25 @@ export async function speak(text: string): Promise<void> {
     const err = await res.json().catch(() => ({ error: 'Speech failed' }));
     throw new Error(err.error || 'Speech failed');
   }
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const audio = new Audio(url);
-  currentAudio = audio;
-  audio.onended = () => URL.revokeObjectURL(url);
-  await audio.play();
+  return URL.createObjectURL(await res.blob());
+}
+
+// Speaks a reply sentence by sentence so the first words start while the rest is still
+// being synthesised — see speechChunks. Kokoro renders a whole reply before returning
+// anything, which meant up to 12s of silence on a long answer.
+export async function speak(text: string): Promise<void> {
+  stopSpeaking();
+  const mine = ++speakGeneration;
+  await speakChunks(text, {
+    synth: synthChunk,
+    onAudio: a => { currentAudio = a; },
+    // stopSpeaking() bumps the generation, which abandons the rest of this utterance
+    // without touching a newer one that may already have started.
+    shouldStop: () => mine !== speakGeneration,
+  });
 }
 
 export function stopSpeaking(): void {
+  speakGeneration++;
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
 }
