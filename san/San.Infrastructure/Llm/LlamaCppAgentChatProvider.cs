@@ -165,6 +165,11 @@ public partial class LlamaCppAgentChatProvider(HttpClient http, IConfiguration c
             // (see GemmaTranscriber) — sharing one would make each evict the other's
             // cache on every voice turn, which is the worst of both worlds.
             ["id_slot"] = Slot,
+            // Stated rather than assumed. Recent llama-server defaults this on, but the
+            // whole fix above is worthless if a build defaults it off, and asking for it
+            // explicitly costs one field. It is the switch that makes a pinned slot mean
+            // anything: without it the slot is reused but the KV cache is not.
+            ["cache_prompt"] = true,
         };
         if (toolsJson is not null) payload["tools"] = toolsJson;
 
