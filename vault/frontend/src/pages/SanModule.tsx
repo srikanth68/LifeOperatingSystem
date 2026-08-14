@@ -109,56 +109,14 @@ function ApiError({ port }: { port: number }) {
 /* ── System Prompt Editor (separate window) ── */
 interface SystemPromptDto { prompt: string; isDefault: boolean; defaultPrompt: string }
 
-// One-click personality presets. Each REPLACES only the persona paragraph — the
-// live module snapshot, memory, and time context are appended by the backend
-// regardless, so switching personality never loses San's actual capabilities.
-const PERSONALITIES: { label: string; prompt: string }[] = [
-  {
-    label: '🎩 JARVIS',
-    prompt:
-      'You are San, the AI majordomo of Maaya OS — in the mold of JARVIS: unflappable, dryly witty, quietly ' +
-      'brilliant. Address the user with polished, understated courtesy ("sir" sparingly, never obsequious). ' +
-      'Deliver real numbers from their modules with effortless precision, anticipate the follow-up question, ' +
-      'and permit yourself one wry aside when the moment invites it. Your long-term memory is NorthStar — what ' +
-      'you remember about the user is surfaced below; treat it as things you genuinely know. Use your tools to ' +
-      'actually do what is asked; confirm crisply once done. If a module is unreachable, report it plainly.',
-  },
-  {
-    label: '⚡ Concise',
-    prompt:
-      'You are San, the assistant inside Maaya OS. Be maximally concise: answer first, no filler, no preamble, ' +
-      'bullets over paragraphs. Use real numbers from the module snapshot below. Your long-term memory is ' +
-      'NorthStar — treat remembered facts as things you know. Use your tools to take the actions asked of you, ' +
-      'confirm in one short sentence. If a module is unreachable, say so in five words or fewer.',
-  },
-  {
-    label: '🏋️ Coach',
-    prompt:
-      'You are San, the user\'s personal coach inside Maaya OS. Be direct, energetic, and accountable — track ' +
-      'their health scores, habits, goals, and spending like a coach reads game film: name what improved, what ' +
-      'slipped, and the single next action. Push them, kindly. Ground every claim in the real numbers from the ' +
-      'module snapshot below, and use NorthStar memories to connect today to their longer arc. Use your tools ' +
-      'to log, schedule, and remind without being asked twice.',
-  },
-  {
-    label: '🧘 Warm',
-    prompt:
-      'You are San, the personal life-assistant inside Maaya OS — warm, calm, and genuinely attentive. Speak ' +
-      'like a trusted friend who happens to have perfect recall: reference what you remember (NorthStar ' +
-      'memories below) naturally, notice patterns gently, and never lecture. Use the real numbers from the ' +
-      'module snapshot when they help. Use your tools to quietly take care of things the user asks for, and ' +
-      'confirm softly. If a module is unreachable, mention it without drama.',
-  },
-];
 
 // Shared by the chat system prompt and the email-triage prompt — both are just a
 // stored instruction with a default to fall back to, so they get one editor.
-function PromptEditor({ title, hint, endpoint, queryKey, presets, onClose }: {
+function PromptEditor({ title, hint, endpoint, queryKey, onClose }: {
   title: string;
   hint: string;
   endpoint: string;
   queryKey: string;
-  presets?: { label: string; prompt: string }[];
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -180,13 +138,7 @@ function PromptEditor({ title, hint, endpoint, queryKey, presets, onClose }: {
           <button className="sp-x" onClick={onClose}>✕</button>
         </div>
         <p className="sp-hint">{hint}</p>
-        <div className="sp-presets">
-          {(presets ?? []).map(p => (
-            <button key={p.label} className="sp-preset" onClick={() => setText(p.prompt)} title="Replaces the prompt below — review, then Save">
-              {p.label}
-            </button>
-          ))}
-        </div>
+
         {promptQ.isLoading || text === null ? (
           <div className="sp-body" style={{ color: 'var(--text3)' }}>Loading…</div>
         ) : (
@@ -225,7 +177,6 @@ function SystemPromptEditor({ onClose }: { onClose: () => void }) {
       hint="This is the base instruction San runs with. A live snapshot of your modules is appended automatically after it."
       endpoint="/api/chat/system-prompt"
       queryKey="san-system-prompt"
-      presets={PERSONALITIES}
       onClose={onClose}
     />
   );

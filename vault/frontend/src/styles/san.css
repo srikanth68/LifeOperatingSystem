@@ -674,18 +674,6 @@
   .call-orb { animation: none !important; }
 }
 
-/* ── System Prompt personality presets ── */
-.sp-presets {
-  display: flex; flex-wrap: wrap; gap: 0.45rem;
-  padding: 0.65rem 1.2rem 0;
-}
-.sp-preset {
-  padding: 0.35rem 0.75rem;
-  background: var(--surface2); color: var(--text2);
-  border: 1px solid var(--border2); border-radius: 999px;
-  font-size: 0.78rem; cursor: pointer;
-}
-.sp-preset:hover { border-color: var(--san); color: var(--text); }
 
 /* ── Global floating call button (App root, reachable from any module) ── */
 .call-fab {
