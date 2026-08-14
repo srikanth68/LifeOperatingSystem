@@ -75,6 +75,14 @@ services:
     command: ["dotnet", "/app/san-worker/San.Worker.dll"]
     working_dir: /data/san/run
     env_file: ./deploy/env/san.env
+    # A different llama.cpp slot from the interactive chat (which uses 0) and from STT
+    # (1). The prompt cache is per slot, and the workers run on 15-minute timers with
+    # completely different system prompts — sharing slot 0 would mean a background
+    # insight run silently evicting the conversation's cached prefix, so the next thing
+    # the user said paid a full ~6K-token prefill again. Same env file as the API, so
+    # this has to be an override rather than a value in san.env.
+    environment:
+      - LLM_SLOT=2
     depends_on: [san]
 
   sutra:
