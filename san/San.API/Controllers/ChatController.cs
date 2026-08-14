@@ -155,24 +155,51 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         // on, because this model weights the end of a long system prompt most heavily.
         var spoken = string.Equals(req.Mode, "voice", StringComparison.OrdinalIgnoreCase);
 
-        // ORDER HERE IS A PERFORMANCE DECISION, not a stylistic one.
+        // THE SYSTEM PROMPT MUST NOT CHANGE BETWEEN TURNS. A performance constraint,
+        // measured against the live server, not a style preference.
         //
         // llama.cpp caches the prompt prefix per slot and reuses it up to the first byte
-        // that changed. The old order put the volatile blocks — recalled memory, the time
-        // line, the module snapshot — SECOND, invalidating everything after them every
-        // turn, including the static instruction blocks and (depending on where the
-        // template renders them) the 3358 tokens of tool schemas. Stable content first
-        // lets the cache survive; the volatile part is only ~330 tokens to re-read.
+        // that differs — and Gemma's template renders the TOOL BLOCK AFTER the system
+        // message. So anything volatile in the system prompt sits in front of 3358
+        // tokens of tool schemas and forces all of them to be re-read, every turn.
         //
-        // The instruction blocks moving off the very end is a real cost, since this model
-        // weights late instructions more heavily — but they were never actually last:
-        // ~1500 tokens of history follow the system prompt regardless. Being 330 tokens
-        // earlier inside that is a small change to a position that was already not the end.
+        // Measured on Everest: 6796-token prompt, same slot, caching on.
+        //     cold                              22.5s
+        //     identical repeat                   1.4s
+        //     ONE LINE of the system tail changed  23.6s   <- full re-read
+        //     static system, context moved into
+        //       the last user message            2.1s / 4.2s / 2.7s
+        //
+        // That was the whole ~34s voice turn: not the model thinking, not the tools —
+        // re-reading an unchanged prompt because one line above it had moved.
+        //
+        // So everything stable lives in the system prompt, and everything that changes
+        // per turn — recalled memory, the time line, the module snapshot — rides in the
+        // newest user message instead, landing after the cached region.
         var systemPrompt = string.Join("\n\n",
             new[] { basePrompt, toolInstructions, capabilities,
-                    SanOutputConventions.Text, spoken ? SanOutputConventions.Voice : null,
-                    memoryBlock, timeContext, context, ownContext }
+                    SanOutputConventions.Text, spoken ? SanOutputConventions.Voice : null }
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
+
+        var liveContext = string.Join("\n\n",
+            new[] { memoryBlock, timeContext, context, ownContext }
+                .Where(s => !string.IsNullOrWhiteSpace(s)));
+
+        // Fenced and labelled, because it arrives where the user's own words go. Without
+        // a marker the model answers questions ABOUT the snapshot, or thanks the user for
+        // telling it the time.
+        if (liveContext.Length > 0)
+        {
+            var ctxIdx = turns.FindLastIndex(t => t.Role == "user");
+            if (ctxIdx >= 0)
+                turns[ctxIdx] = turns[ctxIdx] with
+                {
+                    Content = "[SYSTEM CONTEXT \u2014 background for you, not something the user said]\n"
+                              + liveContext
+                              + "\n[END CONTEXT]\n\n"
+                              + turns[ctxIdx].Content,
+                };
+        }
 
         if (spoken) logger.LogInformation("Chat turn arrived by voice — replying for speech.");
 
