@@ -1,5 +1,6 @@
 import { moduleApi } from './apiHost';
 import { authHeaders } from './auth';
+import { speakChunks } from './speechChunks';
 
 const SAN = moduleApi(5300);
 
@@ -57,6 +58,8 @@ export class VoiceCall {
   private buf: Uint8Array<ArrayBuffer> = new Uint8Array(new ArrayBuffer(0));
   private noiseFloor = MIN_FLOOR;
   private audio: HTMLAudioElement | null = null;
+  // Set when the user speaks over San; abandons the remaining chunks.
+  private bargedIn = false;
   private stopped = false;
 
   constructor(handlers: CallHandlers) {
@@ -239,32 +242,52 @@ export class VoiceCall {
   // Plays San's reply, but keeps watching the mic: sustained speech over the
   // (higher) barge-in threshold cuts the playback short so the user can
   // interrupt instead of waiting out a long answer.
+  // Speaks San's reply in sentence-sized pieces so the first words start while the
+  // rest is still being synthesised (see speechChunks). Kokoro renders a whole reply
+  // before returning anything, so a long answer meant ~12s of dead air mid-call.
+  //
+  // Barge-in still works across the whole utterance: the mic is watched during every
+  // chunk, and cutting in stops the remaining chunks too, not just the one playing.
   private async speakWithBargeIn(text: string): Promise<void> {
-    const res = await fetch(`${SAN}/api/voice/speak`, {
-      method: 'POST',
-      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+    await speakChunks(text, {
+      synth: async (chunk) => {
+        const res = await fetch(`${SAN}/api/voice/speak`, {
+          method: 'POST',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: chunk }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Speech failed' }));
+          throw new Error(err.error || 'Speech failed');
+        }
+        return URL.createObjectURL(await res.blob());
+      },
+      onAudio: (audio) => { this.audio = audio; },
+      shouldStop: () => this.stopped || this.bargedIn,
+      awaitPlayback: (audio) => this.watchForBargeIn(audio),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'Speech failed' }));
-      throw new Error(err.error || 'Speech failed');
-    }
+    this.bargedIn = false;
+    this.audio = null;
+  }
 
-    const url = URL.createObjectURL(await res.blob());
-    const audio = new Audio(url);
-    this.audio = audio;
+  // Returns true if the user cut in — which must abandon the REST of the reply, not
+  // merely the chunk that happened to be playing when they spoke.
+  private async watchForBargeIn(audio: HTMLAudioElement): Promise<boolean> {
     const ended = new Promise<void>(resolve => {
       audio.onended = () => resolve();
       audio.onerror = () => resolve();
     });
-    await audio.play();
 
     const threshold = this.noiseFloor * BARGE_MULT;
     let loud = 0;
     while (!this.stopped && !audio.ended) {
       if (this.rms() > threshold) {
         loud += TICK_MS;
-        if (loud >= BARGE_SUSTAIN_MS) { audio.pause(); break; }
+        if (loud >= BARGE_SUSTAIN_MS) {
+          audio.pause();
+          this.bargedIn = true;
+          return true;
+        }
       } else {
         loud = 0;
       }
@@ -272,8 +295,7 @@ export class VoiceCall {
     }
 
     if (!audio.paused) await ended;
-    URL.revokeObjectURL(url);
-    if (this.audio === audio) this.audio = null;
+    return this.stopped;
   }
 }
 
