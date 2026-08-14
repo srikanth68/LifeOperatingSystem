@@ -56,8 +56,33 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
     [HttpPut("system-prompt")]
     public async Task<IActionResult> SetSystemPrompt([FromBody] SystemPromptRequest req)
     {
+        // Keep what we are about to overwrite. Saving replaces this row outright, and a
+        // personality preset fills the editor with its own text — so one click plus Save
+        // can destroy a long hand-written persona with nothing anywhere to restore from.
+        var previous = await repo.GetSettingAsync(SystemPromptKey);
+        if (!string.Equals(previous, req.Prompt, StringComparison.Ordinal))
+        {
+            var historyKey = PromptHistory.KeyFor(SystemPromptKey);
+            var history = await repo.GetSettingAsync(historyKey);
+            await repo.SetSettingAsync(historyKey, PromptHistory.Push(history, previous));
+        }
+
         await repo.SetSettingAsync(SystemPromptKey, req.Prompt ?? "");
         return Ok(new { prompt = req.Prompt ?? "" });
+    }
+
+    // Previous versions of the system prompt, newest first, so a bad save is undoable.
+    [HttpGet("system-prompt/history")]
+    public async Task<IActionResult> GetSystemPromptHistory()
+    {
+        var raw = await repo.GetSettingAsync(PromptHistory.KeyFor(SystemPromptKey));
+        return Ok(PromptHistory.Parse(raw).Select(v => new
+        {
+            v.Prompt,
+            savedAt = v.SavedAtUtc,
+            chars = v.Prompt.Length,
+            preview = v.Prompt.Length <= 120 ? v.Prompt : v.Prompt[..120] + "…",
+        }));
     }
 
     [HttpPost("messages")]
