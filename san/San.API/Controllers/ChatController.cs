@@ -145,7 +145,14 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         // gateway is up and the built-in registry otherwise, and claiming the full set
         // while running on built-ins is exactly the lie that made the silent MCP outage
         // so hard to spot from the outside.
-        var (tools, executor) = await toolRouter.ResolveAsync(HttpContext.RequestAborted);
+        var (allTools, executor) = await toolRouter.ResolveAsync(HttpContext.RequestAborted);
+
+        // A spoken turn carries a curated subset — see VoiceTools. The executor is
+        // unchanged: this narrows what San is OFFERED, not what it could run, so a tool
+        // reached some other way still works.
+        var tools = spoken ? VoiceTools.Filter(allTools) : allTools;
+        if (spoken && tools.Count != allTools.Count)
+            logger.LogInformation("Voice turn: offering {Kept} of {Total} tools.", tools.Count, allTools.Count);
 
         // Order: persona, memory, time awareness, live module snapshot, San's own
         // scheduled items, then (plain LLMs only) the tool instructions. Capabilities
