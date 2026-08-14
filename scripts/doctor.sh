@@ -19,6 +19,9 @@
 #   502      up       nginx holds a stale IP  -> docker compose restart frontend
 #   down     down     the container is genuinely down -> docker compose logs <mod>
 #   up       down     published port not bound (rare; check the ports: mapping)
+#   none     up       nothing answered via nginx -> the network between you and the
+#                     box, NOT a stale upstream. Stale DNS makes a live nginx say 502;
+#                     silence says the request never arrived.
 #
 # Read-only: every request is a GET, nothing is written, nothing restarted. Safe to
 # run against a live system at any time, including from Windows via Git Bash.
@@ -27,7 +30,7 @@ set -uo pipefail
 
 HOST="${1:-100.126.41.41}"
 WEB_PORT="${WEB_PORT:-3000}"
-TIMEOUT="${TIMEOUT:-8}"
+TIMEOUT="${TIMEOUT:-12}"
 
 # module:port — the published host port from docker-compose.yml.
 MODULES="vault:5000 vitara:5100 aasthi:5200 san:5300 sutra:5400 northstar:5500 karma:5600 nexus:5700"
@@ -40,11 +43,26 @@ dim()   { printf '\033[2m%s\033[0m' "$1"; }
 problems=0
 stale_dns=0
 
-# Prints the HTTP status, or "-" when nothing answered at all. A connection refused
+# Prints the HTTP status, or 000 when nothing answered at all. A connection refused
 # and a 500 are different diagnoses, so they must not collapse into one value.
 code_for() {
-  curl -s -o /dev/null -w '%{http_code}' --max-time "$TIMEOUT" "$1" 2>/dev/null || echo "-"
+  local out
+  out=$(curl -s -o /dev/null -w '%{http_code}' --max-time "$TIMEOUT" "$1" 2>/dev/null)
+  # curl reports 000 when nothing answered. One retry: measured over a Meshnet tunnel
+  # that had just reconnected, a single slow request timed out and an entire healthy
+  # module got reported as a stale-DNS fault. A checker that cries wolf is worse than
+  # no checker, so a no-answer has to happen twice before it counts.
+  if [ -z "$out" ] || [ "$out" = "000" ]; then
+    sleep 1
+    out=$(curl -s -o /dev/null -w '%{http_code}' --max-time "$TIMEOUT" "$1" 2>/dev/null)
+  fi
+  echo "${out:-000}"
 }
+
+# Nothing answered at all: a timeout or a refused connection, NOT an error from a
+# running server. Kept separate from a 5xx because they point somewhere completely
+# different — one is the network between here and the box, the other is the box's proxy.
+noanswer() { [ "$1" = "000" ]; }
 
 # 401 counts as ALIVE, deliberately. Every module runs a fallback authorization policy
 # that answers 401 for anything without a token — including routes that don't exist.
@@ -79,6 +97,11 @@ for entry in $MODULES; do
 
   if alive "$via" && alive "$dir"; then
     printf '  %s  %-22s %s\n' "$(green ' ok ')" "$mod" "$(dim "nginx $via / direct $dir")"
+  elif alive "$dir" && noanswer "$via"; then
+    # Stale DNS makes a LIVE nginx answer 502; silence is not that. Reporting this
+    # as stale sends someone restarting containers to fix their own network.
+    printf '  %s  %-22s %s\n' "$(yellow 'NET  ')" "$mod" "direct $dir but no answer via nginx — network path, not the container"
+    problems=$((problems + 1))
   elif alive "$dir" && ! alive "$via"; then
     printf '  %s  %-22s %s\n' "$(yellow 'STALE')" "$mod" "nginx $via but direct $dir — nginx has a dead IP cached"
     stale_dns=$((stale_dns + 1))
