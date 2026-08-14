@@ -155,9 +155,23 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         // on, because this model weights the end of a long system prompt most heavily.
         var spoken = string.Equals(req.Mode, "voice", StringComparison.OrdinalIgnoreCase);
 
+        // ORDER HERE IS A PERFORMANCE DECISION, not a stylistic one.
+        //
+        // llama.cpp caches the prompt prefix per slot and reuses it up to the first byte
+        // that changed. The old order put the volatile blocks — recalled memory, the time
+        // line, the module snapshot — SECOND, invalidating everything after them every
+        // turn, including the static instruction blocks and (depending on where the
+        // template renders them) the 3358 tokens of tool schemas. Stable content first
+        // lets the cache survive; the volatile part is only ~330 tokens to re-read.
+        //
+        // The instruction blocks moving off the very end is a real cost, since this model
+        // weights late instructions more heavily — but they were never actually last:
+        // ~1500 tokens of history follow the system prompt regardless. Being 330 tokens
+        // earlier inside that is a small change to a position that was already not the end.
         var systemPrompt = string.Join("\n\n",
-            new[] { basePrompt, memoryBlock, timeContext, context, ownContext, toolInstructions,
-                    capabilities, SanOutputConventions.Text, spoken ? SanOutputConventions.Voice : null }
+            new[] { basePrompt, toolInstructions, capabilities,
+                    SanOutputConventions.Text, spoken ? SanOutputConventions.Voice : null,
+                    memoryBlock, timeContext, context, ownContext }
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
 
         if (spoken) logger.LogInformation("Chat turn arrived by voice — replying for speech.");
@@ -178,7 +192,14 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
                            + t.Parameters.Sum(p => ChatWindow.EstimateTokens(p.Key + p.Value.Description))),
             tools.Count,
             turns.Sum(t => ChatWindow.EstimateTokens(t.Content)),
-            ChatWindow.EstimateTokens(systemPrompt) + turns.Sum(t => ChatWindow.EstimateTokens(t.Content)));
+            // Tools ride in a separate request field, so they were absent from this
+            // total while being its largest single component — 3358 of ~6200 tokens.
+            // What matters is what the model actually prefills, and reading "total 2841"
+            // while the server chewed through 6200 sent a latency hunt the wrong way.
+            ChatWindow.EstimateTokens(systemPrompt)
+                + turns.Sum(t => ChatWindow.EstimateTokens(t.Content))
+                + tools.Sum(t => ChatWindow.EstimateTokens(t.Name + t.Description)
+                                 + t.Parameters.Sum(p => ChatWindow.EstimateTokens(p.Key + p.Value.Description))));
 
         var (rawReply, llmMs) = await TimedAsync(chat.CompleteWithToolsAsync(systemPrompt, turns, tools, executor));
         logger.LogInformation("San raw reply via {Provider} ({Length} chars, {LlmMs}ms): {Preview}",
