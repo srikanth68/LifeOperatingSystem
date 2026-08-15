@@ -22,12 +22,24 @@ public class TasksController(IAasthiRepository repo) : ControllerBase
         return task is null ? NotFound() : Ok(ToResult(task));
     }
 
+    // propertyId is accepted from EITHER the query string (what the dashboard sends)
+    // or the body (what Maaya.Mcp's property_task_create sends). Binding only the query
+    // meant every agent-created task arrived with Guid.Empty and died on the foreign key
+    // as a bare HTTP 500 -- which San relayed to the user as "Aasthi had an internal
+    // error", making a fixed contract mismatch look like a flaky module. A missing or
+    // unknown id is a 400 with a message the agent can act on, never a 500.
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] TaskUpsertRequest req, [FromQuery] Guid propertyId)
     {
+        var id = propertyId != Guid.Empty ? propertyId : req.PropertyId ?? Guid.Empty;
+        if (id == Guid.Empty)
+            return BadRequest(new { error = "propertyId is required — pass it in the query string or the body." });
+        if (await repo.GetPropertyAsync(id) is null)
+            return BadRequest(new { error = $"No property with id {id}. List the properties first and use one of those ids." });
+
         var task = new PropertyTask
         {
-            PropertyId  = propertyId,
+            PropertyId  = id,
             Title       = req.Title,
             Description = req.Description ?? "",
             DueDate     = req.DueDate,
