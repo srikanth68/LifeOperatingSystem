@@ -111,7 +111,11 @@ public record TaskUpsertRequest(
     string? Description,
     DateOnly? DueDate,
     string? Priority,
-    string? Source
+    string? Source,
+    // The dashboard sends propertyId in the query string; the MCP gateway and any
+    // agent driving it send it in the body. Accepting both is what makes an
+    // agent-created task possible at all -- see TasksController.Create.
+    Guid? PropertyId = null
 );
 
 public record TaskStatusUpdate(

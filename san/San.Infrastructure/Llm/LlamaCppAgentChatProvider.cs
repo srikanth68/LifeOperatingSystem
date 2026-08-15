@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using San.Application;
 using San.Application.Interfaces;
 
 namespace San.Infrastructure.Llm;
@@ -77,6 +78,13 @@ public partial class LlamaCppAgentChatProvider(HttpClient http, IConfiguration c
         // sees the whole loop, so it's the right place to log where the time actually went.
         var turnSw = Stopwatch.StartNew();
 
+        // Which tools actually ran this turn. The unverified-claim check below is the
+        // only thing standing between the user and a confident lie, and it can be
+        // trusted only because this list is the loop's own record of what it executed,
+        // never the model's account of it.
+        var executed = new List<string>();
+        var nudged = false;
+
         for (var step = 0; step < Math.Max(maxSteps, 1); step++)
         {
             var stepSw = Stopwatch.StartNew();
@@ -99,6 +107,35 @@ public partial class LlamaCppAgentChatProvider(HttpClient http, IConfiguration c
             if (toolCalls is null || toolCalls.Value.GetArrayLength() == 0 || toolExecutor is null)
             {
                 var content = message.TryGetProperty("content", out var c) ? c.GetString() : null;
+
+                // Asked to create ten reminders, the model once answered "I have saved 10
+                // reminders" having called nothing at all - and nothing in the stack could
+                // tell the user otherwise, because a claim in prose is indistinguishable
+                // from a real one. It isn't here: the loop knows every tool it ran. When a
+                // reply announces a completed write and no write tool ran, give the model
+                // exactly one chance to either do the work or take the claim back. The
+                // nudge is worded so it stays harmless if the check misfires on a reply
+                // that was describing something from an earlier turn.
+                if (!nudged && toolExecutor is not null && WriteClaimCheck.ClaimsUnverifiedWrite(content, executed))
+                {
+                    nudged = true;
+                    logger.LogWarning(
+                        "Reply claims a completed action but no write tool ran this turn (tools used: {Tools}) - re-prompting once.",
+                        executed.Count == 0 ? "none" : string.Join(", ", executed));
+                    messages.Add(JsonDocument.Parse(message.GetRawText()).RootElement.Clone());
+                    messages.Add(new
+                    {
+                        role = "user",
+                        content =
+                            "SYSTEM CHECK: no tool ran during this turn, so nothing was written to Maaya just now. " +
+                            "If your previous reply claimed you had just created, saved, scheduled, logged or updated " +
+                            "something, that claim is false - either call the correct tool now to actually do it, or " +
+                            "correct the statement plainly. If you were describing something from an earlier turn, " +
+                            "repeat your answer unchanged.",
+                    });
+                    continue;
+                }
+
                 logger.LogInformation("Chat turn finished after {TotalMs}ms ({Steps} step(s))", turnSw.ElapsedMilliseconds, step + 1);
                 return string.IsNullOrWhiteSpace(content)
                     ? "🤔 The local model returned an empty answer. Try rephrasing, or check the model in Settings."
@@ -126,6 +163,7 @@ public partial class LlamaCppAgentChatProvider(HttpClient http, IConfiguration c
                 {
                     result = $"Tool error ({name}): {ex.Message}";
                 }
+                executed.Add(name);
                 logger.LogInformation("Step {Step}: tool {Name} took {ToolMs}ms", step, name, toolSw.ElapsedMilliseconds);
 
                 messages.Add(new { role = "tool", tool_call_id = id, content = result });
