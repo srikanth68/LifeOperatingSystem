@@ -235,7 +235,15 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
                 + tools.Sum(t => ChatWindow.EstimateTokens(t.Name + t.Description)
                                  + t.Parameters.Sum(p => ChatWindow.EstimateTokens(p.Key + p.Value.Description))));
 
-        var (rawReply, llmMs) = await TimedAsync(chat.CompleteWithToolsAsync(systemPrompt, turns, tools, executor));
+        // maxSteps is a per-turn budget of LLM round trips, not of tool calls: the model
+        // can fan a batch out across one step, and usually does. But it is free to do them
+        // one per step instead, and "create reminders for these ten things" is a real
+        // request the user has already made -- at the old ceiling of 10 that lands exactly
+        // on the limit, so the last item silently never runs and the turn ends in the
+        // too-many-steps warning rather than an answer. The headroom costs nothing on a
+        // normal turn, which finishes in one or two steps and never reaches it.
+        var (rawReply, llmMs) = await TimedAsync(
+            chat.CompleteWithToolsAsync(systemPrompt, turns, tools, executor, maxSteps: 16));
         logger.LogInformation("San raw reply via {Provider} ({Length} chars, {LlmMs}ms): {Preview}",
             chat.ProviderName, rawReply.Length, llmMs, rawReply.Length > 800 ? rawReply[..800] + "…" : rawReply);
 

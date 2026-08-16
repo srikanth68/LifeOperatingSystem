@@ -170,8 +170,15 @@ public partial class LlamaCppAgentChatProvider(HttpClient http, IConfiguration c
             }
         }
 
-        logger.LogWarning("Chat turn stopped after {TotalMs}ms — too many tool steps (max {MaxSteps})", turnSw.ElapsedMilliseconds, maxSteps);
-        return "⚠️ San stopped after too many tool steps without a final answer. The actions above may still have run — check the relevant tab.";
+        // Naming what ran matters most exactly here. A batch that stops halfway leaves the
+        // user unable to tell which half landed, and "check the relevant tab" asks them to
+        // reconstruct it by hand -- the loop already knows, so it should say.
+        var ran = executed.Count == 0
+            ? "No tools ran, so nothing was saved."
+            : $"These ran, and may have saved something: {string.Join(", ", executed.Distinct())}.";
+        logger.LogWarning("Chat turn stopped after {TotalMs}ms - too many tool steps (max {MaxSteps}). Tools run: {Tools}",
+            turnSw.ElapsedMilliseconds, maxSteps, executed.Count == 0 ? "none" : string.Join(", ", executed));
+        return "⚠️ San stopped after too many tool steps without finishing. " + ran;
     }
 
     private async Task<JsonElement> SendAsync(List<object> messages, object[]? toolsJson, bool enableThinking, CancellationToken ct)
