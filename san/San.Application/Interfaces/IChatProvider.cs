@@ -33,6 +33,12 @@ public interface IChatProvider
     // Agent loop — returns final text after resolving all tool calls.
     // Default impl falls back to simple CompleteAsync (no tool use).
     //
+    // cacheLane: an opaque partition id for providers that keep a prompt cache. Two
+    // callers whose prompts differ in a stable way -- San's spoken turns carry extra
+    // output conventions and a smaller tool set than its typed ones -- must not share a
+    // lane, or each will evict the other's cached prefix and both pay a full re-read on
+    // every switch. Providers without a prompt cache ignore it.
+    //
     // enableThinking: some local models emit a step-by-step deliberation before
     // deciding whether/which tool to call. It costs roughly 15x the generation
     // tokens, so interactive chat leaves it off (latency is the experience there),
@@ -45,6 +51,7 @@ public interface IChatProvider
         Func<ToolCall, CancellationToken, Task<string>> toolExecutor,
         int maxSteps = 10,
         bool enableThinking = false,
+        int cacheLane = 0,
         CancellationToken ct = default)
     {
         return CompleteAsync(systemPrompt, history, ct);

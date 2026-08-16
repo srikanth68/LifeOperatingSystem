@@ -243,8 +243,13 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         // on the limit, so the last item silently never runs and the turn ends in the
         // too-many-steps warning rather than an answer. The headroom costs nothing on a
         // normal turn, which finishes in one or two steps and never reaches it.
+        // cacheLane 1 for spoken turns: a voice prompt differs from a typed one above the
+        // history (extra output conventions, a curated tool set), so sharing a llama.cpp
+        // slot made every switch between talking and typing evict the other's cached
+        // prefix. Separate lanes let each mode keep its own resident prefix.
         var (rawReply, llmMs) = await TimedAsync(
-            chat.CompleteWithToolsAsync(systemPrompt, turns, tools, executor, maxSteps: 16));
+            chat.CompleteWithToolsAsync(systemPrompt, turns, tools, executor,
+                maxSteps: 16, cacheLane: spoken ? 1 : 0));
         logger.LogInformation("San raw reply via {Provider} ({Length} chars, {LlmMs}ms): {Preview}",
             chat.ProviderName, rawReply.Length, llmMs, rawReply.Length > 800 ? rawReply[..800] + "…" : rawReply);
 

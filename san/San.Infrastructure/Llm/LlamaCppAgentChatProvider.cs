@@ -40,13 +40,35 @@ public partial class LlamaCppAgentChatProvider(HttpClient http, IConfiguration c
     private static int Slot =>
         int.TryParse(Environment.GetEnvironmentVariable("LLM_SLOT"), out var s) && s >= 0 ? s : 0;
 
+    // Spoken turns get their own slot, because they are not the same prompt.
+    //
+    // A voice turn appends the spoken output conventions to the system prompt AND
+    // carries a curated tool set instead of the full catalogue. Both differences sit
+    // ABOVE the history in Gemma's template, so on a shared slot every switch between
+    // typing and talking evicted the other mode's cached prefix and paid a full
+    // re-read -- which is most of what a voice turn costs on this hardware.
+    //
+    // Separate lanes mean each mode keeps its own resident prefix and a switch costs
+    // nothing. This is also what makes a wider voice tool set affordable: a stable tool
+    // block is nearly free once cached, and expensive only while it keeps being evicted.
+    //
+    // Default 3: the server runs 4 slots, 0 is typed chat, 1 is STT (GemmaTranscriber),
+    // 2 is San.Worker, and 3 was idle. On a server with fewer slots, set LLM_VOICE_SLOT
+    // to something in range or to the same value as LLM_SLOT to opt out.
+    private static int VoiceSlot =>
+        int.TryParse(Environment.GetEnvironmentVariable("LLM_VOICE_SLOT"), out var s) && s >= 0 ? s : 3;
+
+    // Lane 0 is the default (typed) lane; lane 1 is spoken. Anything else is treated as
+    // the default rather than guessed at, since an out-of-range slot is a hard error.
+    private static int SlotFor(int cacheLane) => cacheLane == 1 ? VoiceSlot : Slot;
+
     private static string BaseUrl =>
         (Environment.GetEnvironmentVariable("LLM_BASE_URL")
          ?? Environment.GetEnvironmentVariable("LLAMACPP_BASE_URL")
          ?? "http://host.docker.internal:8080").TrimEnd('/');
 
     public Task<string> CompleteAsync(string systemPrompt, List<ChatTurn> history, CancellationToken ct = default)
-        => RunAsync(systemPrompt, history, null, null, 1, false, ct);
+        => RunAsync(systemPrompt, history, null, null, 1, false, 0, ct);
 
     public Task<string> CompleteWithToolsAsync(
         string systemPrompt,
@@ -55,8 +77,9 @@ public partial class LlamaCppAgentChatProvider(HttpClient http, IConfiguration c
         Func<ToolCall, CancellationToken, Task<string>> toolExecutor,
         int maxSteps = 10,
         bool enableThinking = false,
+        int cacheLane = 0,
         CancellationToken ct = default)
-        => RunAsync(systemPrompt, history, tools, toolExecutor, maxSteps, enableThinking, ct);
+        => RunAsync(systemPrompt, history, tools, toolExecutor, maxSteps, enableThinking, cacheLane, ct);
 
     private async Task<string> RunAsync(
         string systemPrompt,
@@ -65,6 +88,7 @@ public partial class LlamaCppAgentChatProvider(HttpClient http, IConfiguration c
         Func<ToolCall, CancellationToken, Task<string>>? toolExecutor,
         int maxSteps,
         bool enableThinking,
+        int cacheLane,
         CancellationToken ct)
     {
         var messages = new List<object> { new { role = "system", content = systemPrompt } };
@@ -91,7 +115,7 @@ public partial class LlamaCppAgentChatProvider(HttpClient http, IConfiguration c
             JsonElement message;
             try
             {
-                message = await SendAsync(messages, toolsJson, enableThinking, ct);
+                message = await SendAsync(messages, toolsJson, enableThinking, cacheLane, ct);
             }
             catch (LlmHttpException ex)
             {
@@ -99,7 +123,10 @@ public partial class LlamaCppAgentChatProvider(HttpClient http, IConfiguration c
                     turnSw.ElapsedMilliseconds, step, stepSw.ElapsedMilliseconds, ex.UserMessage);
                 return ex.UserMessage;
             }
-            logger.LogInformation("Step {Step}: LLM call took {StepMs}ms", step, stepSw.ElapsedMilliseconds);
+            // Slot is logged because an out-of-range LLM_VOICE_SLOT fails every spoken turn
+            // and looks like the model being broken rather than one env var being wrong.
+            logger.LogInformation("Step {Step} (slot {Slot}): LLM call took {StepMs}ms",
+                step, SlotFor(cacheLane), stepSw.ElapsedMilliseconds);
 
             var toolCalls = message.TryGetProperty("tool_calls", out var tc) && tc.ValueKind == JsonValueKind.Array
                 ? tc : (JsonElement?)null;
@@ -181,7 +208,7 @@ public partial class LlamaCppAgentChatProvider(HttpClient http, IConfiguration c
         return "⚠️ San stopped after too many tool steps without finishing. " + ran;
     }
 
-    private async Task<JsonElement> SendAsync(List<object> messages, object[]? toolsJson, bool enableThinking, CancellationToken ct)
+    private async Task<JsonElement> SendAsync(List<object> messages, object[]? toolsJson, bool enableThinking, int cacheLane, CancellationToken ct)
     {
         // Anonymous types can't hold an optional property, so shape via dictionary.
         var payload = new Dictionary<string, object>
@@ -209,7 +236,7 @@ public partial class LlamaCppAgentChatProvider(HttpClient http, IConfiguration c
             // only what actually changed. STT deliberately uses a DIFFERENT slot
             // (see GemmaTranscriber) — sharing one would make each evict the other's
             // cache on every voice turn, which is the worst of both worlds.
-            ["id_slot"] = Slot,
+            ["id_slot"] = SlotFor(cacheLane),
             // Stated rather than assumed. Recent llama-server defaults this on, but the
             // whole fix above is worthless if a build defaults it off, and asking for it
             // explicitly costs one field. It is the switch that makes a pinned slot mean
