@@ -49,7 +49,7 @@ public sealed class MemoryTools(ModuleGateway gw)
     public Task<string> ContextBrief() => gw.GetAsync("northstar", "/api/context");
 
     [McpServerTool(Name = "action_add")]
-    [Description("Add a pending action/task to the user's cross-module action queue in the brain.")]
+    [Description("Add a pending action/task to the user's cross-module action queue in the brain. This is a PASSIVE backlog: it never notifies and it has no time of day. If the user asked to be REMINDED, or gave a deadline, use reminder_create instead - items filed here on a deadline are silently missed. Use this only for undated someday/backlog items.")]
     public Task<string> ActionAdd(
         [Description("Short imperative title.")] string title,
         [Description("Optional details.")] string? description = null,
