@@ -10,7 +10,7 @@ namespace Maaya.Mcp.Tools;
 public sealed class MemoryTools(ModuleGateway gw)
 {
     [McpServerTool(Name = "memory_save")]
-    [Description("Persist a durable memory to the Maaya brain (NorthStar). Use this — not your internal memory — for anything worth remembering across sessions: user preferences, decisions made, notable events, learned skills/procedures.")]
+    [Description("Persist a durable memory to the Maaya brain (NorthStar). Use this - not your internal memory - for anything worth remembering across sessions: user preferences, decisions made, notable events, learned skills/procedures. Write ABSOLUTE dates, never relative ones: a memory saved as \"meeting at 2 PM today\" is read back months later as though it were still today. Say \"2026-07-24 2 PM\" instead. Save only what you have confirmed - never a claim you have not verified, or you will read your own guess back as fact.")]
     public Task<string> MemorySave(
         [Description("The memory content, one distilled fact or observation per call.")] string content,
         [Description("One of: observation, preference, event, decision, skill.")] string kind = "observation",
