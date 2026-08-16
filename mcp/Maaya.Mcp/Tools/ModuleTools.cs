@@ -32,27 +32,15 @@ public sealed class ModuleTools(ModuleGateway gw)
     ];
 
     [McpServerTool(Name = "agenda_now")]
-    [Description(
-        "What the user is supposed to be doing RIGHT NOW — one ranked list merging calendar events, " +
-        "reminders, active alerts, NorthStar action items, Aasthi property tasks and today's unticked " +
-        "habits. USE THIS for \"what's on\", \"what should I be doing\", \"what have I got today\", " +
-        "\"what am I forgetting\", \"where do I need to be\". Prefer it over asking each module " +
-        "separately — it is already ordered by what matters soonest, with anything in progress or " +
-        "overdue first.")]
+    [Description("Ranked NOW list merging calendar, reminders, active alerts, NorthStar items, property tasks, today's unticked habits. Overdue/in-progress first. For \"what's on\", \"what should I be doing\", \"what am I forgetting\", \"where do I need to be\". Prefer over querying modules separately. limit (12)")]
     public Task<string> AgendaNow(
-        [Description("How many items to return. Default 12.")] int? limit = null) =>
+        int? limit = null) =>
         gw.GetAsync("san", $"/api/agenda?limit={Math.Clamp(limit ?? 12, 1, 50)}");
 
     [McpServerTool(Name = "maaya_search")]
-    [Description(
-        "Search across the user's ENTIRE Maaya system at once — documents (Sutra), property records, " +
-        "tasks and maintenance (Aasthi), bank transactions (Vault), and long-term memory (NorthStar). " +
-        "USE THIS whenever the user asks where something is or to find/recall something without saying " +
-        "which module holds it — e.g. 'find the HVAC invoice', 'what did I spend at Home Depot', " +
-        "'when did I last service the boiler'. Returns results grouped by source; a group is omitted " +
-        "when it has no matches.")]
+    [Description("Search the whole system at once: Sutra docs, Aasthi property/maintenance records, Vault transactions, NorthStar memory. Use whenever the user asks where something is or to find something without naming a module - \"find the HVAC invoice\", \"what did I spend at Home Depot\", \"when did I last service the boiler\". Results grouped by source; empty groups omitted. query*")]
     public async Task<string> MaayaSearch(
-        [Description("What to look for, e.g. 'HVAC', 'Home Depot', 'roof warranty'.")] string query)
+        string query)
     {
         if (string.IsNullOrWhiteSpace(query))
             return "Provide something to search for.";
@@ -99,27 +87,27 @@ public sealed class ModuleTools(ModuleGateway gw)
     }
 
     [McpServerTool(Name = "vault_finances")]
-    [Description("Vault — the user's finances: net worth, cash, debt, and a 30-day spending summary by category. USE THIS for 'how much do I have', 'what's my net worth', 'what am I spending on'. For a SPECIFIC merchant or transaction, use maaya_search instead.")]
+    [Description("Net worth, cash, debt, 30-day spending by category. For \"how much do I have\", \"what's my net worth\", \"what am I spending on\". Specific merchant/transaction -> maaya_search.")]
     public Task<string> VaultFinances() => gw.GetAsync("vault", "/api/summary");
 
     [McpServerTool(Name = "vitara_health")]
-    [Description("Vitara — the user's health dashboard: readiness, sleep, activity, heart metrics, recent workouts. USE THIS for 'how did I sleep', 'how am I doing', 'what's my readiness', 'am I recovered'.")]
+    [Description("Readiness, sleep, activity, heart metrics, recent workouts. For \"how did I sleep\", \"what's my readiness\", \"am I recovered\".")]
     public Task<string> VitaraHealth() => gw.GetAsync("vitara", "/api/dashboard");
 
     [McpServerTool(Name = "aasthi_properties")]
-    [Description("Aasthi — the user's real-estate portfolio: properties, values, profit. USE THIS for 'my properties', 'how are the rentals doing'. For a specific repair, cost or vendor, use maaya_search instead.")]
+    [Description("Real-estate portfolio: properties, values, profit. For \"my properties\", \"how are rentals doing\". Specific repair/cost/vendor -> maaya_search.")]
     public Task<string> AasthiProperties() => gw.GetAsync("aasthi", "/api/properties");
 
     [McpServerTool(Name = "sutra_documents")]
-    [Description("Sutra — the user's document vault. Without a query returns stats (counts by category, expiring soon); with a query returns matching documents.")]
+    [Description("Document vault. No query -> stats (counts by category, expiring soon). With query -> matching docs. query")]
     public Task<string> SutraDocuments(
-        [Description("Optional free-text search over stored documents.")] string? query = null) =>
+        string? query = null) =>
         string.IsNullOrWhiteSpace(query)
             ? gw.GetAsync("sutra", "/api/documents/stats")
             : gw.GetAsync("sutra", $"/api/documents?q={Uri.EscapeDataString(query)}");
 
     [McpServerTool(Name = "karma_habits")]
-    [Description("Karma — today's habit check-ins and active goals with progress. USE THIS for 'did I do my habits', 'how are my streaks', 'how am I doing on my goals'. Also gives you the habit ids needed for habit_checkin.")]
+    [Description("Today's check-ins + active goals, with habit ids for habit_checkin. For \"did I do my habits\", \"how are my streaks\".")]
     public async Task<string> KarmaHabits()
     {
         var habits = await gw.GetAsync("karma", "/api/habits/today");
@@ -128,28 +116,28 @@ public sealed class ModuleTools(ModuleGateway gw)
     }
 
     [McpServerTool(Name = "nexus_market")]
-    [Description("Nexus — trading monitor status: tracked symbols, recent alert COUNT, market open/closed. Read-only; never places trades. Use nexus_alerts to read the actual alerts.")]
+    [Description("Monitor status: tracked symbols, alert COUNT, market open/closed. Actual alerts -> nexus_alerts.")]
     public Task<string> NexusMarket() => gw.GetAsync("nexus", "/api/nexus/sentinel/status");
 
     [McpServerTool(Name = "nexus_alerts")]
-    [Description("Nexus — the actual alerts Sentinel has raised (symbol, kind, message, timestamp), newest first. Read-only; never places trades.")]
+    [Description("Alerts Sentinel raised (symbol, kind, message, timestamp), newest first. days (7) · limit (50)")]
     public Task<string> NexusAlerts(
-        [Description("How many days back to look (default 7).")] int days = 7,
-        [Description("Max alerts to return (default 50).")] int limit = 50)
+        int days = 7,
+        int limit = 50)
     {
         var since = DateTime.UtcNow.AddDays(-Math.Max(1, days)).ToString("yyyy-MM-ddTHH:mm:ssZ");
         return gw.GetAsync("nexus", $"/api/nexus/sentinel/alerts?since={Uri.EscapeDataString(since)}&limit={limit}");
     }
 
     [McpServerTool(Name = "san_people")]
-    [Description("San — the user's people/contacts. USE THIS for 'who is X', 'what's X's number', 'whose birthday is coming up' (query 'birthdays'). Gives you the id needed to update or delete a contact.")]
+    [Description("Contacts. For \"who is X\", \"what's X's number\", \"whose birthday is coming up\" (query birthdays). Returns ids. query*")]
     public Task<string> SanPeople(
-        [Description("Name to search, or 'birthdays' for upcoming birthdays.")] string query) =>
+        string query) =>
         query.Trim().Equals("birthdays", StringComparison.OrdinalIgnoreCase)
             ? gw.GetAsync("san", "/api/people/birthdays")
             : gw.GetAsync("san", $"/api/people?q={Uri.EscapeDataString(query)}");
 
     [McpServerTool(Name = "maaya_status")]
-    [Description("Health check across all 8 Maaya modules — who is online, with latency. Call this AFTER another tool returns an error, to find out whether the module is down. Do not call it speculatively before other tools.")]
+    [Description("Health of all 8 modules with latency. Call only AFTER a tool errors, to check if that module is down. Never speculatively.")]
     public Task<string> MaayaStatus() => gw.ProbeAllAsync(Probes);
 }
