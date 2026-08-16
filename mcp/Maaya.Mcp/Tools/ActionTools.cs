@@ -92,11 +92,11 @@ public sealed class ActionTools(ModuleGateway gw)
     // ── San: reminders ──
 
     [McpServerTool(Name = "reminder_create")]
-    [Description("Create a reminder in the user's own Maaya/San system. USE THIS for any 'remind me…' request — do NOT use Apple Reminders or any other reminder app, and do NOT use action_add (that's a passive backlog, it never notifies).")]
+    [Description("Create a reminder. Use for ANY \"remind me...\" - never Apple Reminders, never action_add (that's silent backlog). text* · dueAt* · notifyTelegram (true)")]
     public async Task<string> ReminderCreate(
-        [Description("What to remind the user about, e.g. 'Go to the bank'.")] string text,
-        [Description("When to fire, in the user's LOCAL wall-clock time as yyyy-MM-ddTHH:mm:ss (e.g. 2026-07-23T22:00:00 for 10pm tonight). Do NOT convert to UTC — just write the time the user said, with the correct date. The server converts it.")] string dueAt,
-        [Description("Also send a Telegram push at the due time (default true).")] bool notifyTelegram = true)
+        string text,
+        string dueAt,
+        bool notifyTelegram = true)
     {
         var (utc, error) = await ToUtcAsync(dueAt, "dueAt", rejectPast: true);
         if (error is not null) return Fail(error);
@@ -105,16 +105,16 @@ public sealed class ActionTools(ModuleGateway gw)
     }
 
     [McpServerTool(Name = "reminders_list")]
-    [Description("List the user's Maaya/San reminders — answers 'what are my reminders', and gives you the id needed to update/complete/delete one.")]
+    [Description("Reminders with ids for update/complete/delete.")]
     public Task<string> RemindersList() => gw.GetAsync("san", "/api/reminders");
 
     [McpServerTool(Name = "reminder_update")]
-    [Description("Edit an existing reminder's text or due time. Get the id from reminders_list. Editing re-arms its notification.")]
+    [Description("Edit text or due time; re-arms the notification. reminderId* · text* · dueAt* · notifyTelegram")]
     public async Task<string> ReminderUpdate(
-        [Description("Reminder GUID from reminders_list.")] string reminderId,
-        [Description("New reminder text.")] string text,
-        [Description("New due time, in the user's LOCAL wall-clock time as yyyy-MM-ddTHH:mm:ss. Do NOT convert to UTC.")] string dueAt,
-        [Description("Send a Telegram push at the due time.")] bool notifyTelegram = true)
+        string reminderId,
+        string text,
+        string dueAt,
+        bool notifyTelegram = true)
     {
         var (utc, error) = await ToUtcAsync(dueAt, "dueAt", rejectPast: true);
         if (error is not null) return Fail(error);
@@ -123,29 +123,29 @@ public sealed class ActionTools(ModuleGateway gw)
     }
 
     [McpServerTool(Name = "reminder_complete")]
-    [Description("Tick a reminder off (or un-tick it). Get the id from reminders_list.")]
+    [Description("Tick off / reopen a reminder. reminderId* · done")]
     public Task<string> ReminderComplete(
-        [Description("Reminder GUID.")] string reminderId,
-        [Description("True = done, false = reopen.")] bool done = true) =>
+        string reminderId,
+        bool done = true) =>
         gw.SendAsync("san", HttpMethod.Patch, $"/api/reminders/{reminderId}/done", done);
 
     [McpServerTool(Name = "reminder_delete")]
-    [Description("Permanently delete a reminder. Prefer reminder_complete unless the user explicitly wants it removed.")]
+    [Description("Permanently delete. Prefer reminder_complete unless removal is explicit. reminderId*")]
     public Task<string> ReminderDelete(
-        [Description("Reminder GUID.")] string reminderId) =>
+        string reminderId) =>
         gw.SendAsync("san", HttpMethod.Delete, $"/api/reminders/{reminderId}", null);
 
     // ── San: alerts ──
 
     [McpServerTool(Name = "alert_create")]
-    [Description("Create an alert in Maaya/San — e.g. a document-expiry or goal-deadline warning. For time-based types (goal_deadline, document_expiry, custom) give triggerAt (ISO-8601 UTC). For spending_threshold give thresholdValue (dollars) instead.")]
+    [Description("Create an alert. type* spending_threshold | goal_deadline | document_expiry | custom · title* · description thresholdValue dollars - required for spending_threshold only triggerAt - required for all other types notifyTelegram (true)")]
     public async Task<string> AlertCreate(
-        [Description("One of: spending_threshold, goal_deadline, document_expiry, custom.")] string type,
-        [Description("Short alert title.")] string title,
-        [Description("Optional longer description.")] string? description = null,
-        [Description("Dollar amount — REQUIRED for spending_threshold, omit otherwise.")] decimal? thresholdValue = null,
-        [Description("Fire time in the user's LOCAL wall-clock time as yyyy-MM-ddTHH:mm:ss (do NOT convert to UTC) — REQUIRED for time-based types.")] string? triggerAt = null,
-        [Description("Also send a Telegram push (default true).")] bool notifyTelegram = true)
+        string type,
+        string title,
+        string? description = null,
+        decimal? thresholdValue = null,
+        string? triggerAt = null,
+        bool notifyTelegram = true)
     {
         string? utc = null;
         if (!string.IsNullOrWhiteSpace(triggerAt))
@@ -159,25 +159,25 @@ public sealed class ActionTools(ModuleGateway gw)
     }
 
     [McpServerTool(Name = "alerts_list")]
-    [Description("List the user's Maaya/San alerts, with ids for updating or deleting. USE THIS for 'what alerts do I have'. Active alerts already appear in agenda_now, so do not call this just to answer 'what should I do'.")]
+    [Description("Alerts with ids. For \"what alerts do I have\". Active ones already appear in agenda_now.")]
     public Task<string> AlertsList() => gw.GetAsync("san", "/api/alerts");
 
     [McpServerTool(Name = "alert_delete")]
-    [Description("Delete an alert. Get the id from alerts_list.")]
+    [Description("- alertId* from alerts_list.")]
     public Task<string> AlertDelete(
-        [Description("Alert GUID.")] string alertId) =>
+        string alertId) =>
         gw.SendAsync("san", HttpMethod.Delete, $"/api/alerts/{alertId}", null);
 
     // ── San: calendar ──
 
     [McpServerTool(Name = "calendar_event_create")]
-    [Description("Create an event on the user's Maaya/San calendar. USE THIS for 'schedule…' / 'put it on my calendar' rather than any external calendar app. startTime/endTime MUST be ISO-8601 UTC.")]
+    [Description("Create a calendar event. Use for \"schedule...\", \"put it on my calendar\" - never an external calendar app. title* · startTime* · endTime* · description · location")]
     public async Task<string> CalendarEventCreate(
-        [Description("Event title.")] string title,
-        [Description("Start time in the user's LOCAL wall-clock time as yyyy-MM-ddTHH:mm:ss. Do NOT convert to UTC.")] string startTime,
-        [Description("End time in the user's LOCAL wall-clock time as yyyy-MM-ddTHH:mm:ss. Do NOT convert to UTC.")] string endTime,
-        [Description("Optional description.")] string? description = null,
-        [Description("Optional location.")] string? location = null)
+        string title,
+        string startTime,
+        string endTime,
+        string? description = null,
+        string? location = null)
     {
         // Past events are legitimate here (logging something that already happened).
         var (startUtc, startErr) = await ToUtcAsync(startTime, "startTime", rejectPast: false);
@@ -190,10 +190,10 @@ public sealed class ActionTools(ModuleGateway gw)
     }
 
     [McpServerTool(Name = "calendar_events_list")]
-    [Description("List the user's upcoming Maaya/San calendar events in a date window. USE THIS for 'what's on my calendar', 'am I free on X', 'when is Y'. For a general 'what should I be doing', prefer agenda_now, which already includes the calendar.")]
+    [Description("Upcoming events in a window. For \"what's on my calendar\", \"am I free on X\", \"when is Y\". General \"what should I be doing\" -> agenda_now. from (today) · to (+1 week)")]
     public Task<string> CalendarEventsList(
-        [Description("Window start, ISO-8601 UTC. Omit for today.")] string? from = null,
-        [Description("Window end, ISO-8601 UTC. Omit for a week out.")] string? to = null)
+        string? from = null,
+        string? to = null)
     {
         var q = new List<string>();
         if (!string.IsNullOrWhiteSpace(from)) q.Add($"from={Uri.EscapeDataString(from)}");
@@ -205,148 +205,148 @@ public sealed class ActionTools(ModuleGateway gw)
     // ── San: people ──
 
     [McpServerTool(Name = "person_create")]
-    [Description("Add a person to the user's Maaya/San contacts.")]
+    [Description("Add a contact. name* · phone · email · birthday yyyy-MM-dd or MM-dd · relationship (other) · notes · tags csv")]
     public Task<string> PersonCreate(
-        [Description("Full name.")] string name,
-        [Description("Phone number.")] string? phone = null,
-        [Description("Email address.")] string? email = null,
-        [Description("Birthday as yyyy-MM-dd (or MM-dd if the year is unknown).")] string? birthday = null,
-        [Description("Relationship, e.g. family, friend, colleague (default other).")] string? relationship = null,
-        [Description("Free-text notes.")] string? notes = null,
-        [Description("Comma-separated tags.")] string? tags = null) =>
+        string name,
+        string? phone = null,
+        string? email = null,
+        string? birthday = null,
+        string? relationship = null,
+        string? notes = null,
+        string? tags = null) =>
         gw.SendAsync("san", HttpMethod.Post, "/api/people",
             new { name, phone, email, birthday, relationship, notes, tags });
 
     [McpServerTool(Name = "person_update")]
-    [Description("Update an existing contact in Maaya/San. Get the id from san_people. Send the full set of fields — omitted ones are overwritten.")]
+    [Description("Update a contact. Send ALL fields - omitted ones are overwritten. personId* · name* · phone · email · birthday · relationship · notes · tags")]
     public Task<string> PersonUpdate(
-        [Description("Person GUID from san_people.")] string personId,
-        [Description("Full name.")] string name,
-        [Description("Phone number.")] string? phone = null,
-        [Description("Email address.")] string? email = null,
-        [Description("Birthday as yyyy-MM-dd.")] string? birthday = null,
-        [Description("Relationship.")] string? relationship = null,
-        [Description("Free-text notes.")] string? notes = null,
-        [Description("Comma-separated tags.")] string? tags = null) =>
+        string personId,
+        string name,
+        string? phone = null,
+        string? email = null,
+        string? birthday = null,
+        string? relationship = null,
+        string? notes = null,
+        string? tags = null) =>
         gw.SendAsync("san", HttpMethod.Put, $"/api/people/{personId}",
             new { name, phone, email, birthday, relationship, notes, tags });
 
     [McpServerTool(Name = "person_delete")]
-    [Description("Delete a contact from Maaya/San. Get the id from san_people.")]
+    [Description("- personId* from san_people.")]
     public Task<string> PersonDelete(
-        [Description("Person GUID.")] string personId) =>
+        string personId) =>
         gw.SendAsync("san", HttpMethod.Delete, $"/api/people/{personId}", null);
 
     // ── Vitara: health logging ──
 
     [McpServerTool(Name = "food_log")]
-    [Description("Log a food/meal to the user's Maaya/Vitara nutrition diary. USE THIS for 'I ate…' / 'log this food'. If you know the food's nutrition pass the per-100g macros so calories compute correctly; otherwise name + quantity is fine.")]
+    [Description("Log a meal to Vitara nutrition. For \"I ate...\". Pass per-100g macros if known so calories compute; otherwise name + qty is fine. foodName* · mealType breakfast|lunch|dinner|snack (snack) · day · qty (1) · unit · servingSizeG · calPer100 · protPer100 · carbsPer100 · fatPer100")]
     public Task<string> FoodLog(
-        [Description("Food name, e.g. 'Grilled chicken breast'.")] string foodName,
-        [Description("breakfast | lunch | dinner | snack (default snack).")] string mealType = "snack",
-        [Description("Day as yyyy-MM-dd local; omit for today.")] string? day = null,
-        [Description("Quantity eaten (default 1).")] double qty = 1,
-        [Description("Unit for qty, e.g. 'serving', 'g', 'cup'.")] string unit = "serving",
-        [Description("Grams per serving, if known.")] double? servingSizeG = null,
-        [Description("Calories per 100g, if known.")] double? calPer100 = null,
-        [Description("Protein g per 100g, if known.")] double? protPer100 = null,
-        [Description("Carbs g per 100g, if known.")] double? carbsPer100 = null,
-        [Description("Fat g per 100g, if known.")] double? fatPer100 = null) =>
+        string foodName,
+        string mealType = "snack",
+        string? day = null,
+        double qty = 1,
+        string unit = "serving",
+        double? servingSizeG = null,
+        double? calPer100 = null,
+        double? protPer100 = null,
+        double? carbsPer100 = null,
+        double? fatPer100 = null) =>
         gw.SendAsync("vitara", HttpMethod.Post, "/api/meals",
             new { day, mealType, foodName, qty, unit, servingSizeG, calPer100, protPer100, carbsPer100, fatPer100 });
 
     [McpServerTool(Name = "weight_log")]
-    [Description("Record the user's body weight in Maaya/Vitara. The API stores KILOGRAMS — if the user says pounds, convert first (lb / 2.20462) and pass kg here.")]
+    [Description("Record body weight. API stores KILOGRAMS - convert pounds (lb / 2.20462) before sending. weightKg* · day")]
     public Task<string> WeightLog(
-        [Description("Weight in KILOGRAMS.")] double weightKg,
-        [Description("Day as yyyy-MM-dd local; omit for today.")] string? day = null) =>
+        double weightKg,
+        string? day = null) =>
         gw.SendAsync("vitara", HttpMethod.Post, "/api/weighins", new { day, weightKg });
 
     [McpServerTool(Name = "workout_log")]
-    [Description("Log a workout/exercise session to Maaya/Vitara. USE THIS for 'I ran…' / 'log my workout'.")]
+    [Description("Log a workout. For \"I ran...\", \"log my workout\". activity* · day · calories · distance METRES · intensity · label")]
     public Task<string> WorkoutLog(
-        [Description("Activity, e.g. 'running', 'weights', 'cycling'.")] string activity,
-        [Description("Day as yyyy-MM-dd local; omit for today.")] string? day = null,
-        [Description("Calories burned, if known.")] int? calories = null,
-        [Description("Distance in METRES, if applicable.")] int? distance = null,
-        [Description("Intensity, e.g. 'easy', 'moderate', 'hard'.")] string? intensity = null,
-        [Description("Optional label/notes.")] string? label = null) =>
+        string activity,
+        string? day = null,
+        int? calories = null,
+        int? distance = null,
+        string? intensity = null,
+        string? label = null) =>
         gw.SendAsync("vitara", HttpMethod.Post, "/api/workouts",
             new { day, activity, calories, distance, intensity, label });
 
     // ── Karma: habits & goals ──
 
     [McpServerTool(Name = "habit_checkin")]
-    [Description("Mark one of the user's Maaya/Karma habits done (or not done) for a day. Call karma_habits FIRST to get the habit's id — this needs the GUID, not the name.")]
+    [Description("Mark a habit done/not-done. Needs the GUID - call karma_habits first. habitId* · completed · date · note")]
     public Task<string> HabitCheckin(
-        [Description("Habit GUID from karma_habits.")] string habitId,
-        [Description("True = completed, false = explicitly not done.")] bool completed = true,
-        [Description("Day as yyyy-MM-dd local; omit for today.")] string? date = null,
-        [Description("Optional note.")] string? note = null) =>
+        string habitId,
+        bool completed = true,
+        string? date = null,
+        string? note = null) =>
         gw.SendAsync("karma", HttpMethod.Post, $"/api/habits/{habitId}/log", new { date, completed, note });
 
     [McpServerTool(Name = "habit_create")]
-    [Description("Create a new habit to track in Maaya/Karma. USE THIS for a repeating action the user wants to do regularly ('I want to meditate every morning'). For a one-off outcome, use goal_create instead.")]
+    [Description("Karma habit - a repeating action (\"meditate every morning\"). One-off outcome -> goal_create. name* · description · emoji (✅) · category (personal) · notifyTime HH:mm · notifyMessage")]
     public Task<string> HabitCreate(
-        [Description("Habit name, e.g. 'Morning walk'.")] string name,
-        [Description("Optional description.")] string? description = null,
-        [Description("A single emoji for the habit (default ✅).")] string emoji = "✅",
-        [Description("Category, e.g. health, personal, work (default personal).")] string category = "personal",
-        [Description("Daily nudge time as HH:mm (24h), e.g. '07:30'. Omit for no nudge.")] string? notifyTime = null,
-        [Description("Message for the nudge.")] string? notifyMessage = null) =>
+        string name,
+        string? description = null,
+        string emoji = "✅",
+        string category = "personal",
+        string? notifyTime = null,
+        string? notifyMessage = null) =>
         gw.SendAsync("karma", HttpMethod.Post, "/api/habits",
             new { name, description, emoji, category, notifyTime, notifyMessage, notifyChannel = "telegram" });
 
     [McpServerTool(Name = "goals_list")]
-    [Description("List the user's Maaya/Karma goals with their current progress. USE THIS for 'what are my goals', 'how far along am I'. Gives you the ids needed by goal_progress_set.")]
+    [Description("Karma goals with progress and ids. For \"what are my goals\", \"how far along am I\".")]
     public Task<string> GoalsList() => gw.GetAsync("karma", "/api/goals");
 
     [McpServerTool(Name = "goal_create")]
-    [Description("Create a new goal in Maaya/Karma. USE THIS when the user says they want to achieve something over time ('I want to run a half marathon'). For a repeating daily action, use habit_create instead.")]
+    [Description("Karma goal - an outcome over time (\"run a half marathon\"). Repeating daily action -> habit_create. title* · description · category (personal) · targetDate · progress (0)")]
     public Task<string> GoalCreate(
-        [Description("Goal title, e.g. 'Reach 75kg'.")] string title,
-        [Description("Optional description.")] string? description = null,
-        [Description("Category, e.g. health, finance, career (default personal).")] string category = "personal",
-        [Description("Target date as yyyy-MM-dd, if any.")] string? targetDate = null,
-        [Description("Starting progress 0-100 (default 0).")] int progress = 0) =>
+        string title,
+        string? description = null,
+        string category = "personal",
+        string? targetDate = null,
+        int progress = 0) =>
         gw.SendAsync("karma", HttpMethod.Post, "/api/goals",
             new { title, description, category, status = "active", progress, targetDate });
 
     [McpServerTool(Name = "goal_progress_set")]
-    [Description("Set a Karma goal's progress percentage (0-100). Use this to keep goals in sync with real data — e.g. read the user's latest weight from Vitara, compute how far they are toward a weight goal, and update it here. Hitting 100 auto-completes the goal.")]
+    [Description("Set goal progress 0-100; 100 auto-completes. Use to sync goals with real data (e.g. Vitara weight -> weight goal). goalId* · progress*")]
     public Task<string> GoalProgressSet(
-        [Description("Goal GUID from goals_list.")] string goalId,
-        [Description("Progress percent, 0-100.")] int progress) =>
+        string goalId,
+        int progress) =>
         gw.SendAsync("karma", HttpMethod.Patch, $"/api/goals/{goalId}/progress", progress);
 
     // ── Aasthi: property financials ──
 
     [McpServerTool(Name = "property_financial_add")]
-    [Description("Add an income or expense entry against one of the user's Maaya/Aasthi properties — e.g. after spotting a property-related transaction in Vault. Call aasthi_properties first to get the property id.")]
+    [Description("Add income/expense against a property. Call aasthi_properties first for the id. propertyId* · type* income|expense · category* rent|repairs|tax|insurance|... · amount* positive · date* · notes")]
     public Task<string> PropertyFinancialAdd(
-        [Description("Property GUID from aasthi_properties.")] string propertyId,
-        [Description("'income' or 'expense'.")] string type,
-        [Description("Category, e.g. rent, repairs, tax, insurance.")] string category,
-        [Description("Amount, positive number.")] decimal amount,
-        [Description("Date as yyyy-MM-dd.")] string date,
-        [Description("Optional notes.")] string? notes = null) =>
+        string propertyId,
+        string type,
+        string category,
+        decimal amount,
+        string date,
+        string? notes = null) =>
         gw.SendAsync("aasthi", HttpMethod.Post, $"/api/properties/{propertyId}/financials",
             new { type, category, amount, date, notes });
 
     [McpServerTool(Name = "property_task_create")]
-    [Description("Create a maintenance/to-do task against one of the user's Maaya/Aasthi properties — e.g. after spotting a property-related item in email or chat. Call aasthi_properties first to get the property id.")]
+    [Description("Create a maintenance task against a property. Call aasthi_properties first for the id. propertyId* · title* · dueDate · priority low|medium|high|urgent (medium)")]
     public Task<string> PropertyTaskCreate(
-        [Description("Property GUID from aasthi_properties.")] string propertyId,
-        [Description("Task title, e.g. 'Fix leaking faucet'.")] string title,
-        [Description("Due date as yyyy-MM-dd, if any.")] string? dueDate = null,
-        [Description("low, medium, high, or urgent (default medium).")] string priority = "medium") =>
+        string propertyId,
+        string title,
+        string? dueDate = null,
+        string priority = "medium") =>
         gw.SendAsync("aasthi", HttpMethod.Post, "/api/tasks",
             new { propertyId, title, dueDate, priority });
 
     // ── NorthStar: keep the brain current ──
 
     [McpServerTool(Name = "northstar_sync")]
-    [Description("Trigger a NorthStar sync — re-pulls every module's current state into the brain and distils it into knowledge entries. Run this before a review/briefing if the data looks stale (it also runs automatically every 15 minutes).")]
+    [Description("Re-pull every module's state into the brain and distil to knowledge entries. Run before a review/briefing if data looks stale (also auto-runs every 15 min).")]
     public Task<string> NorthStarSync() =>
         gw.SendAsync("northstar", HttpMethod.Post, "/api/context/sync", new { });
 }
