@@ -142,6 +142,16 @@ struct ChatSendResult: Codable {
     let model: String
 }
 
+// mode is what switches the server onto its spoken path: a "voice" turn is offered a
+// curated 8 tools instead of the full catalogue, gets the speak-aloud output rules, a
+// smaller history budget, and its own llama.cpp cache slot. Sending nothing meant every
+// call from the phone was handled as a typed turn -- so San read markdown out loud, and
+// took the slow route doing it.
+//
+// imageDataUrl is a "data:image/jpeg;base64,..." string. The server has accepted these
+// all along; the app simply never offered one.
 struct ChatSendBody: Codable {
     let content: String
+    var imageDataUrl: String?
+    var mode: String?
 }

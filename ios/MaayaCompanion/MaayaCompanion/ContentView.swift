@@ -1,5 +1,17 @@
 import SwiftUI
 
+// Three tabs, down from five.
+//
+// The old set was Dashboard / San / Status / Health / Settings -- three of the five were
+// read-only reporting: net worth, module latency, sleep scores. All true, none of them a
+// reason to pick up a phone. The website is the better place to look at the system; the
+// phone is where something gets done about it.
+//
+// So: talk to San, act on what is outstanding, and configure. Nothing else.
+//
+// The initialiser still takes the managers it always did, even though only Settings reads
+// most of them now -- SyncManager holds references to all three, and unpicking that is a
+// separate change from re-pointing the app at actions.
 struct ContentView: View {
     let locationManager: LocationManager
     let calendarManager: CalendarManager
@@ -11,24 +23,12 @@ struct ContentView: View {
     var body: some View {
         if auth.isAuthenticated {
             TabView {
-                Tab("Dashboard", systemImage: "square.grid.2x2.fill") {
-                    DashboardView(client: client)
-                }
-
                 Tab("San", systemImage: "bubble.left.and.bubble.right.fill") {
                     ChatView(client: client)
                 }
 
-                Tab("Status", systemImage: "antenna.radiowaves.left.and.right") {
-                    StatusView(
-                        locationManager: locationManager,
-                        syncManager: syncManager,
-                        healthManager: healthManager
-                    )
-                }
-
-                Tab("Health", systemImage: "heart.fill") {
-                    HealthSummaryView(healthManager: healthManager)
+                Tab("Now", systemImage: "checklist") {
+                    NowView(client: client)
                 }
 
                 Tab("Settings", systemImage: "gear") {

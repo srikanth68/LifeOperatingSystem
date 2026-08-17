@@ -3,7 +3,7 @@
 A private companion app for Maaya OS. It does three things:
 
 1. **Background telemetry** — pushes device context (location, calendar, health snapshot) to San so your assistant has real-time awareness (the app's original purpose, unchanged).
-2. **Read-only dashboard + San chat** — after signing in with your Maaya credentials/PIN, view a summary of every module (Vault, Vitara, Aasthi, Karma, NorthStar, Sutra, Nexus) and chat with San.
+2. **San, in full** — chat (with photo attachments), voice calls, and a Now tab that lists what is actually outstanding across San's reminders, San's alerts and NorthStar's action queue, each completable with one tap. The app is deliberately action-oriented: the per-module dashboards were removed, because reading net worth and sleep scores is what the website is for.
 3. **Apple Health → Vitara** — uploads richer HealthKit data (steps, heart rate, calories, sleep, weight, recent workouts, and the last week of daily activity) straight into Vitara.
 
 All traffic goes directly from the phone to Everest over the private NordVPN Meshnet / Tailscale mesh — no cloud services in the path. The mesh VPN app (NordVPN Meshnet or Tailscale) must be installed and connected on the iPhone; this app just talks plain HTTP to the mesh IP.
@@ -46,6 +46,7 @@ Since an `.xcodeproj` cannot be reliably generated outside Xcode, follow these s
    - `Models/DashboardModels.swift`
    - `Models/VoiceModels.swift`
    - `Models/NotificationModels.swift`
+   - `Models/ActionModels.swift`
    - `Managers/LocationManager.swift`
    - `Managers/CalendarManager.swift`
    - `Managers/HealthManager.swift`
@@ -56,15 +57,14 @@ Since an `.xcodeproj` cannot be reliably generated outside Xcode, follow these s
    - `Services/AuthService.swift`
    - `Services/MaayaClient.swift`
    - `Services/SpeechPlayer.swift`
+   - `Services/SpeechChunks.swift`
    - `Services/VoiceConversationManager.swift`
    - `Services/NotificationManager.swift`
-   - `Views/StatusView.swift`
-   - `Views/HealthSummaryView.swift`
    - `Views/SettingsView.swift`
    - `Views/LoginView.swift`
-   - `Views/DashboardView.swift`
    - `Views/ChatView.swift`
    - `Views/CallView.swift`
+   - `Views/NowView.swift`
 4. Make sure **"Copy items if needed"** is checked and **"Create groups"** is selected
 
 ### 3. Add Info.plist
