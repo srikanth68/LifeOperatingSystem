@@ -8,9 +8,25 @@
 #   - Secrets/config per module: ./deploy/env/<module>.env  (gitignored).
 #   - llama.cpp (Gemma) and Sentinel run on the HOST → host.docker.internal.
 
+# Container logs are capped, because they are not capped by default.
+#
+# Docker's json-file driver grows without limit, and a build once died with
+# "no space left on device" while the images themselves were only 12.7GB: the
+# containers were holding 3.1GB, nearly all of it log. Fifteen services writing
+# request logs for weeks will do that, and nothing was ever going to stop them.
+#
+# 10MB x 3 files per container is roughly 450MB across the stack at worst, and
+# still leaves days of history for the module that just misbehaved.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 x-backend: &backend
   image: maaya-backend
   restart: unless-stopped
+  logging: *logging
   volumes:
     - ./deploy/data:/data
   extra_hosts:
@@ -125,6 +141,7 @@ services:
     build: ./vault/frontend
     image: maaya-frontend
     restart: unless-stopped
+    logging: *logging
     ports:
       - "3000:80"    # http://<host>:3000  (mic works on localhost)
       - "3443:443"   # https://<host>:3443 (mic works over Meshnet/.nord)
@@ -142,6 +159,7 @@ services:
   kokoro:
     image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
     restart: unless-stopped
+    logging: *logging
     ports: ["8880:8880"]
 
   # Piper — the lightweight TTS fallback. Kokoro handles everything today, so Piper
@@ -153,6 +171,7 @@ services:
   piper:
     image: ghcr.io/matatonic/openedai-speech-min:latest
     restart: unless-stopped
+    logging: *logging
     profiles: ["piper"]
     ports: ["8001:8000"]   # host port for manual testing; San uses the service name
     volumes:
