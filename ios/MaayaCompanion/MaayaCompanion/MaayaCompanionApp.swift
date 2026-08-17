@@ -17,6 +17,24 @@ struct MaayaCompanionApp: App {
     private static let notificationDelegate = ForegroundNotificationDelegate()
 
     init() {
+        // Must run before anything reads a setting.
+        //
+        // @AppStorage("autoSyncEnabled") = true is a READ-TIME fallback for that one
+        // property wrapper; it never writes to UserDefaults. SyncManager's background
+        // handler reads the same key with UserDefaults.standard.bool(forKey:), which
+        // answers false for a key that was never written -- so background refresh exited
+        // immediately on every run while Settings displayed the toggle as on, and the
+        // Vitara push never fired either. Nothing logged, because nothing failed.
+        //
+        // register(defaults:) populates NSRegistrationDomain, which both @AppStorage and
+        // a bare UserDefaults read consult, so the switch and the worker finally agree.
+        UserDefaults.standard.register(defaults: [
+            "autoSyncEnabled": true,
+            "vitaraSyncEnabled": true,
+            "serverHost": "100.126.41.41",
+            "serverScheme": "http",
+        ])
+
         UNUserNotificationCenter.current().delegate = Self.notificationDelegate
         let loc = LocationManager()
         let cal = CalendarManager()
@@ -57,6 +75,11 @@ struct MaayaCompanionApp: App {
                 await healthManager.requestAuthorization()
                 await NotificationManager.shared.requestAuthorization()
                 if auth.isAuthenticated { await NotificationManager.shared.sync(using: client) }
+                // Also schedule at launch, not only on backgrounding: a fresh install
+                // that has never been backgrounded has no pending request at all, so the
+                // first refresh would wait for the user to happen to swipe away.
+                // Submitting the same identifier twice replaces, so this is safe to repeat.
+                SyncManager.scheduleBackgroundSync()
             }
             .onChange(of: scenePhase) { _, phase in
                 // Re-mirror reminders/alerts to local notifications each time the
