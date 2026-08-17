@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using San.Application;
 using San.Application.Interfaces;
 
 namespace San.Worker;
@@ -22,7 +23,10 @@ public class MemoryDistillationWorker(IServiceProvider services, ILogger<MemoryD
         "You extract durable long-term memories from a short conversation between a user and their " +
         "assistant. Output ONLY memories worth remembering for months: stable preferences, personal " +
         "facts, decisions made, or notable life events. Ignore small talk, questions, and transient " +
-        "status. Format: one memory per line as `kind|text`, where kind is one of preference, fact, " +
+        "status. NEVER record that a reminder, alert, task or calendar event was created - those are " +
+        "already stored in the app that owns them, and repeating them here makes the assistant claim " +
+        "it set reminders it never set. Write absolute dates (2026-08-17), never today or tomorrow. " +
+        "Format: one memory per line as `kind|text`, where kind is one of preference, fact, " +
         "decision, event. If there is nothing worth saving, output exactly: NONE. No other text.";
 
     protected override async Task ExecuteAsync(CancellationToken ct)
@@ -81,6 +85,7 @@ public class MemoryDistillationWorker(IServiceProvider services, ILogger<MemoryD
 
         int saved = 0;
         int failed = 0;
+        int rejected = 0;
         foreach (var line in reply.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var sep = line.IndexOf('|');
@@ -89,6 +94,16 @@ public class MemoryDistillationWorker(IServiceProvider services, ILogger<MemoryD
             var text = line[(sep + 1)..].Trim();
             if (text.Length < 3) continue;
             if (kind is not ("preference" or "fact" or "decision" or "event")) kind = "observation";
+
+            // The prompt above asks for this too, but asking is not enough: every one of
+            // the reminder-echo memories now polluting recall was produced by a model
+            // that had been told to ignore transient status.
+            if (!MemoryWorthKeeping.Keep(text, out var why))
+            {
+                logger.LogInformation("Memory rejected ({Why}): {Text}", why, text);
+                rejected++;
+                continue;
+            }
 
             var importance = kind is "preference" or "decision" ? 4 : 3;
             if (await brain.SaveMemoryAsync(text, kind, importance, ct)) saved++;
@@ -118,7 +133,8 @@ public class MemoryDistillationWorker(IServiceProvider services, ILogger<MemoryD
         if (failed > 0)
             logger.LogWarning("Distilled {Saved} memory(ies); {Failed} could not be saved and are lost.", saved, failed);
         else if (saved > 0)
-            logger.LogInformation("Distilled {n} memory(ies) into NorthStar from recent chat.", saved);
+            logger.LogInformation("Distilled {Saved} memory(ies) into NorthStar from recent chat; "
+                + "{Rejected} rejected as not durable.", saved, rejected);
     }
 
     // A pass that found nothing to distill still counts as a completed pass — this
