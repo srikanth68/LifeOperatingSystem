@@ -33,5 +33,20 @@ ENV TZ=${TZ}
 # ~80 MB in the image; buys speech-to-text with no speech service at all.
 RUN apt-get update && apt-get install -y --no-install-recommends tzdata ffmpeg && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out /app
+
+# What is actually running in this image.
+#
+# The stack is deployed by copying a tarball to the box, not by pulling a branch,
+# so nothing on the running machine knows which commit it came from -- and a
+# tarball reusing an earlier filename has already caused a stale build to be
+# deployed and debugged as though it were the new one. VERSION is written into the
+# archive by scripts/release.sh and lands here, so the answer is one command away
+# on any module, all of which share this image:
+#
+#     docker compose exec san cat /app/VERSION
+#
+# Copied last and tolerated missing: a hand-built image without it still works.
+COPY VERSIO[N] /app/VERSION
+
 # Default command is overridden per service in docker-compose.yml.
 CMD ["dotnet", "/app/vault-api/Vault.API.dll"]
