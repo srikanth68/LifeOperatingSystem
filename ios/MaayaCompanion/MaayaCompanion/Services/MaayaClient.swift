@@ -6,6 +6,15 @@ import Foundation
 // UI can drop back to the login screen — the same contract as the web app's
 // session-expiry interceptor.
 final class MaayaClient {
+    // A San chat turn runs a real agent loop against a local model: it prefills several
+    // thousand tokens, may call tools, and has been measured between 6 and 50 seconds on
+    // Everest. The old blanket 30s was shorter than San's ordinary reply, so sending
+    // simply failed -- reading, which is fast, always worked, which is what made it look
+    // like a send bug rather than a timeout.
+    static let chatTimeout: TimeInterval = 180
+    static let defaultTimeout: TimeInterval = 30
+    static let voiceTimeout: TimeInterval = 120
+
     private let auth: AuthService
 
     init(auth: AuthService) {
@@ -48,13 +57,49 @@ final class MaayaClient {
         try await get(ModulePort.san, "/api/alerts")
     }
 
+    // MARK: - Actions (NorthStar queue) and completions
+
+    func pendingActions(limit: Int = 50) async throws -> [ActionItem] {
+        try await get(ModulePort.northstar, "/api/actions?status=pending&limit=\(limit)")
+    }
+
+    @discardableResult
+    func completeAction(_ id: String) async throws -> Data {
+        try await perform(ModulePort.northstar, "/api/actions/\(id)", method: "PATCH",
+                          httpBody: try MaayaJSON.encoder.encode(
+                              UpdateActionBody(status: "completed", resolvedBy: "ios")),
+                          allowRefresh: true)
+    }
+
+    // The server binds a bare JSON boolean here, not an object.
+    @discardableResult
+    func setReminderDone(_ id: String, done: Bool = true) async throws -> Data {
+        try await perform(ModulePort.san, "/api/reminders/\(id)/done", method: "PATCH",
+                          httpBody: try MaayaJSON.encoder.encode(done),
+                          allowRefresh: true)
+    }
+
+    @discardableResult
+    func createReminder(text: String, dueAt: Date, notifyTelegram: Bool = true) async throws -> Data {
+        try await perform(ModulePort.san, "/api/reminders", method: "POST",
+                          httpBody: try MaayaJSON.encoder.encode(
+                              CreateReminderBody(text: text, dueAt: dueAt, notifyTelegram: notifyTelegram)),
+                          allowRefresh: true)
+    }
+
     // MARK: - San chat
 
     func chatHistory() async throws -> [ChatMessage] {
         try await get(ModulePort.san, "/api/chat/messages")
     }
-    func sendChat(_ content: String) async throws -> ChatSendResult {
-        try await send(ModulePort.san, "/api/chat/messages", method: "POST", body: ChatSendBody(content: content))
+    // mode: "voice" on a spoken turn, nil when typed. imageDataUrl carries an attached
+    // photo as a data: URL. Both are optional on the wire, so an older server ignores them.
+    func sendChat(_ content: String,
+                  imageDataUrl: String? = nil,
+                  mode: String? = nil) async throws -> ChatSendResult {
+        try await send(ModulePort.san, "/api/chat/messages", method: "POST",
+                       body: ChatSendBody(content: content, imageDataUrl: imageDataUrl, mode: mode),
+                       timeout: Self.chatTimeout)
     }
 
     // MARK: - San voice (Whisper STT + Piper TTS proxy, local-only)
@@ -93,13 +138,16 @@ final class MaayaClient {
         try await request(port, path, method: "GET", httpBody: nil)
     }
 
-    private func send<B: Encodable, T: Decodable>(_ port: Int, _ path: String, method: String, body: B) async throws -> T {
+    private func send<B: Encodable, T: Decodable>(_ port: Int, _ path: String, method: String, body: B,
+                                                  timeout: TimeInterval? = nil) async throws -> T {
         let httpBody = try MaayaJSON.encoder.encode(body)
-        return try await request(port, path, method: method, httpBody: httpBody)
+        return try await request(port, path, method: method, httpBody: httpBody, timeout: timeout)
     }
 
-    private func request<T: Decodable>(_ port: Int, _ path: String, method: String, httpBody: Data?) async throws -> T {
-        let data = try await perform(port, path, method: method, httpBody: httpBody, allowRefresh: true)
+    private func request<T: Decodable>(_ port: Int, _ path: String, method: String, httpBody: Data?,
+                                       timeout: TimeInterval? = nil) async throws -> T {
+        let data = try await perform(port, path, method: method, httpBody: httpBody,
+                                     allowRefresh: true, timeout: timeout)
         return try MaayaJSON.decoder.decode(T.self, from: data)
     }
 
@@ -107,13 +155,16 @@ final class MaayaClient {
     // the raw bytes without JSON decoding — used by the voice endpoints, where
     // the request is multipart and the /speak response is audio. Shares the same
     // Bearer + single-silent-refresh contract as `perform`.
-    private func performData(_ port: Int, _ path: String, method: String, body: Data?, contentType: String?, allowRefresh: Bool = true) async throws -> Data {
+    private func performData(_ port: Int, _ path: String, method: String, body: Data?, contentType: String?,
+                             allowRefresh: Bool = true, timeout: TimeInterval? = nil) async throws -> Data {
         let urlString = "\(AppConfig.moduleURL(port))\(path)"
         guard let url = URL(string: urlString) else { throw APIError.invalidURL(urlString) }
 
         var req = URLRequest(url: url)
         req.httpMethod = method
-        req.timeoutInterval = 60   // Whisper/Piper can be slower than a JSON read
+        // Gemma hears the audio natively and Kokoro renders the speech; both are slower
+        // than a JSON read, and both run on the same box as the chat model.
+        req.timeoutInterval = timeout ?? Self.voiceTimeout
         if let token = auth.accessToken {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
@@ -127,7 +178,7 @@ final class MaayaClient {
 
         if http.statusCode == 401 {
             if allowRefresh, await auth.refresh() {
-                return try await performData(port, path, method: method, body: body, contentType: contentType, allowRefresh: false)
+                return try await performData(port, path, method: method, body: body, contentType: contentType, allowRefresh: false, timeout: timeout)
             }
             auth.forceLogout()
             throw APIError.sessionExpired
@@ -140,13 +191,14 @@ final class MaayaClient {
         return data
     }
 
-    private func perform(_ port: Int, _ path: String, method: String, httpBody: Data?, allowRefresh: Bool) async throws -> Data {
+    private func perform(_ port: Int, _ path: String, method: String, httpBody: Data?, allowRefresh: Bool,
+                         timeout: TimeInterval? = nil) async throws -> Data {
         let urlString = "\(AppConfig.moduleURL(port))\(path)"
         guard let url = URL(string: urlString) else { throw APIError.invalidURL(urlString) }
 
         var req = URLRequest(url: url)
         req.httpMethod = method
-        req.timeoutInterval = 30
+        req.timeoutInterval = timeout ?? Self.defaultTimeout
         if let token = auth.accessToken {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
@@ -160,7 +212,7 @@ final class MaayaClient {
 
         if http.statusCode == 401 {
             if allowRefresh, await auth.refresh() {
-                return try await perform(port, path, method: method, httpBody: httpBody, allowRefresh: false)
+                return try await perform(port, path, method: method, httpBody: httpBody, allowRefresh: false, timeout: timeout)
             }
             auth.forceLogout()
             throw APIError.sessionExpired

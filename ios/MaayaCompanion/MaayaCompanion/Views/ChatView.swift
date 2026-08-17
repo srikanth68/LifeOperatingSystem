@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import UIKit
 
 // San chat — send a message, see the conversation. Matches SanModule.tsx's
 // Assistant tab: GET /api/chat/messages for history, POST /api/chat/messages
@@ -15,6 +17,13 @@ struct ChatView: View {
     @State private var voice: VoiceStatus?
     @State private var showCall = false
     @State private var speech: SpeechPlayer?
+
+    // A picked photo, held until the next send. Only the CURRENT turn ever carries an
+    // image: San stores a text marker in history instead, because re-sending the picture
+    // on every later turn would spend thousands of vision tokens re-describing something
+    // it already answered about.
+    @State private var pickerItem: PhotosPickerItem?
+    @State private var attachedJpeg: Data?
     @AppStorage("sanAutoSpeak") private var autoSpeak = false
 
     var body: some View {
@@ -86,30 +95,67 @@ struct ChatView: View {
     }
 
     private var inputBar: some View {
-        HStack(spacing: 10) {
-            TextField("Ask San anything…", text: $draft, axis: .vertical)
-                .lineLimit(1...4)
-                .padding(10)
-                .background(MaayaTheme.surface, in: RoundedRectangle(cornerRadius: 20))
+        VStack(spacing: 8) {
+            if let attachedJpeg, let ui = UIImage(data: attachedJpeg) {
+                HStack {
+                    Image(uiImage: ui)
+                        .resizable().scaledToFill()
+                        .frame(width: 44, height: 44)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    Text("Photo attached").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Remove") { self.attachedJpeg = nil; pickerItem = nil }
+                        .font(.caption)
+                }
+            }
+
+            HStack(spacing: 10) {
+                PhotosPicker(selection: $pickerItem, matching: .images, photoLibrary: .shared()) {
+                    Image(systemName: "photo")
+                        .padding(10)
+                        .background(MaayaTheme.surface, in: Circle())
+                }
                 .disabled(sending)
 
-            Button {
-                Task { await send() }
-            } label: {
-                Image(systemName: "paperplane.fill")
+                TextField("Ask San anything…", text: $draft, axis: .vertical)
+                    .lineLimit(1...4)
                     .padding(10)
-                    .background(canSend ? MaayaTheme.gold : Color.gray)
-                    .foregroundStyle(.black)
-                    .clipShape(Circle())
+                    .background(MaayaTheme.surface, in: RoundedRectangle(cornerRadius: 20))
+                    .disabled(sending)
+
+                Button {
+                    Task { await send() }
+                } label: {
+                    Image(systemName: "paperplane.fill")
+                        .padding(10)
+                        .background(canSend ? MaayaTheme.gold : Color.gray)
+                        .foregroundStyle(.black)
+                        .clipShape(Circle())
+                }
+                .disabled(!canSend)
             }
-            .disabled(!canSend)
         }
         .padding()
         .background(.ultraThinMaterial)
+        .onChange(of: pickerItem) { _, item in
+            guard let item else { attachedJpeg = nil; return }
+            Task {
+                // JPEG at 0.7 keeps a phone photo to a few hundred KB. The raw HEIC off a
+                // modern camera is several megabytes, and it rides in the JSON body as
+                // base64 -- a third larger again.
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let ui = UIImage(data: data),
+                   let jpeg = ui.jpegData(compressionQuality: 0.7) {
+                    attachedJpeg = jpeg
+                }
+            }
+        }
     }
 
+    // A photo with no caption is a legitimate message, so an attachment alone enables send.
     private var canSend: Bool {
-        !sending && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard !sending else { return false }
+        return attachedJpeg != nil || !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func bubble(role: String, text: String, italic: Bool = false) -> some View {
@@ -147,15 +193,21 @@ struct ChatView: View {
 
     private func send() async {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        let image = attachedJpeg
+        // A photo on its own is a real message -- "what is this?" is implied.
+        guard !text.isEmpty || image != nil else { return }
         draft = ""
+        attachedJpeg = nil
+        pickerItem = nil
         sending = true
         loadError = nil
         // Optimistically show the user's message immediately.
         let optimistic = ChatMessage(id: UUID().uuidString, role: "user", content: text, createdAt: .now)
         messages.append(optimistic)
         do {
-            let result = try await client.sendChat(text)
+            let result = try await client.sendChat(
+                text,
+                imageDataUrl: image.map { "data:image/jpeg;base64," + $0.base64EncodedString() })
             // Replace the optimistic user bubble with the server's canonical pair.
             if let idx = messages.firstIndex(of: optimistic) { messages.remove(at: idx) }
             messages.append(result.userMessage)

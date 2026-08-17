@@ -108,14 +108,17 @@ final class VoiceConversationManager {
                 lastUserText = heard
 
                 phase = .thinking
-                let reply = try await client.sendChat(heard).assistantMessage.content
+                // mode: "voice" is what puts the server on its spoken path -- 8 tools
+                // instead of 40, the speak-aloud output rules, a smaller history window
+                // and its own cache slot. Without it San answers a phone call in
+                // markdown, formatted for a screen nobody is looking at.
+                let reply = try await client.sendChat(heard, mode: "voice").assistantMessage.content
                 guard isActive else { return }
                 lastSanText = reply
 
                 phase = .speaking
-                let audioOut = try await client.speak(reply)
+                try await speakInChunks(reply)
                 guard isActive else { return }
-                await play(audioOut)
             } catch APIError.sessionExpired {
                 phase = .error("Session expired — reopen after signing in again.")
                 isActive = false
@@ -126,6 +129,35 @@ final class VoiceConversationManager {
                 phase = .error(error.localizedDescription)
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
             }
+        }
+    }
+
+    // Speaks a reply piece by piece, synthesising the next piece while the current one
+    // plays. The first chunk is short on purpose: it is the only wait the listener
+    // actually experiences. See SpeechChunks.
+    private func speakInChunks(_ reply: String) async throws {
+        let chunks = SpeechChunks.split(reply)
+        guard !chunks.isEmpty else { return }
+
+        // One chunk ahead, no more. Two would not arrive sooner -- the server renders
+        // them one at a time anyway -- and would waste work whenever the call is ended
+        // or barged in on mid-reply.
+        var next: Task<Data, Error>? = Task { [client] in try await client.speak(chunks[0]) }
+
+        for i in chunks.indices {
+            guard isActive else { next?.cancel(); return }
+            guard let current = next else { return }
+
+            if i + 1 < chunks.count {
+                let following = chunks[i + 1]
+                next = Task { [client] in try await client.speak(following) }
+            } else {
+                next = nil
+            }
+
+            let audio = try await current.value
+            guard isActive else { next?.cancel(); return }
+            await play(audio)
         }
     }
 
