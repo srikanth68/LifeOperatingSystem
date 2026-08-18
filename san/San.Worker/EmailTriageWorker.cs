@@ -44,7 +44,23 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
             var moduleContext = scope.ServiceProvider.GetRequiredService<IModuleContextService>();
 
             var accounts = (await repo.GetEmailAccountsAsync()).Where(a => a.Active).ToList();
-            if (accounts.Count == 0) return;
+            if (accounts.Count == 0)
+            {
+                // Say so, and record the run as healthy.
+                //
+                // This used to return in silence, which made "no mailbox has ever been
+                // connected" look exactly like "the timer is dead" from the outside --
+                // no Telegram, no log line, no health entry. The same reasoning already
+                // moved the health record above the empty-batch exit further down; this
+                // branch was simply missed, and it is the one that fires when the OAuth
+                // connect was never completed.
+                logger.LogInformation(
+                    "Email triage: no active mailbox connected, nothing to do. "
+                    + "Connect one from Settings (GET /api/email/accounts lists what is linked).");
+                await scope.ServiceProvider.GetRequiredService<IHealthTracker>()
+                    .RecordAsync(HealthComponents.WorkerEmailTriage, true, ct: ct);
+                return;
+            }
 
             // Read once per run, not per message. Editable in Settings so a sender that
             // keeps being filtered wrongly can be fixed without a rebuild.
