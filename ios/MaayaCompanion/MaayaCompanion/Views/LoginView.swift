@@ -93,7 +93,7 @@ struct LoginView: View {
 private struct ServerSettingsSheet: View {
     let onDone: () -> Void
 
-    @AppStorage("serverHost") private var serverHost = "<your-mesh-ip>"
+    @AppStorage("serverHost") private var serverHost = "localhost"
     @AppStorage("serverScheme") private var serverScheme = "http"
 
     private let schemes = ["http", "https"]
@@ -112,7 +112,7 @@ private struct ServerSettingsSheet: View {
                 } header: {
                     Text("Server")
                 } footer: {
-                    Text("e.g. \"localhost\" if the Maaya backend runs on this same Mac, or the NordVPN Meshnet / Tailscale IP (e.g. <your-mesh-ip>) for a remote host.")
+                    Text("e.g. \"localhost\" if the Maaya backend runs on this same Mac, or the NordVPN Meshnet / Tailscale IP (e.g. 100.x.y.z) for a remote host.")
                         .font(.caption)
                 }
             }
