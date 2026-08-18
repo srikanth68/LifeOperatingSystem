@@ -140,7 +140,7 @@ The buttons stay hidden until the voice services are up, so the app works normal
    - Tokens are saved in the Keychain; the app silently refreshes them and only shows the sign-in screen again if the session truly expires.
 3. Go to the **Settings** tab and set:
    - **Scheme** — `http` (or `https` if you use the nginx proxy path — not required).
-   - **Host / mesh IP** — e.g. `100.126.41.41` (defaults to this). Each module is reached on its own port off this host (5000–5700).
+   - **Host / mesh IP** — e.g. `100.x.y.z` (defaults to `localhost`). Each module is reached on its own port off this host (5000–5700).
    - **Device Key** — the `DEVICE_API_KEY` shared by San and Vitara (used only for the telemetry/HealthKit uploads, not for sign-in).
 4. The **Dashboard** and **San** tabs load automatically once signed in. On the **Status** tab, tap **Sync Now** to test the telemetry + Vitara HealthKit push.
 

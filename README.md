@@ -77,7 +77,7 @@ Each module is fully independent — its own database, its own API, its own depl
 - **Module isolation** — each module can run, fail, and deploy independently
 - **Config over code** — swap AI models, sync schedules, and API keys without touching source
 - **Local-first** — everything runs on your machine, no cloud dependency
-- **Model-agnostic AI** — San's chat provider is an interface; swap Claude for GPT or Llama via env vars
+- **The AI runs locally too** — San talks to a Gemma model on llama.cpp on the same box. No prompt containing your finances, health or correspondence leaves the machine. `IChatProvider` keeps cloud models swappable, but the local path is the default and the one that is maintained
 - **Graceful degradation** — if a module is down, the others keep working
 
 ---
@@ -155,7 +155,10 @@ That's it. One command spins up all APIs, workers, and the frontend.
 - Document download and management
 
 ### San — AI Assistant
-- **Model-agnostic chat** — currently Claude, swappable to any LLM via config
+- **Fully local LLM** — Gemma on llama.cpp, on the same machine. Nothing is sent to a cloud model
+- **Native tool calling** — San runs its own agent loop and can act, not just answer: 44 tools across every module, served over MCP
+- **Multimodal** — send it a photo; speech-to-text runs on the same model rather than a second service
+- **Voice calls** — speak to San and hear it reply, with responses chunked so it starts talking before the whole answer is rendered
 - Chat context enriched with live data from all running modules
 - Reminders with **Telegram** notifications
 - Threshold-based spending alerts (auto-re-arming)
@@ -173,7 +176,8 @@ That's it. One command spins up all APIs, workers, and the frontend.
 | Frontend | React 18, TypeScript, Vite, React Query |
 | Workers | .NET BackgroundService with PeriodicTimer |
 | Notifications | Telegram Bot API |
-| AI | Anthropic Claude (swappable via `IChatProvider` interface) |
+| AI | Gemma on llama.cpp, running locally — native tool calling, vision, and speech-to-text on one model (`IChatProvider` keeps cloud models swappable) |
+| Agent tooling | MCP (Model Context Protocol) gateway exposing 44 tools to any harness |
 | Bank Sync | Plaid API |
 | Health Data | Oura Ring API (OAuth 2.0) |
 
@@ -194,10 +198,10 @@ That's it. One command spins up all APIs, workers, and the frontend.
 
 - [ ] **Nexus** — Order history, price/volume alerts, per-ticker notes (contract only defines read endpoints today)
 - [ ] **SAN → Aasthi task automation** — SAN creates property tasks from emails, calendar events, and context data
-- [ ] **Vitara AI Reasoning** — Claude-powered biological age scoring, weekly briefs, cross-signal correlation engine
+- [ ] **Vitara AI Reasoning** — biological age scoring, weekly briefs, cross-signal correlation engine
 - [ ] Raspberry Pi deployment with external access
 - [ ] WhatsApp notification support
-- [ ] Additional LLM providers (OpenAI, Ollama, local models)
+- [x] ~~Additional LLM providers~~ — moved to a fully local model; cloud providers remain supported but unused
 
 ---
 

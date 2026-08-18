@@ -3,7 +3,7 @@ import Foundation
 // Single source of truth for how the app reaches Everest.
 //
 // The owner runs NordVPN Meshnet (or Tailscale) on the phone; that exposes the
-// Mac mini at a private mesh IP (e.g. 100.126.41.41). We just talk plain HTTP
+// Mac mini at a private mesh IP (e.g. 100.x.y.z). We just talk plain HTTP
 // to <scheme>://<host>:<port> per module, mirroring the web frontend's old
 // per-port apiHost model. Host + scheme are configurable in Settings so the
 // same build works whether the owner points at the mesh IP, a .nord hostname,
@@ -23,7 +23,7 @@ enum AppConfig {
     // Keys are shared with SettingsView's @AppStorage bindings.
     static var host: String {
         let h = UserDefaults.standard.string(forKey: "serverHost") ?? ""
-        return h.isEmpty ? "100.126.41.41" : h
+        return h.isEmpty ? "localhost" : h
     }
 
     static var scheme: String {

@@ -37,7 +37,7 @@
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<!-- The app talks plain HTTP to Everest over the private NordVPN Meshnet /
-		     Tailscale mesh (e.g. http://100.126.41.41:5300). Those raw-IP HTTP
+		     Tailscale mesh (e.g. http://100.x.y.z:5300). Those raw-IP HTTP
 		     loads are blocked by ATS unless arbitrary loads are allowed. This is a
 		     private, non-App-Store build reaching only the owner's own mesh host. -->
 		<key>NSAllowsArbitraryLoads</key>

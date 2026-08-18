@@ -25,7 +25,7 @@ FROM nginx:alpine
 #   docker compose build --build-arg TLS_SAN="IP:100.x.x.x,DNS:host.nord,DNS:localhost"
 # Once deployed, trust maaya.crt on your devices to drop the warning for good
 # (see DOCKER.md → "Trusting the dashboard certificate").
-ARG TLS_SAN="IP:100.126.41.41,DNS:srp6888everest.nord,DNS:localhost,IP:127.0.0.1"
+ARG TLS_SAN="DNS:localhost,IP:127.0.0.1"
 RUN apk add --no-cache openssl \
  && mkdir -p /etc/nginx/certs /etc/nginx/snippets \
  && openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \

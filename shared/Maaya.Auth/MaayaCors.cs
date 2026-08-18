@@ -2,7 +2,7 @@ namespace Maaya.Auth;
 
 // Merges each module's default dev origins with deployment-specific ones from
 // CORS_ORIGINS (comma-separated), so containers serving the frontend from another
-// host (e.g. http://100.126.41.41:3000 on Everest) work without code changes.
+// host (e.g. http://100.x.y.z:3000 on the server) work without code changes.
 public static class MaayaCors
 {
     public static string[] Origins(params string[] defaults)

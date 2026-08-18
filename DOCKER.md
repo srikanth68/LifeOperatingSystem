@@ -17,7 +17,7 @@ containers ──► host.docker.internal ──► llama.cpp :8080, Sentinel :8
 2. `.\deploy\collect-data.ps1` — copies live DBs + Sutra storage into `deploy/data/`.
 3. Transfer the repo **including `deploy/env/` and `deploy/data/`** to Everest
    (both are gitignored — git alone won't carry them):
-   `scp -r maaya srp6888@100.126.41.41:~/Documents/maaya` (or rsync/AirDrop).
+   `scp -r maaya <user>@<your-mesh-ip>:~/Documents/maaya` (or rsync/AirDrop).
 
 ## Run (on Everest)
 
@@ -27,12 +27,12 @@ docker compose up -d --build     # first build ≈ 5-10 min
 docker compose ps                # everything should be "running"
 ```
 
-Open **http://100.126.41.41:3000** from any Meshnet device.
+Open **http://<your-mesh-ip>:3000** from any Meshnet device.
 
 ## Point an external MCP agent at the gateway
 
 For any MCP-capable agent (Claude, custom) that should drive Maaya's tools:
-- MCP endpoint: `http://localhost:5900`  (from other machines: `http://100.126.41.41:5900`)
+- MCP endpoint: `http://localhost:5900`  (from other machines: `http://<your-mesh-ip>:5900`)
 - Header: `X-API-Key: <MCP_API_KEY from deploy/env/mcp.env>`
 - San's own chat needs none of this — its agent loop (`LLM_PROVIDER=llamacpp-agent`)
   calls the module APIs directly. Gemma stays at `http://localhost:8080/v1` (host-level).
@@ -43,7 +43,7 @@ For any MCP-capable agent (Claude, custom) that should drive Maaya's tools:
 - All data (SQLite + document storage): `deploy/data/<module>/` — back this
   folder up and you've backed up Maaya.
 - Frontend origin allowed by APIs: `CORS_ORIGINS` in each env file
-  (preset to `http://100.126.41.41:3000`; add LAN/hostname origins as needed).
+  (preset to `http://<your-mesh-ip>:3000`; add LAN/hostname origins as needed).
 - Sentinel/llama.cpp URLs use `host.docker.internal` (works on Docker Desktop
   for Mac out of the box).
 
@@ -54,7 +54,7 @@ For any MCP-capable agent (Claude, custom) that should drive Maaya's tools:
   reach the port. On a Meshnet-only host that's your own devices. If Everest
   also sits on a shared LAN, consider removing `AUTH_TRUSTED_NETWORKS` and the
   private-range trust in `shared/Maaya.Auth/TrustedNetwork.cs`.
-- **Oura OAuth**: `OURA_REDIRECT_URI` is now `http://100.126.41.41:5100/api/oura/callback`
+- **Oura OAuth**: `OURA_REDIRECT_URI` is now `http://<your-mesh-ip>:5100/api/oura/callback`
   — add that exact URI to the Oura developer-app settings or re-linking will fail.
   (Synced Oura data keeps flowing regardless; the token lives in vitara.db.)
 - **Vault split-db**: there were historically two `vault.db` files (API/Worker).
@@ -118,14 +118,14 @@ For any MCP-capable agent (Claude, custom) that should drive Maaya's tools:
 
 The dashboard's HTTPS cert (port 3443) is self-signed, so browsers show
 "Your connection is not private" every visit. The cert now carries a proper
-Subject Alternative Name for `100.126.41.41`, `srp6888everest.nord`, and
+Subject Alternative Name for `<your-mesh-ip>`, `<your-host>.nord`, and
 `localhost`, which makes it **trustable** — do this once per device and the
 warning disappears for good.
 
-**If your Meshnet IP is not `100.126.41.41`**, rebuild the frontend with your IP
+**If your Meshnet IP is not `<your-mesh-ip>`**, rebuild the frontend with your IP
 first, then re-deploy:
 ```bash
-docker compose build --build-arg TLS_SAN="IP:<your-ip>,DNS:srp6888everest.nord,DNS:localhost" frontend
+docker compose build --build-arg TLS_SAN="IP:<your-ip>,DNS:<your-host>.nord,DNS:localhost" frontend
 docker compose up -d frontend
 ```
 
@@ -148,7 +148,7 @@ Copy `~/maaya.crt` to each device you browse from.
 (Settings → Profile Downloaded) → then **Settings → General → About → Certificate
 Trust Settings** → enable full trust for it.
 
-After trusting, visit `https://100.126.41.41:3443` (or the `.nord` name) — no
+After trusting, visit `https://<your-mesh-ip>:3443` (or the `.nord` name) — no
 warning. Note it's bound to those exact hostnames, so browse by one of them, not
 a different IP.
 

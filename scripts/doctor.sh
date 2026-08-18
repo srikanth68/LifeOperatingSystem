@@ -28,7 +28,9 @@
 
 set -uo pipefail
 
-HOST="${1:-100.126.41.41}"
+# No default host: this is a public repo and a hard-coded mesh address in it
+# is one person's network, not a sensible default for anyone else.
+HOST="${1:-${MAAYA_HOST:-localhost}}"
 WEB_PORT="${WEB_PORT:-3000}"
 TIMEOUT="${TIMEOUT:-12}"
 

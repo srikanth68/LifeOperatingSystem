@@ -165,7 +165,7 @@ The frontend is served two ways:
   (`http://localhost:3000`), since browsers allow mic on localhost without TLS.
 - `https://<host>:3443` — HTTPS with a self-signed cert. **Use this from your
   laptop/phone over Meshnet** so the mic works, e.g.
-  `https://srp6888everest.nord:3443` or `https://100.126.41.41:3443`.
+  `https://<your-host>.nord:3443` or `https://<your-mesh-ip>:3443`.
   Trust the cert once per device to drop the warning — see DOCKER.md →
   "Trusting the dashboard certificate".
 

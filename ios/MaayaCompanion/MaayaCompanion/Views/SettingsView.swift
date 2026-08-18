@@ -3,7 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     // Host + scheme are the single source of truth for every module URL; the
     // per-module port is applied automatically (see AppConfig / ModulePort).
-    @AppStorage("serverHost") private var serverHost = "100.126.41.41"
+    @AppStorage("serverHost") private var serverHost = "localhost"
     @AppStorage("serverScheme") private var serverScheme = "http"
     @AppStorage("apiKey") private var apiKey = ""
     @AppStorage("autoSyncEnabled") private var autoSyncEnabled = true
@@ -47,7 +47,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Server")
                 } footer: {
-                    Text("Reachable over NordVPN Meshnet or Tailscale (e.g. 100.126.41.41). Each module is served on its own port off this host. The Device Key matches DEVICE_API_KEY on the server for the telemetry/HealthKit uploads.")
+                    Text("Reachable over NordVPN Meshnet or Tailscale (e.g. 100.x.y.z). Each module is served on its own port off this host. The Device Key matches DEVICE_API_KEY on the server for the telemetry/HealthKit uploads.")
                         .font(.caption)
                 }
 

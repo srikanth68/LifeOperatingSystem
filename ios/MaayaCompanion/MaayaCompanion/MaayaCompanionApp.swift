@@ -31,7 +31,7 @@ struct MaayaCompanionApp: App {
         UserDefaults.standard.register(defaults: [
             "autoSyncEnabled": true,
             "vitaraSyncEnabled": true,
-            "serverHost": "100.126.41.41",
+            "serverHost": "localhost",
             "serverScheme": "http",
         ])
 
