@@ -473,6 +473,35 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
             new { title, body, generatedBy = $"san-insights/{Environment.GetEnvironmentVariable("LLM_MODEL") ?? "llm"}" },
             HealthComponents.NorthStarWrite, ct);
 
+    public async Task<bool> CompleteActionAsync(string actionId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(actionId)) return false;
+        try
+        {
+            var http = httpFactory.CreateClient("northstar");
+            using var req = new HttpRequestMessage(HttpMethod.Patch, $"/api/actions/{actionId}")
+            {
+                Content = new StringContent(
+                    JsonSerializer.Serialize(new { status = "completed", resolvedBy = "san-email-triage" }),
+                    Encoding.UTF8, "application/json"),
+            };
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ServiceToken());
+            using var resp = await http.SendAsync(req, ct);
+
+            // Reported through the health tracker like every other brain write — this
+            // class has no logger, and a silent failure here would leave a commitment
+            // being chased forever with nothing saying why.
+            await health.RecordAsync(HealthComponents.NorthStarWrite, resp.IsSuccessStatusCode,
+                resp.IsSuccessStatusCode ? null : $"HTTP {(int)resp.StatusCode} completing action", ct);
+            return resp.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            await health.RecordAsync(HealthComponents.NorthStarWrite, false, ex.Message, ct);
+            return false;
+        }
+    }
+
     private async Task<bool> PostToBrainAsync(string path, object payload, string component, CancellationToken ct)
     {
         try

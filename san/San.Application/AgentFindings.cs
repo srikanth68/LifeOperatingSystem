@@ -84,7 +84,10 @@ public static class FindingParser
         el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
     // Models like to wrap JSON in prose or a ``` fence — take the outermost bracketed span.
-    private static string? ExtractJson(string s)
+    // internal rather than private: Settlements reads the same reply for its own key,
+    // and two copies of "find the JSON the model may have fenced or prefixed" would
+    // drift the first time one of them was fixed.
+    internal static string? ExtractJson(string s)
     {
         var starts = new[] { s.IndexOf('{'), s.IndexOf('[') }.Where(i => i >= 0).ToArray();
         if (starts.Length == 0) return null;
