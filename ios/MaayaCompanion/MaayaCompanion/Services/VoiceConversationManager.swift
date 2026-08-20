@@ -211,7 +211,40 @@ final class VoiceConversationManager {
 
         defer { try? FileManager.default.removeItem(at: url) }
         guard hasSpoken, isActive else { return nil }
+
+        let data = await finalisedRecording(at: url)
+        // A 16 kHz mono 16-bit WAV runs 32 KB/s, so a kilobyte is about 30ms -- less
+        // than a syllable. Sending it wastes a round trip and comes back as a decode
+        // error, which reads like a bug rather than "you did not say anything".
+        guard let data, data.count > 1024 else { return nil }
+        return data
+    }
+
+    // AVAudioRecorder.stop() closes the file on its own queue, and the RIFF header's
+    // length fields are written during that finalisation. Reading the moment stop()
+    // returns can therefore capture a WAV that declares zero bytes of audio -- which
+    // the server's ffmpeg rejects as "that recording couldn't be decoded". The file is
+    // there; it just isn't finished.
+    //
+    // Waiting for the size to settle rather than using the delegate keeps this class as
+    // it is: AVAudioRecorderDelegate is an NSObject protocol, and conforming would mean
+    // restructuring an @Observable @MainActor type for one callback. In practice this
+    // settles on the first or second pass.
+    private func finalisedRecording(at url: URL) async -> Data? {
+        var previous = -1
+        for _ in 0..<40 {                      // 2s ceiling; never reached in practice
+            let size = fileSize(url)
+            if size > 44, size == previous { break }
+            previous = size
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
         return try? Data(contentsOf: url)
+    }
+
+    private func fileSize(_ url: URL) -> Int {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = attrs[.size] as? Int else { return 0 }
+        return size
     }
 
     // MARK: - Playback
