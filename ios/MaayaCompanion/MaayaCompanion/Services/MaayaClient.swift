@@ -87,6 +87,27 @@ final class MaayaClient {
                           allowRefresh: true)
     }
 
+    // Tick a Karma habit for today. Karma keys the log by habit GUID + date, so
+    // sending the same day twice corrects rather than duplicates.
+    @discardableResult
+    func logHabit(_ id: String, completed: Bool = true) async throws -> Data {
+        try await perform(ModulePort.karma, "/api/habits/\(id)/log", method: "POST",
+                          httpBody: try MaayaJSON.encoder.encode(
+                              HabitLogBody(date: nil, completed: completed, note: nil)),
+                          allowRefresh: true)
+    }
+
+    // Push a reminder's due time out. The endpoint is a full replace, so the existing
+    // text has to be sent back with it or it would be blanked.
+    @discardableResult
+    func snoozeReminder(_ r: ReminderItem, to newDue: Date) async throws -> Data {
+        try await perform(ModulePort.san, "/api/reminders/\(r.id)", method: "PUT",
+                          httpBody: try MaayaJSON.encoder.encode(
+                              ReminderUpsertBody(text: r.text, dueAt: newDue,
+                                                 notifyTelegram: r.notifyTelegram, done: false)),
+                          allowRefresh: true)
+    }
+
     // MARK: - San chat
 
     func chatHistory() async throws -> [ChatMessage] {

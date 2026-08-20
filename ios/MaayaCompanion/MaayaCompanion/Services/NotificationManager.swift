@@ -35,6 +35,8 @@ final class NotificationManager {
 
         let reminders = (try? await client.reminders()) ?? []
         let alerts    = (try? await client.alerts()) ?? []
+
+        await updateBadge(reminders: reminders)
         let now = Date()
 
         struct Pending { let id: String; let title: String; let body: String; let date: Date }
@@ -96,6 +98,21 @@ final class NotificationManager {
                        withCompletionHandler: nil)   // nil trigger = deliver now
         }
         if changed { UserDefaults.standard.set(Array(seen), forKey: key) }
+    }
+
+    // The app icon carries the count of things already due.
+    //
+    // Without a paid developer account there is no push, so the phone can only ever
+    // learn about work when the app runs. A badge is the one piece of that which
+    // survives the app being closed -- it is visible on the home screen, costs no
+    // notification permission beyond the one already granted, and answers "is there
+    // anything?" without opening anything.
+    //
+    // Overdue only, deliberately. Badging everything outstanding produces a number
+    // that never reaches zero, and a badge that is never zero is wallpaper.
+    func updateBadge(reminders: [ReminderItem], actions: Int = 0) async {
+        let overdue = reminders.filter { !$0.done && $0.dueAt <= .now }.count + actions
+        try? await UNUserNotificationCenter.current().setBadgeCount(overdue)
     }
 }
 
