@@ -34,8 +34,11 @@ public static class EmailTriageDefaults
         "Reserve 'critical' for genuine harm: a missed mortgage or rent, an overdraft, a legal or " +
         "medical deadline. Never write URGENT or CRITICAL, or warn of penalties or service " +
         "interruption, over a small routine amount.\n\n" +
+        "CLOSING SOMETHING MATTERS AS MUCH AS RAISING IT. When an email confirms that something the user owed is now settled - a payment received, a claim resolved, an appointment confirmed - list it under \"settled\". Do NOT go looking for the reminder yourself and do NOT complete it: name the obligation and the system finds and closes every reminder and task that matches. Only list what the message actually confirms. A bill ARRIVING is not a bill being PAID.\n\n" +
         "Return ONLY a JSON object in this shape, with no prose and no code fence:\n" +
-        "{\"findings\":[{\"key\":\"...\",\"severity\":\"critical|high|medium|low\",\"message\":\"...\",\"dueOn\":\"YYYY-MM-DD\"}]}\n\n" +
+        "{\"findings\":[{\"key\":\"...\",\"severity\":\"critical|high|medium|low\",\"message\":\"...\",\"dueOn\":\"YYYY-MM-DD\"}]," +
+        "\"settled\":[{\"vendor\":\"Spectrum\",\"what\":\"internet bill\",\"amount\":79.99}]}\n\n" +
+        "- settled: omit it entirely when nothing was confirmed done. vendor is required and should be the name the user would recognise. what describes the obligation in a few words, and is what lets the match tell a Chase card bill from a Chase mortgage - without it, a vendor name alone will not close anything.\n" +
         "- key: a STABLE identifier for the underlying thing, e.g. \"bill.amc.2026-08-09\", " +
         "\"reply.ali_abdaal\". The SAME item must produce the SAME key every run, forever — repetition " +
         "is suppressed by this key, and the system audit uses the same keys, so a bill you both notice " +

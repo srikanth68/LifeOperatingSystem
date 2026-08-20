@@ -34,6 +34,12 @@ public interface IModuleContextService
     // Everything the user has said they would do, from every store that holds one.
     Task<List<Commitment>> GetOpenCommitmentsAsync(CancellationToken ct = default);
 
+    // Marks a NorthStar action item completed. Used when an email confirms the thing was
+    // done, so the commitment stops being chased. Returns false rather than throwing when
+    // NorthStar is unreachable: failing to close is a nuisance, failing the whole triage
+    // run over it would lose the findings alongside it.
+    Task<bool> CompleteActionAsync(string actionId, CancellationToken ct = default);
+
     // Today's habits and whether each is already ticked, for the agenda.
     Task<List<(string Name, bool DoneToday)>> GetTodaysHabitsAsync(CancellationToken ct = default);
 

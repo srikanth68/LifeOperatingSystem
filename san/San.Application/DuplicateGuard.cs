@@ -84,13 +84,21 @@ public static class DuplicateGuard
     // new one.
     public static readonly TimeSpan SameWindow = TimeSpan.FromDays(3);
 
-    public static bool IsDuplicate(string? newText, DateTime newDue, string? existingText, DateTime existingDue)
+    // Do these two strings refer to the same obligation, ignoring when it is due?
+    //
+    // Separated from IsDuplicate because settlement matching needs exactly this and
+    // nothing else: "Spectrum payment received" has no due date to compare against the
+    // reminder it should close.
+    public static bool NamesTheSameThing(string? a, string? b)
     {
-        if ((newDue - existingDue).Duration() > SameWindow) return false;
-        if (Similarity(newText, existingText) < Threshold) return false;
+        if (Similarity(a, b) < Threshold) return false;
 
         // The overlap has to name the same THING, not merely the same kind of errand.
-        var shared = Fingerprint(newText).Where(Fingerprint(existingText).Contains);
+        var shared = Fingerprint(a).Where(Fingerprint(b).Contains);
         return shared.Any(w => !Generic.Contains(w));
     }
+
+    public static bool IsDuplicate(string? newText, DateTime newDue, string? existingText, DateTime existingDue)
+        => (newDue - existingDue).Duration() <= SameWindow
+           && NamesTheSameThing(newText, existingText);
 }

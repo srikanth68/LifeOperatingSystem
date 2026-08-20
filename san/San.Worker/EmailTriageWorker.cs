@@ -142,6 +142,13 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
             logger.LogInformation("Email triage reply ({Length} chars): {Preview}",
                 reply.Length, reply.Length > 500 ? reply[..500] + "…" : reply);
 
+            // Closing runs BEFORE raising, deliberately. If one email confirms a payment
+            // and another chases it, the reminder should end the run completed rather
+            // than recreated — and DuplicateGuard only stops a second copy of something
+            // still open, so the order is what makes the two agree.
+            await SettlementCloser.ApplyAsync(
+                Settlements.Parse(reply), repo, telegram, moduleContext, logger, ct);
+
             // Keyed findings through the shared ledger — same key namespace as the
             // system audit, so a bill both of them notice is reported once. Also
             // records to NorthStar so San's time context surfaces it in chat.
