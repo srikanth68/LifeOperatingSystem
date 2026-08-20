@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using San.Application;
 using San.Application.DTOs;
 using San.Application.Interfaces;
 using San.Domain.Entities;
@@ -6,7 +7,7 @@ using San.Domain.Entities;
 namespace San.API.Controllers;
 
 [ApiController, Route("api/alerts")]
-public class AlertsController(ISanRepository repo) : ControllerBase
+public class AlertsController(ISanRepository repo, ILogger<AlertsController> logger) : ControllerBase
 {
     private static readonly string[] ValidTypes = ["spending_threshold", "goal_deadline", "document_expiry", "custom"];
 
@@ -20,6 +21,24 @@ public class AlertsController(ISanRepository repo) : ControllerBase
         if (!ValidTypes.Contains(req.Type)) return BadRequest($"Type must be one of: {string.Join(", ", ValidTypes)}");
         if (req.Type == "spending_threshold" && req.ThresholdValue is null) return BadRequest("ThresholdValue is required for spending_threshold alerts.");
         if (req.Type != "spending_threshold" && req.TriggerAt is null) return BadRequest("TriggerAt is required for time-based alerts.");
+
+        // Same guard as reminders, same reason: the workers re-notice the same bill on
+        // every run and ask for an alert about it in fresh words each time. Title and
+        // description are compared together, because the model sometimes puts the
+        // identifying detail in one and sometimes in the other.
+        if (req.TriggerAt is { } when)
+        {
+            var live = (await repo.GetAlertsAsync()).Where(a => a.Active && a.TriggerAt is not null);
+            var dupe = live.FirstOrDefault(a => DuplicateGuard.IsDuplicate(
+                $"{req.Title} {req.Description}".Trim(), when,
+                $"{a.Title} {a.Description}".Trim(), a.TriggerAt!.Value));
+            if (dupe is not null)
+            {
+                logger.LogInformation("Alert \"{New}\" already covered by \"{Existing}\" — not creating a second.",
+                    req.Title, dupe.Title);
+                return Ok(ToResult(dupe));
+            }
+        }
 
         var alert = new Alert
         {

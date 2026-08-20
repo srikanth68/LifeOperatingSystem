@@ -21,8 +21,17 @@ namespace San.Worker;
 // at the same instant and stall an interactive chat between them.
 public class SystemAuditWorker(IServiceProvider services, ILogger<SystemAuditWorker> logger) : BackgroundService
 {
+    // Two hours, not fifteen minutes.
+    //
+    // The audit re-reads the same module snapshot each run, so at a quarter-hour cadence
+    // it re-notices the same unpaid bill 96 times a day. The ledger stops most of those
+    // becoming messages, but every run still costs a full model pass, and any reminder
+    // the model decides to create is a notification the ledger never sees. Slowing the
+    // producer is the cheapest half of the fix; DuplicateGuard is the other half.
+    //
+    // Nothing this worker looks at changes on a fifteen-minute timescale anyway.
     private static readonly TimeSpan Interval = TimeSpan.FromMinutes(
-        int.TryParse(Environment.GetEnvironmentVariable("AUDIT_INTERVAL_MINUTES"), out var m) && m > 0 ? m : 15);
+        int.TryParse(Environment.GetEnvironmentVariable("AUDIT_INTERVAL_MINUTES"), out var m) && m > 0 ? m : 120);
 
     private static readonly TimeSpan StartupDelay = TimeSpan.FromMinutes(7);
 

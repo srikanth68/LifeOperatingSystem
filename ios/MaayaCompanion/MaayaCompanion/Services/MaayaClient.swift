@@ -108,6 +108,16 @@ final class MaayaClient {
                           allowRefresh: true)
     }
 
+    // Dismissing an alert deletes it. There is no "seen" state server-side, and an
+    // alert you have dealt with should stop occupying San's context block as well as
+    // the app's list -- deleting achieves both, and the underlying obligation lives in
+    // whichever module actually owns it.
+    @discardableResult
+    func dismissAlert(_ id: String) async throws -> Data {
+        try await perform(ModulePort.san, "/api/alerts/\(id)", method: "DELETE",
+                          httpBody: nil, allowRefresh: true)
+    }
+
     // MARK: - San chat
 
     func chatHistory() async throws -> [ChatMessage] {
