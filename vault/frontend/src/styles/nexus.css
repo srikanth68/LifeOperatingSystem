@@ -144,8 +144,25 @@
   border: 1px solid var(--border2);
   border-radius: var(--r-md);
   overflow-y: auto;
-  padding: 2rem 2.25rem 3rem;
+  /* Padding scales with the window: 2.25rem of gutter on each side is right on a
+     desktop and is pure waste on a laptop, where it was eating ~72px of the width
+     the two columns needed. */
+  padding: clamp(1.1rem, 1.6vw, 2rem) clamp(1.1rem, 1.8vw, 2.25rem) 3rem;
   animation: nexus-slide 0.18s ease-out;
+
+  /* THE PANEL IS THE THING THAT IS TOO NARROW, SO THE PANEL IS WHAT GETS ASKED.
+     Every breakpoint below used to be @media, i.e. keyed to the WINDOW -- but the
+     window is never what runs out of room here. The panel is min(1480px, 100%)
+     inside 2vw of overlay padding, so its content box is always meaningfully
+     narrower than the viewport the media query was measuring, and at common laptop
+     widths the two columns were being kept side by side in a frame that could no
+     longer hold them. Hence "too zoomed in": nothing was scaled up, the container
+     had shrunk out from under content sized for a wider one.
+
+     Container queries ask the frame directly, which also makes this correct at any
+     browser zoom without touching a single font size app-wide. */
+  container-type: inline-size;
+  container-name: nexuspanel;
 }
 @keyframes nexus-slide { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
@@ -189,7 +206,11 @@
 /* 1280px, not 1100 — between those widths the two columns technically fit but the
    ticket's six numeric cells and the thesis both end up cramped. Browser zoom
    shrinks the CSS viewport, so this is also what a zoomed-in window lands on. */
-@media (max-width: 1280px) {
+/* 1230px of PANEL, which is what a 1280px window used to leave after the overlay
+   gutter -- same effective trigger point, now measured on the thing that matters.
+   Between roughly 900 and 1230 the columns still fit but want less air, so the gap
+   tightens before the layout gives up and stacks. */
+@container nexuspanel (max-width: 1230px) {
   .nexus-cols { grid-template-columns: minmax(0, 1fr); gap: 1.75rem; }
   .nexus-col-side { position: static; }
   .nexus-hero { gap: 1.5rem; }
@@ -197,10 +218,9 @@
 }
 /* Panel padding and symbol size are already handled by the max-width:720px rule
    further down — only the pieces that rule doesn't cover belong here. */
-@media (max-width: 640px) {
+@container nexuspanel (max-width: 620px) {
   .nexus-hero { gap: 1rem; }
   .nexus-hero-stats { gap: 1.25rem; }
-  .nexus-price-big { font-size: 2rem; }
   .nexus-ticket-fields { grid-template-columns: repeat(2, 1fr); }
 }
 
@@ -265,6 +285,11 @@
     border-radius: 0;
     padding: 0;
     animation: none;
+    /* Containment off for paper: the print rules below lay this out as one flowing
+       document, and size containment has no business interacting with how the
+       browser decides to break pages. The @container rules stop applying with it,
+       which is correct -- print has its own single-column layout already. */
+    container-type: normal;
   }
   /* Controls aren't part of the document. */
   .nexus-panel-actions { display: none !important; }
@@ -289,7 +314,16 @@
 }
 
 .nexus-panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1.25rem; }
-.nexus-panel-sym { font-size: 2.9rem; font-weight: 800; font-family: 'Space Grotesk', sans-serif; line-height: 1; letter-spacing: -0.01em; }
+/* cqi is 1% of the PANEL's inline size, so the ticker shrinks with the frame rather
+   than staying 46px in a box that no longer has room for it. The ceiling is also
+   lower than the old fixed 2.9rem: at every laptop width the clamp was pinned to its
+   maximum anyway, which is precisely the "too zoomed in" complaint -- hero type sized
+   for a display, in a frame the size of a window. */
+.nexus-panel-sym {
+  font-size: clamp(1.4rem, 3cqi, 2.3rem);
+  font-weight: 800; font-family: 'Space Grotesk', sans-serif;
+  line-height: 1; letter-spacing: -0.01em;
+}
 .nexus-panel-co { color: var(--text3); font-size: 0.95rem; }
 /* The verdict is the single most important thing on this screen — tinted fill
    and a larger scale so it reads before anything else. */
@@ -313,7 +347,7 @@
   margin-bottom: 1.25rem;
 }
 .nexus-price-row { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.75rem; }
-.nexus-price-big { font-size: 2.6rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+.nexus-price-big { font-size: clamp(1.5rem, 2.8cqi, 2.1rem); font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
 .nexus-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px,1fr)); gap: 1px; background: var(--border); border-radius: 6px; overflow: hidden; margin-top: 0.9rem; }
 /* In the hero these are bare stacked figures, not boxed cells — the panel border
    already separates them and the extra chrome was adding clutter. */
@@ -416,7 +450,9 @@
 
 .nexus-source-line { font-size: 0.82rem; color: var(--text3); font-family: 'Space Grotesk', sans-serif; margin-top: 1.5rem; padding-top: 0.9rem; border-top: 1px solid var(--border); }
 
+/* Panel padding is a frame concern, so it stays keyed to the window. The symbol
+   size that used to live here is now handled by the clamp above, which covers
+   every width instead of one threshold. */
 @media (max-width: 720px) {
   .nexus-panel { padding: 1.25rem 1.1rem 2.5rem; }
-  .nexus-panel-sym { font-size: 1.6rem; }
 }
