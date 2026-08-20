@@ -81,8 +81,14 @@ public class NotificationWorker(IServiceProvider services, ILogger<NotificationW
                 else if (a.TriggerAt is { } triggerAt && triggerAt <= now && a.TriggeredAt is null)
                 {
                     await telegram.SendAsync($"⚠️ {a.Title}: {a.Description}", ct);
-                    await repo.UpdateAlertAsync(a.Id, x => x.TriggeredAt = now);
-                    logger.LogInformation("Sent time-based alert: {title}", a.Title);
+                    // A one-shot alert has finished its job once it fires, so it stands
+                    // down. Leaving it Active kept every alert that had ever gone off in
+                    // the "Active alerts" line of San's context block and in the app --
+                    // so San would go on mentioning a bill it had already told you about
+                    // days earlier, and the list only ever grew. Spending thresholds are
+                    // the exception above: they re-arm, so they must stay active.
+                    await repo.UpdateAlertAsync(a.Id, x => { x.TriggeredAt = now; x.Active = false; });
+                    logger.LogInformation("Sent time-based alert and stood it down: {title}", a.Title);
                 }
             }
         }

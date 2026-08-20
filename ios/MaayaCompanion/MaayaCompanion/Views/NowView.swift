@@ -99,6 +99,15 @@ struct NowView: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
+                            // An alert you have dealt with has to be dismissable, or the
+                            // list only ever grows and the whole screen becomes something
+                            // to scroll past.
+                            .swipeActions(edge: .trailing) {
+                                Button("Dismiss", role: .destructive) {
+                                    Task { await run(id: al.id) { try await client.dismissAlert(al.id) } }
+                                }
+                            }
+                            .opacity(busy.contains(al.id) ? 0.5 : 1)
                         }
                     }
                 }
