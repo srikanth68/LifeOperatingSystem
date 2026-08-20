@@ -35,6 +35,7 @@ public static class VoiceTools
         "reminder_create",    // the most natural thing to say out loud
         "workout_log",        // logging a session by voice beats typing it
         "maaya_status",       // "is everything up?"
+        "journal_add",        // speaking the day out loud is the whole point of a voice journal
     ];
 
     // VOICE_TOOLS accepts a comma-separated list, "all" to keep the whole catalogue, or

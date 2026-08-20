@@ -44,6 +44,25 @@ public sealed class MemoryTools(ModuleGateway gw)
     [Description("All profile key-value facts. For \"what do you know about me\", or to read a setting before acting.")]
     public Task<string> FactsList() => gw.GetAsync("northstar", "/api/facts");
 
+    // The user's own daily log. Kept out of memory_save on purpose: memories are
+    // relevance-ranked into San's context on every turn, and a diary retrieved by
+    // accident during a reminder request is how the model learns to answer with prose
+    // instead of a tool call.
+    [McpServerTool(Name = "journal_add")]
+    [Description("Append to the user's daily journal. USE THIS when they are recounting their day, thinking out loud, or say to log/journal something - not memory_save, which is for durable facts and is read back on every turn. Entries append, so several a day is normal. text* · day yyyy-MM-dd (defaults to today)")]
+    public Task<string> JournalAdd(
+        string text,
+        string? day = null) =>
+        gw.SendAsync("northstar", HttpMethod.Post, "/api/journal",
+            new { text, day, source = "san" });
+
+    [McpServerTool(Name = "journal_read")]
+    [Description("Read back the daily journal, newest first. USE THIS for 'what did I do last week', 'what was I thinking about on Tuesday', or before any review or reflection. days (14) · limit (50)")]
+    public Task<string> JournalRead(
+        int days = 14,
+        int limit = 50) =>
+        gw.GetAsync("northstar", $"/api/journal?days={days}&limit={limit}");
+
     [McpServerTool(Name = "context_brief")]
     [Description("Full cross-module briefing: user facts, module snapshots + health, pending actions, active insights, recent knowledge. Ideal session-start call.")]
     public Task<string> ContextBrief() => gw.GetAsync("northstar", "/api/context");

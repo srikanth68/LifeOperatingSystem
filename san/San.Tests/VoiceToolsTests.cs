@@ -12,7 +12,7 @@ public class VoiceToolsTests
 
     private static readonly List<ToolDefinition> Full =
         Catalogue("vitara_health", "memory_recent", "memory_recall", "agenda_now", "maaya_search",
-                  "reminder_create", "workout_log", "maaya_status",
+                  "reminder_create", "workout_log", "maaya_status", "journal_add",
                   "vault_finances", "property_task_create", "person_create", "food_log", "nexus_market");
 
     [Fact]
@@ -58,7 +58,8 @@ public class VoiceToolsTests
             "aasthi_properties","action_add","action_complete","actions_pending","agenda_now",
             "alert_create","alert_delete","alerts_list","calendar_event_create","calendar_events_list",
             "context_brief","fact_set","facts_list","food_log","goal_create","goal_progress_set",
-            "goals_list","habit_checkin","habit_create","karma_habits","maaya_search","maaya_status",
+            "goals_list","habit_checkin","habit_create","journal_add","journal_read","karma_habits",
+            "maaya_search","maaya_status",
             "memory_recall","memory_recent","memory_save","nexus_alerts","nexus_market","northstar_sync",
             "person_create","person_delete","person_update","property_financial_add","property_task_create",
             "reminder_complete","reminder_create","reminder_delete","reminder_update","reminders_list",
