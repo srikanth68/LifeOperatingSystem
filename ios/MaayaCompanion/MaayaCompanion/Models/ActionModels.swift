@@ -25,3 +25,18 @@ struct UpdateActionBody: Codable {
     let status: String
     let resolvedBy: String?
 }
+
+// POST 5600/api/habits/{id}/log — Karma keys by habit + date, so a repeat corrects.
+struct HabitLogBody: Codable {
+    let date: String?
+    let completed: Bool
+    let note: String?
+}
+
+// PUT 5300/api/reminders/{id} — a full replace, not a patch: omitting text blanks it.
+struct ReminderUpsertBody: Codable {
+    let text: String
+    let dueAt: Date
+    let notifyTelegram: Bool
+    let done: Bool
+}
