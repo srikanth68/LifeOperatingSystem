@@ -98,6 +98,16 @@ public sealed class ModuleTools(ModuleGateway gw)
     [Description("Real-estate portfolio: properties, values, profit. For \"my properties\", \"how are rentals doing\". Specific repair/cost/vendor -> maaya_search.")]
     public Task<string> AasthiProperties() => gw.GetAsync("aasthi", "/api/properties");
 
+    [McpServerTool(Name = "property_rent_status")]
+    [Description("Rent and recurring bills per property this month: expected vs received, and what is late. For \"did rent come in\", \"is the mortgage paid\", \"what is overdue on the rentals\".")]
+    public Task<string> PropertyRentStatus() => gw.GetAsync("aasthi", "/api/recurring-charges/status");
+
+    [McpServerTool(Name = "property_unreceipted")]
+    [Description("Confirmed one-off property spending this year with no receipt attached. For \"what am I missing receipts for\", \"tax paperwork\". Recurring bills are excluded - the bank record covers those. year")]
+    public Task<string> PropertyUnreceipted(
+        [Description("Tax year. Omit for the current one.")] int? year = null)
+        => gw.GetAsync("aasthi", $"/api/ledger/unreceipted{(year is > 0 ? $"?year={year}" : "")}");
+
     [McpServerTool(Name = "sutra_documents")]
     [Description("Document vault. No query -> stats (counts by category, expiring soon). With query -> matching docs. query")]
     public Task<string> SutraDocuments(

@@ -350,3 +350,13 @@
   display: flex; flex-direction: column; gap: 0.5rem;
   margin-top: 0.75rem; padding-top: 0.875rem; border-top: 1px solid var(--border);
 }
+
+/* Receipt attach: a file input styled as a button. The native control cannot be
+   restyled, so it is hidden inside the label and the label carries the appearance. */
+.led-upload {
+  padding: 0.25rem 0.55rem; border-radius: var(--r-sm);
+  border: 1px solid var(--border2); background: transparent;
+  color: var(--text2); font-size: 0.7rem; cursor: pointer; white-space: nowrap;
+}
+.led-upload:hover { border-color: var(--aasthi); color: var(--aasthi); }
+.led-upload input { display: none; }

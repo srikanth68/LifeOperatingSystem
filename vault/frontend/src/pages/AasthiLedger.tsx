@@ -331,6 +331,85 @@ function Charges({ properties }: { properties: Property[] | undefined }) {
   );
 }
 
+/* ── Confirmed spending with no paperwork behind it ── */
+function MissingReceipts({ properties }: { properties: Property[] | undefined }) {
+  const qClient = useQueryClient();
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const year = new Date().getFullYear();
+  const missingQ = useQuery<Entry[]>({
+    queryKey: ['unreceipted', year],
+    queryFn: () => get(`${API}/api/ledger/unreceipted?year=${year}`),
+  });
+
+  // Two steps on purpose. The file goes through the ordinary property-document
+  // upload, so a receipt is a normal document -- searchable, listed under Documents,
+  // stored the same way as a deed. This only records which one belongs to the expense.
+  const attach = async (entry: Entry, file: File) => {
+    setBusy(entry.id);
+    try {
+      const fd = new FormData();
+      fd.append('files', file);
+      fd.append('category', 'receipt');
+
+      const uploaded = await fetch(`${API}/api/properties/${entry.propertyId}/documents`, {
+        method: 'POST', headers: authHeaders(), body: fd,
+      }).then(r => { if (!r.ok) throw new Error(r.status.toString()); return r.json(); });
+
+      const documentId = uploaded?.[0]?.id;
+      if (!documentId) throw new Error('upload returned no document');
+
+      await send(`${API}/api/ledger/${entry.id}/receipt`, 'POST', { documentId });
+      qClient.invalidateQueries({ queryKey: ['unreceipted'] });
+    } catch {
+      // Left deliberately quiet in the UI: the row simply stays in the list, which is
+      // the honest signal that the receipt is still missing.
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const missing = missingQ.data ?? [];
+  if (missingQ.isLoading || missing.length === 0) return null;
+
+  const total = missing.reduce((sum, e) => sum + e.amount, 0);
+
+  return (
+    <div className="led-section">
+      <div className="aasthi-section-label">
+        No receipt yet <span className="led-badge">{missing.length}</span>
+      </div>
+      <div className="led-empty" style={{ marginBottom: '0.5rem' }}>
+        {fmtMoney(total)} of one-off {year} spending you'd be claiming without paperwork.
+        Recurring bills aren't listed — the bank record and the annual statement cover those.
+      </div>
+
+      <div className="led-list">
+        {missing.map(e => (
+          <div key={e.id} className="led-row">
+            <div className="led-row-main">
+              <div className="led-desc">{e.notes || e.category}</div>
+              <div className="led-meta">
+                {fmtDate(e.date)} <span className="led-dim">· {addressOf(properties, e.propertyId)}</span>
+              </div>
+            </div>
+            <span className="led-expected">{fmtMoney(e.amount)}</span>
+            <label className="led-upload">
+              {busy === e.id ? 'Saving…' : 'Attach receipt'}
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                disabled={busy === e.id}
+                onChange={ev => { const f = ev.target.files?.[0]; if (f) void attach(e, f); ev.target.value = ''; }}
+              />
+            </label>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function LedgerPage() {
   const propertiesQ = useQuery<Property[]>({ queryKey: ['properties'], queryFn: () => get(`${API}/api/properties`) });
 
@@ -347,6 +426,7 @@ export default function LedgerPage() {
     <div style={style}>
       <ReviewQueue properties={propertiesQ.data} />
       <RentStatus properties={propertiesQ.data} />
+      <MissingReceipts properties={propertiesQ.data} />
       <Charges properties={propertiesQ.data} />
     </div>
   );

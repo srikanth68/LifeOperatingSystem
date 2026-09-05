@@ -287,6 +287,74 @@ public class LedgerController(IAasthiRepository repo, IVaultTransactions vault, 
         return Ok(ToResult(entry));
     }
 
+    // Attach a receipt to one expense.
+    //
+    // The file itself goes through the ordinary property-document upload, and this
+    // only records which document belongs to which entry. Two calls instead of one,
+    // deliberately: a receipt uploaded this way is a normal PropertyDocument, so it
+    // is searchable, appears under Documents, and rides the same Sutra-or-local
+    // storage path as everything else. A second upload route living here would have
+    // been a second place for that to go wrong.
+    //
+    // PropertyDocument already hangs off the property, which is fine for a deed and
+    // useless in an audit: "show me the receipt for that $340" needs the document
+    // attached to the entry, which is what this adds.
+    [HttpPost("{id:guid}/receipt")]
+    public async Task<IActionResult> AttachReceipt(Guid id, [FromBody] ReceiptRequest req)
+    {
+        var entry = await repo.GetFinancialAsync(id);
+        if (entry is null) return NotFound(new { error = "No such ledger entry." });
+
+        // The document has to belong to the same property as the expense. Without this
+        // a receipt could be attached across properties, which would look right in the
+        // UI and be wrong in the only place it matters.
+        var doc = await repo.GetDocumentAsync(entry.PropertyId, req.DocumentId);
+        if (doc is null) return BadRequest(new { error = "That document does not belong to this entry's property." });
+
+        entry.ReceiptDocumentId = req.DocumentId;
+        await repo.UpdateFinancialAsync(entry);
+
+        logger.LogInformation("Receipt {Doc} attached to entry {Entry}.", req.DocumentId, id);
+        return Ok(ToResult(entry));
+    }
+
+    // Detaches only. The document is left alone: it may be a multi-page statement
+    // covering several entries, and deleting a file because one link was wrong would
+    // destroy evidence to fix a typo.
+    [HttpDelete("{id:guid}/receipt")]
+    public async Task<IActionResult> DetachReceipt(Guid id)
+    {
+        var entry = await repo.GetFinancialAsync(id);
+        if (entry is null) return NotFound();
+
+        entry.ReceiptDocumentId = null;
+        await repo.UpdateFinancialAsync(entry);
+        return NoContent();
+    }
+
+    // Everything with a receipt still owed against it, for the tax pass at year end.
+    //
+    // Deliberately lists what is MISSING rather than what is present: at year end the
+    // useful question is not "what do I have" but "what am I about to claim without
+    // evidence for it".
+    [HttpGet("unreceipted")]
+    public async Task<IActionResult> Unreceipted([FromQuery] int year = 0)
+    {
+        var y = year > 0 ? year : DateTime.UtcNow.Year;
+        var all = await repo.GetFinancialsAsync(status: "confirmed");
+
+        return Ok(all
+            .Where(e => e.Date.Year == y
+                     && e.ReceiptDocumentId is null
+                     && !e.Type.Equals("income", StringComparison.OrdinalIgnoreCase)
+                     // Recurring bills are evidenced by the bank record and the annual
+                     // statement. It is the one-off spending -- a contractor, a parts
+                     // run -- that needs a piece of paper behind it.
+                     && e.RecurringChargeId is null)
+            .OrderByDescending(e => e.Amount)
+            .Select(ToResult));
+    }
+
     private static object ToResult(PropertyFinancialEntry e) => new
     {
         e.Id,
@@ -313,6 +381,8 @@ public record AssignRequest(
     string? Type, string? Category, string? TaxTreatment, string? Notes);
 
 public record ConfirmRequest(Guid? PropertyId, string? Category, string? TaxTreatment, decimal? Amount);
+
+public record ReceiptRequest(Guid DocumentId);
 
 public record ProposeRequest(
     string VaultTransactionId, Guid PropertyId, decimal Amount, string Date,
