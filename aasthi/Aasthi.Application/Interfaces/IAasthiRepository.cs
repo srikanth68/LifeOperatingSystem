@@ -26,9 +26,23 @@ public interface IAasthiRepository
     Task<bool> DeleteTaskAsync(Guid taskId);
 
     // Financials
-    Task<List<PropertyFinancialEntry>> GetFinancialsAsync(Guid? propertyId = null);
+    Task<List<PropertyFinancialEntry>> GetFinancialsAsync(Guid? propertyId = null, string? status = null);
+    Task<PropertyFinancialEntry?> GetFinancialAsync(Guid entryId);
     Task<PropertyFinancialEntry> AddFinancialAsync(PropertyFinancialEntry entry);
+    Task<bool> UpdateFinancialAsync(PropertyFinancialEntry entry);
     Task<bool> DeleteFinancialAsync(Guid entryId);
+
+    // Which of these Vault transactions are already accounted for -- matched, awaiting
+    // confirmation, or explicitly rejected. The daily pass asks this before proposing
+    // anything, so a transaction the user has already dealt with is never raised twice.
+    Task<HashSet<string>> GetLinkedTransactionIdsAsync(IEnumerable<string> vaultTransactionIds);
+
+    // Recurring charges
+    Task<List<RecurringCharge>> GetRecurringChargesAsync(Guid? propertyId = null, bool activeOnly = false);
+    Task<RecurringCharge?> GetRecurringChargeAsync(Guid id);
+    Task<RecurringCharge> AddRecurringChargeAsync(RecurringCharge charge);
+    Task<bool> UpdateRecurringChargeAsync(RecurringCharge charge);
+    Task<bool> DeleteRecurringChargeAsync(Guid id);
 
     // Maintenance
     Task<List<MaintenanceLog>> GetMaintenanceAsync(Guid? propertyId = null);

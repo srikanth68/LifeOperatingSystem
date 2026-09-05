@@ -35,6 +35,7 @@ public class AasthiDbContext(DbContextOptions<AasthiDbContext> options) : DbCont
     public DbSet<PropertyTask> Tasks => Set<PropertyTask>();
     public DbSet<PropertyFinancialEntry> FinancialEntries => Set<PropertyFinancialEntry>();
     public DbSet<MaintenanceLog> MaintenanceLogs => Set<MaintenanceLog>();
+    public DbSet<RecurringCharge> RecurringCharges => Set<RecurringCharge>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -78,6 +79,24 @@ public class AasthiDbContext(DbContextOptions<AasthiDbContext> options) : DbCont
                 s => DateOnly.ParseExact(s, DateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None));
             f.HasOne(x => x.Property).WithMany().HasForeignKey(x => x.PropertyId).OnDelete(DeleteBehavior.Cascade);
             f.HasIndex(x => new { x.PropertyId, x.Type });
+            // The daily pass asks "have I already seen this transaction?" for every row
+            // Vault synced. Without this it is a table scan per transaction per day.
+            f.HasIndex(x => x.VaultTransactionId);
+            f.HasIndex(x => x.Status);
+        });
+
+        b.Entity<RecurringCharge>(r =>
+        {
+            r.HasKey(x => x.Id);
+            r.Property(x => x.Amount).HasColumnType("decimal(18,2)");
+            r.Property(x => x.StartDate).HasConversion(
+                d => d.ToString(DateFormat, CultureInfo.InvariantCulture),
+                s => DateOnly.ParseExact(s, DateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None));
+            r.Property(x => x.EndDate).HasConversion(
+                d => d.HasValue ? d.Value.ToString(DateFormat, CultureInfo.InvariantCulture) : null,
+                s => s == null ? null : DateOnly.ParseExact(s, DateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None));
+            r.HasOne(x => x.Property).WithMany().HasForeignKey(x => x.PropertyId).OnDelete(DeleteBehavior.Cascade);
+            r.HasIndex(x => new { x.PropertyId, x.Active });
         });
 
         b.Entity<MaintenanceLog>(m =>

@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Aasthi.Domain\Aasthi.Domain.csproj" />
     <ProjectReference Include="..\Aasthi.Application\Aasthi.Application.csproj" />
+    <ProjectReference Include="..\..\shared\Maaya.Auth\Maaya.Auth.csproj" />
   </ItemGroup>
 
   <ItemGroup>

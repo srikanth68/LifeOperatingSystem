@@ -157,11 +157,104 @@ public class AasthiRepository(AasthiDbContext db) : IAasthiRepository
     }
 
     // ── Financials ──
-    public async Task<List<PropertyFinancialEntry>> GetFinancialsAsync(Guid? propertyId = null)
+    public async Task<List<PropertyFinancialEntry>> GetFinancialsAsync(Guid? propertyId = null, string? status = null)
     {
         var q = db.FinancialEntries.AsQueryable();
         if (propertyId.HasValue) q = q.Where(f => f.PropertyId == propertyId.Value);
+        // Rejected rows are tombstones, not history: they exist so the daily pass stops
+        // re-proposing a transaction, and showing them in the ledger would be noise. A
+        // caller that genuinely wants them asks for them by name.
+        if (!string.IsNullOrWhiteSpace(status)) q = q.Where(f => f.Status == status);
+        else q = q.Where(f => f.Status != "rejected");
         return await q.OrderByDescending(f => f.Date).ThenByDescending(f => f.CreatedAt).ToListAsync();
+    }
+
+    public async Task<PropertyFinancialEntry?> GetFinancialAsync(Guid entryId) =>
+        await db.FinancialEntries.FirstOrDefaultAsync(f => f.Id == entryId);
+
+    public async Task<bool> UpdateFinancialAsync(PropertyFinancialEntry entry)
+    {
+        var existing = await db.FinancialEntries.FirstOrDefaultAsync(f => f.Id == entry.Id);
+        if (existing is null) return false;
+
+        existing.PropertyId = entry.PropertyId;
+        existing.Type = entry.Type;
+        existing.Category = entry.Category;
+        existing.Amount = entry.Amount;
+        existing.Date = entry.Date;
+        existing.Notes = entry.Notes;
+        existing.VaultTransactionId = entry.VaultTransactionId;
+        existing.Origin = entry.Origin;
+        existing.Status = entry.Status;
+        existing.RecurringChargeId = entry.RecurringChargeId;
+        existing.MatchConfidence = entry.MatchConfidence;
+        existing.TaxTreatment = entry.TaxTreatment;
+        existing.ReceiptDocumentId = entry.ReceiptDocumentId;
+        existing.ConfirmedAt = entry.ConfirmedAt;
+
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<HashSet<string>> GetLinkedTransactionIdsAsync(IEnumerable<string> vaultTransactionIds)
+    {
+        var ids = vaultTransactionIds.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
+        if (ids.Count == 0) return [];
+
+        var found = await db.FinancialEntries
+            .Where(f => f.VaultTransactionId != null && ids.Contains(f.VaultTransactionId))
+            .Select(f => f.VaultTransactionId!)
+            .ToListAsync();
+
+        return found.ToHashSet(StringComparer.Ordinal);
+    }
+
+    public async Task<List<RecurringCharge>> GetRecurringChargesAsync(Guid? propertyId = null, bool activeOnly = false)
+    {
+        var q = db.RecurringCharges.AsQueryable();
+        if (propertyId.HasValue) q = q.Where(c => c.PropertyId == propertyId.Value);
+        if (activeOnly) q = q.Where(c => c.Active);
+        return await q.OrderBy(c => c.Category).ThenBy(c => c.DueDay).ToListAsync();
+    }
+
+    public async Task<RecurringCharge?> GetRecurringChargeAsync(Guid id) =>
+        await db.RecurringCharges.FirstOrDefaultAsync(c => c.Id == id);
+
+    public async Task<RecurringCharge> AddRecurringChargeAsync(RecurringCharge charge)
+    {
+        db.RecurringCharges.Add(charge);
+        await db.SaveChangesAsync();
+        return charge;
+    }
+
+    public async Task<bool> UpdateRecurringChargeAsync(RecurringCharge charge)
+    {
+        var existing = await db.RecurringCharges.FirstOrDefaultAsync(c => c.Id == charge.Id);
+        if (existing is null) return false;
+
+        existing.PropertyId = charge.PropertyId;
+        existing.Direction = charge.Direction;
+        existing.Category = charge.Category;
+        existing.Amount = charge.Amount;
+        existing.Frequency = charge.Frequency;
+        existing.DueDay = charge.DueDay;
+        existing.StartDate = charge.StartDate;
+        existing.EndDate = charge.EndDate;
+        existing.MatchHint = charge.MatchHint;
+        existing.Active = charge.Active;
+        existing.Notes = charge.Notes;
+
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> DeleteRecurringChargeAsync(Guid id)
+    {
+        var existing = await db.RecurringCharges.FirstOrDefaultAsync(c => c.Id == id);
+        if (existing is null) return false;
+        db.RecurringCharges.Remove(existing);
+        await db.SaveChangesAsync();
+        return true;
     }
 
     public async Task<PropertyFinancialEntry> AddFinancialAsync(PropertyFinancialEntry entry)
