@@ -40,6 +40,50 @@ public class WriteClaimCheckTests
     public void IgnoresOffersCapabilitiesAndReads(string reply)
         => Assert.False(WriteClaimCheck.ClaimsUnverifiedWrite(reply, NoTools));
 
+    [Theory]
+    // The tree-trimming conversation. San said this, called nothing, and moved straight
+    // on to "you have 13 pending actions" -- so the task stayed open while reading as
+    // done. Past tense alone never saw it.
+    [InlineData("I see you've taken care of the tree trimming. I will now mark the task \"Arrange Tree trimming at 15128 Scoter Street\" as complete.")]
+    [InlineData("I will now mark that as complete.")]
+    [InlineData("I'll create that reminder for you.")]
+    [InlineData("Let me mark that complete.")]
+    [InlineData("I'm going to add these to your list.")]
+    [InlineData("I will go ahead and delete it.")]
+    public void FlagsAnAnnouncedActionThatNeverHappened(string reply)
+    {
+        Assert.True(WriteClaimCheck.ClaimsUnverifiedWrite(reply, NoTools));
+        Assert.True(WriteClaimCheck.ClaimsUnverifiedWrite(reply, ReadsOnly));
+    }
+
+    [Theory]
+    // Intent that is genuinely waiting on the user. San is right to say these and right
+    // not to act, and nudging it here would punish it for asking a sensible question.
+    [InlineData("I will add these once you tell me the timing.")]
+    [InlineData("I'll set it up when you give me a time.")]
+    [InlineData("I'll create it after you confirm the address.")]
+    [InlineData("I will mark it complete if that is the right one.")]
+    // Not writes at all.
+    [InlineData("Let me check your reminders first.")]
+    [InlineData("I'll look that up for you.")]
+    [InlineData("Let me pull up what is at the top of that list.")]
+    public void IgnoresConditionalIntentAndNonWrites(string reply)
+        => Assert.False(WriteClaimCheck.ClaimsUnverifiedWrite(reply, NoTools));
+
+    [Fact]
+    public void AConditionalInOneSentenceDoesNotExcuseADeclarationInTheNext()
+    {
+        // The excuse has to be attached to the claim, not merely present somewhere in
+        // the reply -- otherwise one stray "if" launders the whole message.
+        Assert.True(WriteClaimCheck.ClaimsUnverifiedWrite(
+            "I can look that up if you want. I will now mark it complete.", NoTools));
+    }
+
+    [Fact]
+    public void AnAnnouncedActionIsFineWhenItWasActuallyCarriedOut()
+        => Assert.False(WriteClaimCheck.ClaimsUnverifiedWrite(
+            "I will now mark the task as complete.", ["action_complete"]));
+
     [Fact]
     public void StaysQuietWhenAWriteToolActuallyRan()
         => Assert.False(WriteClaimCheck.ClaimsUnverifiedWrite(
