@@ -184,6 +184,85 @@ public class LedgerController(IAasthiRepository repo, IVaultTransactions vault, 
         return Ok(new { matched, pending, from = start.ToString("yyyy-MM-dd"), to = end.ToString("yyyy-MM-dd") });
     }
 
+    // Bank transactions nothing has claimed yet.
+    //
+    // Everything unlinked is returned rather than a pre-filtered guess at what looks
+    // property-related. There is no rule in C# that can tell a hardware-store run for
+    // a rental from one for the user's own kitchen -- that judgement needs to know
+    // whose life this is, which is exactly the part San is for. Vault syncs once a day
+    // and a day is a handful of rows, so there is nothing to save by guessing here.
+    [HttpGet("unassigned")]
+    public async Task<IActionResult> Unassigned([FromQuery] int days = 7, CancellationToken ct = default)
+    {
+        var to = DateOnly.FromDateTime(DateTime.UtcNow);
+        var from = to.AddDays(-Math.Clamp(days, 1, 120));
+
+        var transactions = await vault.GetAsync(from, to, ct: ct);
+        if (transactions.Count == 0) return Ok(Array.Empty<object>());
+
+        // Linked covers all three ways a transaction leaves this list: matched to a
+        // recurring charge, assigned by hand, or explicitly rejected. Rejections are
+        // the reason tomorrow's pass does not raise the same row again.
+        var linked = await repo.GetLinkedTransactionIdsAsync(transactions.Select(x => x.Id));
+
+        return Ok(transactions
+            .Where(t => !linked.Contains(t.Id))
+            .OrderByDescending(t => t.Date)
+            .Select(t => new
+            {
+                t.Id,
+                date = t.Date.ToString("yyyy-MM-dd"),
+                // Sign is flipped away here: the caller is a language model being asked
+                // "is this a property expense", and "amount 340, outgoing" is far less
+                // likely to be misread than Plaid's positive-means-out convention.
+                amount = t.Magnitude,
+                direction = t.IsMoneyOut ? "out" : "in",
+                t.Description,
+                t.MerchantName,
+            }));
+    }
+
+    // San's daily pass proposes a property for a transaction it recognises. Written as
+    // pending: nothing San decides enters the books until the user agrees.
+    [HttpPost("propose")]
+    public async Task<IActionResult> Propose([FromBody] ProposeRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.VaultTransactionId))
+            return BadRequest(new { error = "vaultTransactionId is required." });
+        if (await repo.GetPropertyAsync(req.PropertyId) is null)
+            return NotFound(new { error = "No such property." });
+        if (!DateOnly.TryParse(req.Date, out var date))
+            return BadRequest(new { error = "date must be YYYY-MM-DD." });
+
+        // Idempotent by transaction. A worker that runs twice, or a model that names
+        // the same transaction twice in one reply, must not produce two proposals --
+        // and it must never overwrite a decision the user has already made by hand.
+        var already = await repo.GetLinkedTransactionIdsAsync([req.VaultTransactionId]);
+        if (already.Count > 0)
+            return Conflict(new { error = "That transaction is already assigned, proposed or rejected." });
+
+        var entry = await repo.AddFinancialAsync(new PropertyFinancialEntry
+        {
+            PropertyId = req.PropertyId,
+            Type = req.Type ?? "expense",
+            Category = req.Category ?? "other",
+            Amount = req.Amount,
+            Date = date,
+            Notes = req.Reason,
+            VaultTransactionId = req.VaultTransactionId,
+            Origin = "san",
+            Status = "pending",
+            // Left for the human. A repair and a capital improvement look identical in
+            // a bank description, and the difference is depreciation -- San guessing it
+            // would be a confident answer to a question it cannot actually see.
+            TaxTreatment = "unclassified",
+        });
+
+        logger.LogInformation("San proposed transaction {Tx} for property {Property} ({Category}).",
+            req.VaultTransactionId, req.PropertyId, entry.Category);
+        return Ok(ToResult(entry));
+    }
+
     private static object ToResult(PropertyFinancialEntry e) => new
     {
         e.Id,
@@ -210,3 +289,7 @@ public record AssignRequest(
     string? Type, string? Category, string? TaxTreatment, string? Notes);
 
 public record ConfirmRequest(Guid? PropertyId, string? Category, string? TaxTreatment, decimal? Amount);
+
+public record ProposeRequest(
+    string VaultTransactionId, Guid PropertyId, decimal Amount, string Date,
+    string? Type, string? Category, string? Reason);
