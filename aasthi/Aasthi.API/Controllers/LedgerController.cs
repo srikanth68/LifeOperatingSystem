@@ -69,6 +69,30 @@ public class LedgerController(IAasthiRepository repo, IVaultTransactions vault, 
         return Ok(all.Where(f => f.VaultTransactionId == vaultTransactionId).Select(ToResult));
     }
 
+    // Every transaction-to-property link, for a client showing a list of transactions.
+    //
+    // Exists so the transaction list can render its property column in one request
+    // rather than asking per row -- a month of transactions would otherwise be a few
+    // hundred calls to draw one screen.
+    [HttpGet("assignments")]
+    public async Task<IActionResult> Assignments()
+    {
+        var all = await repo.GetFinancialsAsync();
+        return Ok(all
+            .Where(f => f.VaultTransactionId is not null)
+            .GroupBy(f => f.VaultTransactionId!)
+            .Select(g => new
+            {
+                vaultTransactionId = g.Key,
+                // A transaction split across two properties has several entries. The
+                // client shows a count rather than pretending there is one owner.
+                entries = g.Select(e => new
+                {
+                    e.Id, e.PropertyId, e.Category, e.Amount, e.Status, e.Origin, e.TaxTreatment,
+                }),
+            }));
+    }
+
     // What San proposed and the user has not yet ruled on.
     [HttpGet("pending")]
     public async Task<IActionResult> Pending()

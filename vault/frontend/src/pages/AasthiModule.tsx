@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { makeModuleQueryClient } from '../services/moduleQuery';
+import LedgerPage from './AasthiLedger';
 import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
 import '../styles/modules.css';
@@ -908,10 +909,11 @@ function MaintenancePage() {
   );
 }
 
-type Page = 'properties' | 'tasks' | 'financials' | 'maintenance';
+type Page = 'properties' | 'tasks' | 'ledger' | 'financials' | 'maintenance';
 const TABS: { id: Page; label: string }[] = [
   { id: 'properties',  label: 'Properties' },
   { id: 'tasks',       label: 'Tasks' },
+  { id: 'ledger',      label: 'Rent & Bills' },
   { id: 'financials',  label: 'Financials' },
   { id: 'maintenance', label: 'Maintenance' },
 ];
@@ -929,6 +931,7 @@ function AasthiInner() {
       </nav>
       {page === 'properties'  && <Properties />}
       {page === 'tasks'       && <TasksPage />}
+      {page === 'ledger'      && <LedgerPage />}
       {page === 'financials'  && <FinancialsPage />}
       {page === 'maintenance' && <MaintenancePage />}
     </div>

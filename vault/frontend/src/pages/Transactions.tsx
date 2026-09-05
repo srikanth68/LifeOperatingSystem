@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { transactionsApi } from '@/services/api';
 import type { Transaction } from '@/types';
+import { usePropertyAssignments, PropertyCell } from '../components/PropertyAssign';
 import '../styles/transactions.css';
 
 // ── Category definitions ──────────────────────────────────────
@@ -177,6 +178,13 @@ export default function Transactions() {
     end:   new Date().toISOString().split('T')[0],
   });
 
+  // Property links come from Aasthi. If Aasthi is unreachable the column simply does
+  // not render -- a sibling module being down must not take the transaction list with
+  // it.
+  const {
+    properties, assignments, available: propsAvailable, refresh: refreshAssignments,
+  } = usePropertyAssignments();
+
   const load = useCallback(async () => {
     try {
       setLoading(true);
@@ -241,6 +249,7 @@ export default function Transactions() {
           <span className="txn-col-account">ACCOUNT</span>
           <span className="txn-col-date">DATE</span>
           <span className="txn-col-cat">CATEGORY</span>
+          {propsAvailable && <span className="txn-col-property">PROPERTY</span>}
           <span className="txn-col-amount">AMOUNT</span>
         </div>
 
@@ -276,6 +285,19 @@ export default function Transactions() {
                 <div className="txn-col-cat">
                   <CategoryBadge txId={t.id} category={t.category} onChange={cat => updateCat(t.id, cat)} />
                 </div>
+                {/* Property — the link lives in Aasthi, not on this transaction */}
+                {propsAvailable && (
+                  <div className="txn-col-property">
+                    <PropertyCell
+                      transactionId={t.id}
+                      amount={t.amount}
+                      transactionDate={t.transactionDate}
+                      entries={assignments[t.id]}
+                      properties={properties}
+                      onAssigned={refreshAssignments}
+                    />
+                  </div>
+                )}
                 {/* Amount */}
                 <div className="txn-amount-cell txn-col-amount">
                   <span className={t.amount > 0 ? 'txn-debit' : 'txn-credit'}>

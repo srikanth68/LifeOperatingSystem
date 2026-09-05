@@ -472,3 +472,45 @@
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
+
+/* ── Property assignment (links live in Aasthi, not on the transaction) ── */
+.txn-col-property { width: 150px; flex-shrink: 0; }
+
+.txn-prop-add {
+  padding: 0.2rem 0.45rem; border-radius: 6px;
+  border: 1px dashed var(--border2, #3a4a63); background: transparent;
+  color: var(--text3, #7a96c0); font-size: 0.7rem; cursor: pointer;
+}
+.txn-prop-add:hover { border-color: var(--aasthi, #d4a843); color: var(--aasthi, #d4a843); }
+
+.txn-prop-tag {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  max-width: 100%; padding: 0.2rem 0.45rem; border-radius: 6px;
+  border: 1px solid var(--border2, #3a4a63); background: transparent;
+  color: var(--text2, #a8bdd8); font-size: 0.7rem; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.txn-prop-tag:hover { border-color: var(--aasthi, #d4a843); }
+
+/* A proposal San made that nobody has agreed to yet reads differently from a link
+   the user made themselves. */
+.txn-prop-pending { border-style: dashed; }
+.txn-prop-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--aasthi, #d4a843); flex-shrink: 0;
+}
+
+.txn-prop-editor { display: flex; flex-direction: column; gap: 0.25rem; }
+.txn-prop-editor select {
+  padding: 0.2rem 0.3rem; font-size: 0.7rem;
+  border: 1px solid var(--border2, #3a4a63); border-radius: 5px;
+  background: var(--bg2, #131c2b); color: var(--text, #e8f0fb);
+}
+.txn-prop-editor-actions { display: flex; gap: 0.25rem; }
+.txn-prop-save, .txn-prop-cancel {
+  flex: 1; padding: 0.2rem 0; border-radius: 5px;
+  font-size: 0.68rem; cursor: pointer; border: 1px solid var(--border2, #3a4a63);
+  background: transparent; color: var(--text2, #a8bdd8);
+}
+.txn-prop-save { border-color: var(--aasthi, #d4a843); color: var(--aasthi, #d4a843); }
+.txn-prop-save:disabled { opacity: 0.4; cursor: default; }

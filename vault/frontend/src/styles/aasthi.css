@@ -268,3 +268,85 @@
 .aasthi-fin-date { font-size: 0.7rem; color: var(--text3); flex-shrink: 0; }
 .aasthi-fin-amount, .aasthi-maint-cost { font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .aasthi-maint-cost { color: var(--text); }
+
+/* ── Ledger: review queue, expected-vs-actual, recurring charges ── */
+
+.led-section { margin-bottom: 1.75rem; }
+
+.led-section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; margin-bottom: 0.5rem;
+}
+.led-section-head .aasthi-section-label { margin-bottom: 0; }
+
+.led-badge {
+  display: inline-block; margin-left: 0.4rem; padding: 0.05rem 0.4rem;
+  border-radius: 999px; background: var(--aasthi); color: #fff;
+  font-size: 0.65rem; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+
+.led-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.led-row {
+  display: flex; align-items: center; gap: 0.875rem;
+  padding: 0.7rem 0.95rem;
+  border: 1px solid var(--border); border-radius: var(--r-md);
+}
+
+/* The review rows carry three selects and two buttons, which will not sit on one
+   line on a narrow panel. Wrapping keeps every control reachable instead of
+   pushing the confirm button off the edge. */
+.led-row-review, .led-row-suggest { flex-wrap: wrap; }
+
+.led-row-main { flex: 1; min-width: 190px; }
+.led-desc { font-size: 0.86rem; font-weight: 600; color: var(--text); }
+.led-dim { font-weight: 400; color: var(--text3); }
+.led-meta {
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+  margin-top: 0.15rem; font-size: 0.72rem; color: var(--text3);
+}
+.led-sample {
+  margin-top: 0.25rem; font-size: 0.68rem; color: var(--text3);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.led-hint { font-style: italic; color: var(--text2); }
+
+.led-tag {
+  padding: 0.05rem 0.4rem; border-radius: var(--r-sm);
+  border: 1px solid var(--border2); font-size: 0.65rem; color: var(--text2);
+}
+
+.led-controls { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.led-controls select, .led-row-suggest select {
+  padding: 0.35rem 0.5rem; font-size: 0.75rem;
+  border: 1px solid var(--border2); border-radius: var(--r-sm);
+  background: transparent; color: var(--text);
+}
+
+.led-actions { display: flex; gap: 0.4rem; }
+
+.led-amounts { display: flex; flex-direction: column; align-items: flex-end; }
+.led-expected { font-size: 0.88rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+.led-actual { font-size: 0.68rem; color: var(--text3); font-variant-numeric: tabular-nums; }
+
+.led-chip {
+  min-width: 72px; text-align: center;
+  padding: 0.15rem 0.5rem; border-radius: 999px;
+  font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.led-received { background: color-mix(in srgb, var(--cash) 18%, transparent); color: var(--cash); }
+/* Upcoming is deliberately quiet. Rent due on the 1st is not a problem on the 1st,
+   and colouring it like a failure is how a useful signal starts getting ignored. */
+.led-upcoming { border: 1px solid var(--border2); color: var(--text3); }
+.led-missing  { background: color-mix(in srgb, var(--debt-l) 20%, transparent); color: var(--debt-l); }
+
+.led-empty {
+  padding: 0.9rem 1rem; border: 1px dashed var(--border2); border-radius: var(--r-md);
+  font-size: 0.8rem; color: var(--text3);
+}
+
+.led-suggestions {
+  display: flex; flex-direction: column; gap: 0.5rem;
+  margin-top: 0.75rem; padding-top: 0.875rem; border-top: 1px solid var(--border);
+}
