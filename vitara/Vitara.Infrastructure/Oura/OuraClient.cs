@@ -91,24 +91,7 @@ public class OuraClient : IOuraClient
         var sessions = new List<SleepSession>();
         foreach (var item in doc.RootElement.GetProperty("data").EnumerateArray())
         {
-            sessions.Add(new SleepSession
-            {
-                Id   = item.GetProperty("id").GetString() ?? "",
-                Day  = DateOnly.Parse(item.GetProperty("day").GetString() ?? ""),
-                BedtimeStart = DateTime.Parse(item.GetProperty("bedtime_start").GetString() ?? ""),
-                BedtimeEnd   = DateTime.Parse(item.GetProperty("bedtime_end").GetString() ?? ""),
-                TotalSleepMinutes = item.TryGet("total_sleep_duration", out int tsd) ? tsd / 60 : 0,
-                RemMinutes   = item.TryGet("rem_sleep_duration",  out int rem) ? rem  / 60 : 0,
-                DeepMinutes  = item.TryGet("deep_sleep_duration", out int deep) ? deep / 60 : 0,
-                LightMinutes = item.TryGet("light_sleep_duration", out int light) ? light / 60 : 0,
-                AwakeMinutes = item.TryGet("awake_time", out int awake) ? awake / 60 : 0,
-                Score        = item.TryGetNullable<int>("score"), // usually absent on the `sleep` endpoint — filled from daily_sleep below
-                AvgHrv       = item.TryGetNullable<double>("average_hrv"),
-                LowestHr     = item.TryGetNullable<double>("lowest_heart_rate"),
-                AvgBreathingRate = item.TryGetNullable<double>("average_breath"),
-                AvgSpo2      = item.TryGetNullable<double>("average_spo2"),
-                SkinTempDeviation = item.TryGetNullable<double>("skin_temp_deviation"),
-            });
+            sessions.Add(MapSleep(item));
         }
 
         // The sleep score lives on Oura's `daily_sleep` endpoint, not `sleep`.
@@ -141,19 +124,7 @@ public class OuraClient : IOuraClient
         foreach (var item in doc.RootElement.GetProperty("data").EnumerateArray())
         {
             var contributors = item.TryGetProperty("contributors", out var c) ? c : (JsonElement?)null;
-            list.Add(new DailyReadiness
-            {
-                Id    = item.GetProperty("id").GetString() ?? "",
-                Day   = DateOnly.Parse(item.GetProperty("day").GetString() ?? ""),
-                Score = item.TryGetNullable<int>("score"),
-                Level = item.TryGetNullable<int>("score") switch { >= 85 => "optimal", >= 70 => "good", _ => "pay_attention" },
-                HrvBalance           = contributors?.TryGetNullable<int>("hrv_balance"),
-                RecoveryIndex        = contributors?.TryGetNullable<int>("recovery_index"),
-                RestingHeartRate     = contributors?.TryGetNullable<int>("resting_heart_rate"),
-                ActivityBalance      = contributors?.TryGetNullable<int>("activity_balance"),
-                SleepBalance         = contributors?.TryGetNullable<int>("sleep_balance"),
-                TemperatureDeviation = contributors?.TryGetNullable<int>("temperature_deviation"),
-            });
+            list.Add(MapReadiness(item, contributors));
         }
         return list;
     }
@@ -350,6 +321,55 @@ public class OuraClient : IOuraClient
         [property: JsonPropertyName("expires_in")]    int ExpiresIn,
         [property: JsonPropertyName("token_type")]    string TokenType
     );
+    // Extracted so the mapping can be tested without an HTTP call. Parsing a third
+    // party's JSON is the most fragile code in this module and the part that breaks
+    // silently when they rename a field -- it was also, until now, the only part with
+    // no test at all.
+    // Durations arrive in seconds; everything stored here is minutes.
+    internal static SleepSession MapSleep(JsonElement item)
+    {
+        return new SleepSession
+            {
+                Id   = item.GetProperty("id").GetString() ?? "",
+                Day  = DateOnly.Parse(item.GetProperty("day").GetString() ?? ""),
+                BedtimeStart = DateTime.Parse(item.GetProperty("bedtime_start").GetString() ?? ""),
+                BedtimeEnd   = DateTime.Parse(item.GetProperty("bedtime_end").GetString() ?? ""),
+                TotalSleepMinutes = item.TryGet("total_sleep_duration", out int tsd) ? tsd / 60 : 0,
+                RemMinutes   = item.TryGet("rem_sleep_duration",  out int rem) ? rem  / 60 : 0,
+                DeepMinutes  = item.TryGet("deep_sleep_duration", out int deep) ? deep / 60 : 0,
+                LightMinutes = item.TryGet("light_sleep_duration", out int light) ? light / 60 : 0,
+                AwakeMinutes = item.TryGet("awake_time", out int awake) ? awake / 60 : 0,
+                Score        = item.TryGetNullable<int>("score"), // usually absent on the `sleep` endpoint — filled from daily_sleep below
+                AvgHrv       = item.TryGetNullable<double>("average_hrv"),
+                LowestHr     = item.TryGetNullable<double>("lowest_heart_rate"),
+                AvgBreathingRate = item.TryGetNullable<double>("average_breath"),
+                AvgSpo2      = item.TryGetNullable<double>("average_spo2"),
+                SkinTempDeviation = item.TryGetNullable<double>("skin_temp_deviation"),
+            };
+    }
+
+    // Extracted so the mapping can be tested without an HTTP call. Parsing a third
+    // party's JSON is the most fragile code in this module and the part that breaks
+    // silently when they rename a field -- it was also, until now, the only part with
+    // no test at all.
+    // The interesting fields live under `contributors`, which is absent on some days.
+    internal static DailyReadiness MapReadiness(JsonElement item, JsonElement? contributors)
+    {
+        return new DailyReadiness
+            {
+                Id    = item.GetProperty("id").GetString() ?? "",
+                Day   = DateOnly.Parse(item.GetProperty("day").GetString() ?? ""),
+                Score = item.TryGetNullable<int>("score"),
+                Level = item.TryGetNullable<int>("score") switch { >= 85 => "optimal", >= 70 => "good", _ => "pay_attention" },
+                HrvBalance           = contributors?.TryGetNullable<int>("hrv_balance"),
+                RecoveryIndex        = contributors?.TryGetNullable<int>("recovery_index"),
+                RestingHeartRate     = contributors?.TryGetNullable<int>("resting_heart_rate"),
+                ActivityBalance      = contributors?.TryGetNullable<int>("activity_balance"),
+                SleepBalance         = contributors?.TryGetNullable<int>("sleep_balance"),
+                TemperatureDeviation = contributors?.TryGetNullable<int>("temperature_deviation"),
+            };
+    }
+
 }
 
 internal static class JsonElementExtensions
@@ -369,4 +389,5 @@ internal static class JsonElementExtensions
 
     public static T? TryGetNullable<T>(this JsonElement? el, string prop) where T : struct
         => el.HasValue ? el.Value.TryGetNullable<T>(prop) : null;
+
 }

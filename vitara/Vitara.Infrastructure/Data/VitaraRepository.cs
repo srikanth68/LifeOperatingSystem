@@ -85,14 +85,45 @@ public class VitaraRepository(VitaraDbContext db) : IVitaraRepository
         db.Spo2.Where(s => s.Day >= from && s.Day <= to).OrderBy(s => s.Day).ToListAsync();
 
     // ── Heart Rate ──
+    // One query for the whole batch instead of one per sample. Oura samples heart rate
+    // continuously, so a two-day pull is hundreds to low thousands of rows -- and the
+    // previous version issued a separate SELECT for every one of them.
     public async Task UpsertHeartRateAsync(IEnumerable<HeartRateSample> samples)
     {
-        foreach (var s in samples)
-        {
-            var exists = await db.HeartRate.AnyAsync(h => h.Timestamp == s.Timestamp && h.Bpm == s.Bpm);
-            if (!exists) db.HeartRate.Add(s);
-        }
+        var incoming = samples.ToList();
+        if (incoming.Count == 0) return;
+
+        var from = incoming.Min(s => s.Timestamp);
+        var to = incoming.Max(s => s.Timestamp);
+
+        var existing = (await db.HeartRate
+                .Where(h => h.Timestamp >= from && h.Timestamp <= to)
+                .Select(h => new { h.Timestamp, h.Bpm })
+                .ToListAsync())
+            .Select(h => (h.Timestamp, h.Bpm))
+            .ToHashSet();
+
+        // Oura returns overlapping windows between runs, and the same batch can repeat a
+        // reading, so duplicates are filtered within the batch as well as against what
+        // is already stored.
+        foreach (var s in incoming)
+            if (existing.Add((s.Timestamp, s.Bpm)))
+                db.HeartRate.Add(s);
+
         await db.SaveChangesAsync();
+    }
+
+    // Nothing in this module has ever deleted a row. Heart rate is the one table where
+    // that matters: it is the only high-volume one, and it lives on the same 16GB box
+    // as the model.
+    public async Task<int> PruneHeartRateAsync(DateTime before)
+    {
+        var stale = await db.HeartRate.Where(h => h.Timestamp < before).ToListAsync();
+        if (stale.Count == 0) return 0;
+
+        db.HeartRate.RemoveRange(stale);
+        await db.SaveChangesAsync();
+        return stale.Count;
     }
     public Task<List<HeartRateSample>> GetHeartRateAsync(DateTime from, DateTime to) =>
         db.HeartRate.Where(h => h.Timestamp >= from && h.Timestamp <= to).OrderBy(h => h.Timestamp).ToListAsync();
@@ -160,6 +191,37 @@ public class VitaraRepository(VitaraDbContext db) : IVitaraRepository
         db.WeighIns.Where(w => w.Day >= from && w.Day <= to).OrderBy(w => w.Day).ToListAsync();
 
     // ── Sync tracking ──
+    // The newest day each collection actually holds.
+    //
+    // The single watermark below takes the MIN across sleep, readiness and activity,
+    // which correctly drags the window back when one of those three lags. It says
+    // nothing about the other six, so a collection that failed for a fortnight was
+    // never asked for those days again once the core three moved on.
+    public async Task<Dictionary<string, DateOnly>> GetLatestDaysAsync()
+    {
+        var result = new Dictionary<string, DateOnly>();
+
+        async Task Add(string name, IQueryable<DateOnly> days)
+        {
+            var latest = await days.OrderByDescending(d => d).Select(d => (DateOnly?)d).FirstOrDefaultAsync();
+            if (latest.HasValue) result[name] = latest.Value;
+        }
+
+        // Keys match the names the sync worker uses for each collection, so the worker
+        // can look up its own watermark without a translation table between the two.
+        await Add("sleep", db.Sleep.Select(x => x.Day));
+        await Add("readiness", db.Readiness.Select(x => x.Day));
+        await Add("activity", db.Activity.Select(x => x.Day));
+        await Add("stress", db.Stress.Select(x => x.Day));
+        await Add("resilience", db.Resilience.Select(x => x.Day));
+        await Add("cv-age", db.CardiovascularAge.Select(x => x.Day));
+        await Add("spo2", db.Spo2.Select(x => x.Day));
+        await Add("vo2max", db.Vo2Max.Select(x => x.Day));
+        await Add("workouts", db.Workouts.Select(x => x.Day));
+
+        return result;
+    }
+
     public async Task<DateOnly?> GetLatestDayAsync()
     {
         var sleepMax = await db.Sleep.OrderByDescending(s => s.Day).Select(s => (DateOnly?)s.Day).FirstOrDefaultAsync();

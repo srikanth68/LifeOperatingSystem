@@ -9,6 +9,19 @@ public interface IVitaraRepository
     Task SaveTokenAsync(OuraToken token);
     Task DeleteTokenAsync();
 
+    // The newest day held by EACH collection, keyed by the names the sync worker uses.
+    //
+    // Replaces a single watermark taken across sleep, readiness and activity only. That
+    // one worked for those three and silently stranded the other six: if spo2 failed
+    // for a fortnight while sleep kept succeeding, the window started a day before the
+    // latest SLEEP record and those spo2 days were never fetched again.
+    Task<Dictionary<string, DateOnly>> GetLatestDaysAsync();
+
+    // Heart rate is the only high-volume table and nothing has ever removed a row from
+    // it. Oura samples it continuously, so it grows without bound on a box that is also
+    // hosting the model.
+    Task<int> PruneHeartRateAsync(DateTime before);
+
     // Profile
     Task<UserProfile?> GetProfileAsync();
     Task SaveProfileAsync(UserProfile profile);

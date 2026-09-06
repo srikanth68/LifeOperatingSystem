@@ -51,7 +51,23 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
             if (readiness is { } r && r.TryGetProperty("avgScore", out var rs)) bits.Add($"readiness avg {rs.GetDouble():N0}");
             if (sleep is { } s && s.TryGetProperty("avgScore", out var ss)) bits.Add($"sleep avg {ss.GetDouble():N0}");
             if (activity is { } a && a.TryGetProperty("avgScore", out var asc)) bits.Add($"activity avg {asc.GetDouble():N0}");
-            if (bits.Count > 0) lines.Add($"Vitara (health, last 30d): {string.Join(", ", bits)}.");
+
+            if (bits.Count > 0)
+            {
+                // How old the freshest reading is. Without it a 30-day average built from
+                // data that stopped arriving a fortnight ago reads exactly like one from
+                // last night, and San states it with the same confidence -- the same
+                // failure as the undated memory that produced a meeting the user did not
+                // have.
+                var staleDays = new[] { readiness, sleep, activity }
+                    .Where(x => x is not null)
+                    .Select(x => x!.Value.TryGetProperty("daysAgo", out var d) && d.TryGetInt32(out var n) ? n : 0)
+                    .DefaultIfEmpty(0)
+                    .Min();
+
+                var age = staleDays > 2 ? $" — NOTE: nothing newer than {staleDays} days ago, Oura may not be syncing" : "";
+                lines.Add($"Vitara (health, last 30d): {string.Join(", ", bits)}.{age}");
+            }
         }
 
         var aasthi = await TryGetJsonAsync("aasthi", "/api/properties/summary", ct);

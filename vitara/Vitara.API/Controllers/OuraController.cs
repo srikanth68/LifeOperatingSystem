@@ -97,8 +97,31 @@ public class OuraController(IOuraClient client, IVitaraRepository repo, IConfigu
     public async Task<IActionResult> Status()
     {
         var token = await repo.GetTokenAsync();
-        if (token is null) return Ok(new { linked = false });
-        return Ok(new { linked = true, expired = token.IsExpired, linkedAt = token.LinkedAt, lastSyncedAt = token.LastSyncedAt });
+        if (token is null) return Ok(new { linked = false, healthy = false, reason = "Oura is not linked." });
+
+        // lastSyncedAt alone could not distinguish a sync that worked from one that ran
+        // and failed, because it used to be stamped either way. The attempt time and the
+        // last error are what separate "not running" from "running and broken", and both
+        // need saying out loud -- this module has no notifier, so if the status endpoint
+        // does not tell the truth nothing else will.
+        var healthy = !token.IsExpired && !token.IsStale && token.LastSyncError is null;
+
+        return Ok(new
+        {
+            linked = true,
+            healthy,
+            expired = token.IsExpired,
+            stale = token.IsStale,
+            linkedAt = token.LinkedAt,
+            lastSyncedAt = token.LastSyncedAt,
+            lastSyncAttemptAt = token.LastSyncAttemptAt,
+            lastSyncError = token.LastSyncError,
+            daysSinceSync = token.LastSyncedAt is { } s ? (int)(DateTime.UtcNow - s).TotalDays : (int?)null,
+            reason = healthy ? null
+                : token.IsExpired ? "The Oura token has expired and needs re-authorising."
+                : token.LastSyncError is not null ? $"Last sync had failures: {token.LastSyncError}"
+                : "No successful sync in over two days.",
+        });
     }
 
     [HttpPost("sync")]

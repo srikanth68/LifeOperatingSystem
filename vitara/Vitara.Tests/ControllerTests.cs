@@ -88,6 +88,12 @@ public class FakeRepo : IVitaraRepository
         Task.FromResult(WeighInData.Where(w => w.Day >= from && w.Day <= to).OrderBy(w => w.Day).ToList());
 
     public Task<DateOnly?> GetLatestDayAsync() => Task.FromResult<DateOnly?>(null);
+    public Task<Dictionary<string, DateOnly>> GetLatestDaysAsync() => Task.FromResult(new Dictionary<string, DateOnly>());
+    public Task<int> PruneHeartRateAsync(DateTime before)
+    {
+        var removed = HeartRateData.RemoveAll(h => h.Timestamp < before);
+        return Task.FromResult(removed);
+    }
 }
 
 // ── Dashboard Controller ──

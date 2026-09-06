@@ -192,6 +192,10 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
 
         // Additive column migrations for existing DBs (EnsureCreated won't ALTER).
         await AddColumnIfMissingAsync(db, "Tokens", "LastSyncedAt", "TEXT");
+        // Sync health. Without these a failed sync is indistinguishable from no sync at
+        // all, and both look identical to a sync that worked.
+        await AddColumnIfMissingAsync(db, "Tokens", "LastSyncAttemptAt", "TEXT");
+        await AddColumnIfMissingAsync(db, "Tokens", "LastSyncError", "TEXT");
     }
 
     private static async Task AddColumnIfMissingAsync(VitaraDbContext db, string table, string column, string type)

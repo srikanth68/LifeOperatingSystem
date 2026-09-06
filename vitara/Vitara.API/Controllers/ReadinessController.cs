@@ -26,6 +26,15 @@ public class ReadinessController(IVitaraRepository repo) : ControllerBase
         return Ok(new
         {
             count        = data.Count,
+            // How current this actually is. The dashboard has carried daysAgo per
+            // metric since it was found reporting last week's sleep as last night's;
+            // these summaries never did, and San reads THESE, not the dashboard. An
+            // average with no recency reads as today's number no matter how old it is.
+            latestDay    = data.Max(x => x.Day).ToString("yyyy-MM-dd"),
+            daysAgo      = to.DayNumber - data.Max(x => x.Day).DayNumber,
+            // Coverage, so a three-night average is not mistaken for a month of data.
+            daysRequested = days,
+
             avgScore     = data.Where(r => r.Score.HasValue).Select(r => r.Score!.Value).DefaultIfEmpty(0).Average(),
             avgHrvBal    = data.Where(r => r.HrvBalance.HasValue).Select(r => r.HrvBalance!.Value).DefaultIfEmpty(0).Average(),
             avgRhr       = data.Where(r => r.RestingHeartRate.HasValue).Select(r => r.RestingHeartRate!.Value).DefaultIfEmpty(0).Average(),

@@ -20,4 +20,11 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- The Oura mappers are internal: they are an implementation detail of the client,
+         not API. The tests still need them, because parsing a third party's JSON is the
+         one thing here that breaks silently. -->
+    <InternalsVisibleTo Include="Vitara.Tests" />
+  </ItemGroup>
+
 </Project>
