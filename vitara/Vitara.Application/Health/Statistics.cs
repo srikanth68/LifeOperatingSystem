@@ -76,6 +76,10 @@ public static class Statistics
     // Least-squares slope, in units per day. x is the day number so gaps in the series
     // are handled correctly -- a fortnight with three missing days is not fourteen
     // evenly spaced points.
+    //
+    // Kept for comparison and for callers that want the conventional figure, but drift
+    // detection uses Trend() below. One bad reading swings a least-squares line, and a
+    // single mis-recorded weight should not become a trend anyone acts on.
     public static double? SlopePerDay(IReadOnlyList<(int Day, double Value)> points)
     {
         if (points.Count < 3) return null;
@@ -87,6 +91,81 @@ public static class Statistics
         var denominator = points.Sum(p => (p.Day - meanX) * (p.Day - meanX));
 
         return denominator <= 1e-9 ? null : numerator / denominator;
+    }
+
+    // Theil-Sen: the median of every pairwise slope.
+    //
+    // Robust where least squares is not. It tolerates roughly 29% of the data being
+    // rubbish before the estimate breaks down, which matters here because a single
+    // mistyped weight or a night the ring half-recorded is entirely normal.
+    //
+    // O(n^2), and that is fine: the longest window is 90 days, so about four thousand
+    // pairs. Choosing the clearer algorithm over the faster one is free at this size.
+    public static double? TheilSenSlope(IReadOnlyList<(int Day, double Value)> points)
+    {
+        if (points.Count < 3) return null;
+
+        var slopes = new List<double>();
+        for (var i = 0; i < points.Count; i++)
+            for (var j = i + 1; j < points.Count; j++)
+            {
+                var dx = points[j].Day - points[i].Day;
+                if (dx == 0) continue;   // same day twice: no slope between them
+                slopes.Add((points[j].Value - points[i].Value) / dx);
+            }
+
+        return slopes.Count == 0 ? null : Median(slopes);
+    }
+
+    public record TrendResult(double SlopePerDay, double Z, int N, bool IsSignificant);
+
+    // Whether a trend is real, and how steep.
+    //
+    // Theil-Sen gives the slope; Mann-Kendall says whether the series is monotonic
+    // enough for that slope to mean anything. Without the second half, a slope always
+    // exists -- fit a line to noise and you get a line -- and across four metrics and
+    // three windows that is twelve chances a day to discover a trend that is not there.
+    //
+    // The threshold defaults to p < 0.01 rather than the usual 0.05 precisely because
+    // of that: twelve tests a day at 0.05 yields a false trend most days, and a system
+    // that announces a spurious trend most days is one nobody reads. The finding layer
+    // then requires persistence on top.
+    public static TrendResult? Trend(IReadOnlyList<(int Day, double Value)> points, double zThreshold = 2.576)
+    {
+        // Below about ten points Mann-Kendall's normal approximation is not appropriate
+        // and the honest answer is that the series is too short to say.
+        if (points.Count < 10) return null;
+
+        var slope = TheilSenSlope(points);
+        if (slope is null) return null;
+
+        var ordered = points.OrderBy(p => p.Day).ToList();
+        var n = ordered.Count;
+
+        // S counts how often the series moves up versus down across every pair.
+        var s = 0;
+        for (var i = 0; i < n; i++)
+            for (var j = i + 1; j < n; j++)
+                s += Math.Sign(ordered[j].Value - ordered[i].Value);
+
+        // Variance, corrected for ties. Health data ties constantly -- integer scores,
+        // rounded weights -- and the uncorrected formula overstates the variance, which
+        // makes the test too conservative rather than too eager.
+        var tieCorrection = ordered
+            .GroupBy(p => p.Value)
+            .Select(g => (double)g.Count())
+            .Where(t => t > 1)
+            .Sum(t => t * (t - 1) * (2 * t + 5));
+
+        var variance = (n * (n - 1.0) * (2 * n + 5) - tieCorrection) / 18.0;
+        if (variance <= 0) return new TrendResult(slope.Value, 0, n, false);
+
+        // The continuity correction: S is discrete, the normal is not.
+        var z = s > 0 ? (s - 1) / Math.Sqrt(variance)
+              : s < 0 ? (s + 1) / Math.Sqrt(variance)
+              : 0;
+
+        return new TrendResult(slope.Value, z, n, Math.Abs(z) >= zThreshold);
     }
 
     // Acute load against chronic load: a short window's mean over a long window's.
