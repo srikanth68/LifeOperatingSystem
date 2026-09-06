@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>San.Evals</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The guardrails double as the scoring functions, so the suite grades the model
+         with the same code that protects the user from it in production. -->
+    <ProjectReference Include="..\San.Application\San.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The prompt under test travels with the binary, so a bare run measures something
+         real. Point the prompt argument at another file to compare two wordings. -->
+    <None Include="prompts\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

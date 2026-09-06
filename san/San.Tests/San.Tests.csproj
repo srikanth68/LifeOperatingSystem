@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\San.Application\San.Application.csproj" />
+    <ProjectReference Include="..\San.Evals\San.Evals.csproj" />
     <ProjectReference Include="..\San.Infrastructure\San.Infrastructure.csproj" />
   </ItemGroup>
 
