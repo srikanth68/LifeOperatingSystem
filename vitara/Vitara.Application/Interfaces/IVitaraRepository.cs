@@ -84,6 +84,30 @@ public interface IVitaraRepository
     // filter would delete food logged by hand through San.
     Task<int> ReplaceMealsForDayAsync(DateOnly day, string source, IEnumerable<MealEntry> meals);
 
+    // ── Health intelligence ──
+
+    // Ignores rows that already exist rather than failing the batch. The unique index
+    // is what makes a backfill resumable, and a re-run that throws on the first
+    // duplicate makes it unusable.
+    Task<int> UpsertObservationsAsync(IEnumerable<Observation> observations);
+
+    Task<List<Observation>> GetObservationsAsync(DateOnly from, DateOnly to, string? metric = null);
+    Task<List<string>> GetObservedMetricsAsync();
+
+    // The two watermarks the nightly job compares. Keeping the "already computed" mark
+    // in the baselines themselves means there is no separate piece of state to fall out
+    // of step with the data it describes.
+    Task<DateOnly?> GetLatestObservationDayAsync();
+    Task<DateOnly?> GetLatestBaselineDayAsync();
+
+    Task SaveBaselinesAsync(IEnumerable<Baseline> baselines);
+    Task<List<Baseline>> GetBaselinesAsync(DateOnly computedOn);
+    Task SaveDerivedMetricsAsync(IEnumerable<DerivedMetric> metrics);
+
+    Task<List<ExcludedPeriod>> GetExcludedPeriodsAsync();
+    Task<List<TravelPeriod>> GetTravelPeriodsAsync();
+    Task<List<Device>> GetDevicesAsync();
+
     // Sync health for sources with no token of their own.
     Task<SyncState?> GetSyncStateAsync(string source);
     Task SaveSyncStateAsync(SyncState state);

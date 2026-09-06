@@ -104,6 +104,93 @@ public class VitaraRepository(VitaraDbContext db) : IVitaraRepository
         return incoming.Count;
     }
 
+    // ── Health intelligence ──
+
+    public async Task<int> UpsertObservationsAsync(IEnumerable<Observation> observations)
+    {
+        var incoming = observations.ToList();
+        if (incoming.Count == 0) return 0;
+
+        var from = incoming.Min(o => o.ObservedDateLocal);
+        var to = incoming.Max(o => o.ObservedDateLocal);
+
+        // One query for the whole batch. The alternative -- an existence check per row
+        // -- is the pattern that made the heart-rate upsert slow, and a backfill writes
+        // far more rows than a nightly sync does.
+        var existing = (await db.Observations
+                .Where(o => o.ObservedDateLocal >= from && o.ObservedDateLocal <= to)
+                .Select(o => new { o.Metric, o.ObservedAtLocal, o.Source })
+                .ToListAsync())
+            .Select(o => (o.Metric, o.ObservedAtLocal, o.Source))
+            .ToHashSet();
+
+        var added = 0;
+        foreach (var o in incoming)
+            if (existing.Add((o.Metric, o.ObservedAtLocal, o.Source)))
+            {
+                db.Observations.Add(o);
+                added++;
+            }
+
+        if (added > 0) await db.SaveChangesAsync();
+        return added;
+    }
+
+    public async Task<List<Observation>> GetObservationsAsync(DateOnly from, DateOnly to, string? metric = null)
+    {
+        var q = db.Observations.Where(o => o.ObservedDateLocal >= from && o.ObservedDateLocal <= to);
+        if (!string.IsNullOrWhiteSpace(metric)) q = q.Where(o => o.Metric == metric);
+        return await q.OrderBy(o => o.ObservedDateLocal).ToListAsync();
+    }
+
+    public async Task<List<string>> GetObservedMetricsAsync() =>
+        await db.Observations.Select(o => o.Metric).Distinct().ToListAsync();
+
+    public async Task<DateOnly?> GetLatestObservationDayAsync() =>
+        await db.Observations.OrderByDescending(o => o.ObservedDateLocal)
+            .Select(o => (DateOnly?)o.ObservedDateLocal).FirstOrDefaultAsync();
+
+    public async Task<DateOnly?> GetLatestBaselineDayAsync() =>
+        await db.Baselines.OrderByDescending(b => b.ComputedOnLocal)
+            .Select(b => (DateOnly?)b.ComputedOnLocal).FirstOrDefaultAsync();
+
+    public async Task SaveBaselinesAsync(IEnumerable<Baseline> baselines)
+    {
+        var incoming = baselines.ToList();
+        if (incoming.Count == 0) return;
+
+        // Recomputing a day replaces it. A job that ran twice must not leave two
+        // baselines for the same metric and day, or a later lookup picks arbitrarily.
+        var days = incoming.Select(b => b.ComputedOnLocal).Distinct().ToList();
+        var stale = await db.Baselines.Where(b => days.Contains(b.ComputedOnLocal)).ToListAsync();
+        if (stale.Count > 0) db.Baselines.RemoveRange(stale);
+
+        db.Baselines.AddRange(incoming);
+        await db.SaveChangesAsync();
+    }
+
+    public Task<List<Baseline>> GetBaselinesAsync(DateOnly computedOn) =>
+        db.Baselines.Where(b => b.ComputedOnLocal == computedOn).ToListAsync();
+
+    public async Task SaveDerivedMetricsAsync(IEnumerable<DerivedMetric> metrics)
+    {
+        var incoming = metrics.ToList();
+        if (incoming.Count == 0) return;
+
+        var days = incoming.Select(m => m.ObservedDateLocal).Distinct().ToList();
+        var names = incoming.Select(m => m.Metric).Distinct().ToList();
+        var stale = await db.DerivedMetrics
+            .Where(m => days.Contains(m.ObservedDateLocal) && names.Contains(m.Metric)).ToListAsync();
+        if (stale.Count > 0) db.DerivedMetrics.RemoveRange(stale);
+
+        db.DerivedMetrics.AddRange(incoming);
+        await db.SaveChangesAsync();
+    }
+
+    public Task<List<ExcludedPeriod>> GetExcludedPeriodsAsync() => db.ExcludedPeriods.ToListAsync();
+    public Task<List<TravelPeriod>> GetTravelPeriodsAsync() => db.TravelPeriods.ToListAsync();
+    public Task<List<Device>> GetDevicesAsync() => db.Devices.OrderBy(d => d.ActiveFromLocal).ToListAsync();
+
     public Task<SyncState?> GetSyncStateAsync(string source) =>
         db.SyncStates.FirstOrDefaultAsync(s => s.Source == source);
 

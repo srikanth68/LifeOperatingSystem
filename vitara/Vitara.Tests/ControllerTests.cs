@@ -91,6 +91,49 @@ public class FakeRepo : IVitaraRepository
     public Task<Dictionary<string, DateOnly>> GetLatestDaysAsync() => Task.FromResult(new Dictionary<string, DateOnly>());
     public SyncState? SyncStateData;
     public Task<SyncState?> GetSyncStateAsync(string source) => Task.FromResult(SyncStateData);
+
+    // Health intelligence. In-memory and deliberately simple: the controllers under
+    // test here do not exercise the analytics layer, which has its own tests against a
+    // real SQLite database.
+    public List<Observation> ObservationData = [];
+    public List<Baseline> BaselineData = [];
+    public List<DerivedMetric> DerivedData = [];
+    public List<ExcludedPeriod> ExcludedData = [];
+    public List<TravelPeriod> TravelData = [];
+    public List<Device> DeviceData = [];
+
+    public Task<int> UpsertObservationsAsync(IEnumerable<Observation> observations)
+    {
+        var added = observations
+            .Where(o => !ObservationData.Any(e => e.Metric == o.Metric && e.ObservedAtLocal == o.ObservedAtLocal && e.Source == o.Source))
+            .ToList();
+        ObservationData.AddRange(added);
+        return Task.FromResult(added.Count);
+    }
+
+    public Task<List<Observation>> GetObservationsAsync(DateOnly from, DateOnly to, string? metric = null) =>
+        Task.FromResult(ObservationData
+            .Where(o => o.ObservedDateLocal >= from && o.ObservedDateLocal <= to)
+            .Where(o => metric == null || o.Metric == metric)
+            .ToList());
+
+    public Task<List<string>> GetObservedMetricsAsync() =>
+        Task.FromResult(ObservationData.Select(o => o.Metric).Distinct().ToList());
+
+    public Task<DateOnly?> GetLatestObservationDayAsync() =>
+        Task.FromResult(ObservationData.Count == 0 ? null : (DateOnly?)ObservationData.Max(o => o.ObservedDateLocal));
+
+    public Task<DateOnly?> GetLatestBaselineDayAsync() =>
+        Task.FromResult(BaselineData.Count == 0 ? null : (DateOnly?)BaselineData.Max(b => b.ComputedOnLocal));
+
+    public Task SaveBaselinesAsync(IEnumerable<Baseline> baselines) { BaselineData.AddRange(baselines); return Task.CompletedTask; }
+    public Task<List<Baseline>> GetBaselinesAsync(DateOnly computedOn) =>
+        Task.FromResult(BaselineData.Where(b => b.ComputedOnLocal == computedOn).ToList());
+    public Task SaveDerivedMetricsAsync(IEnumerable<DerivedMetric> metrics) { DerivedData.AddRange(metrics); return Task.CompletedTask; }
+
+    public Task<List<ExcludedPeriod>> GetExcludedPeriodsAsync() => Task.FromResult(ExcludedData);
+    public Task<List<TravelPeriod>> GetTravelPeriodsAsync() => Task.FromResult(TravelData);
+    public Task<List<Device>> GetDevicesAsync() => Task.FromResult(DeviceData);
     public Task SaveSyncStateAsync(SyncState state) { SyncStateData = state; return Task.CompletedTask; }
     public Task<int> ReplaceMealsForDayAsync(DateOnly day, string source, IEnumerable<MealEntry> meals)
     {

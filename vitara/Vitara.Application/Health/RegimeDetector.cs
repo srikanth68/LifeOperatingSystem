@@ -50,13 +50,21 @@ public static class RegimeDetector
             var beforeCentre = Statistics.Median(before);
             var spread = Statistics.MedianAbsoluteDeviation(before);
 
-            // A metric that never varies has no scale to measure a shift against. Any
-            // movement at all is infinitely many sigmas, which is not a useful claim.
-            if (spread <= 1e-9) continue;
-
             var afterCentre = Statistics.Median(after);
-            var shift = Math.Abs(afterCentre - beforeCentre) / spread;
-            if (shift < shiftInSigmas) continue;
+
+            // Pooled, so a metric that is steady before a change and noisy after it is
+            // judged against the larger of the two rather than the flattering one.
+            var pooled = Math.Max(spread, Statistics.MedianAbsoluteDeviation(after));
+
+            // A metric with no variance at all -- a low-resolution score that sits on
+            // one value for weeks -- has no scale to express a shift in. The sigma test
+            // is meaningless there rather than failed, so it is skipped and the
+            // separation test below decides on its own. Two constant windows at
+            // different levels are a step change by any reading.
+            var degenerate = pooled <= 1e-9;
+            var shift = degenerate ? double.MaxValue : Math.Abs(afterCentre - beforeCentre) / pooled;
+
+            if (!degenerate && shift < shiftInSigmas) continue;
 
             // The sigma test alone is not enough on a very steady metric. When a series
             // barely moves, its MAD shrinks towards zero and an utterly trivial
@@ -79,7 +87,10 @@ public static class RegimeDetector
             var daysHeld = ordered[^1].Day.DayNumber - ordered[split].Day.DayNumber + 1;
             if (daysHeld < dwellDays) continue;
 
-            return new RegimeChange(ordered[split].Day, beforeCentre, afterCentre, shift, daysHeld);
+            // Capped so the stored figure stays a number. The degenerate case above
+            // produces an arbitrarily large one, and a serialised infinity in an
+            // evidence blob is a problem for whatever reads it later.
+            return new RegimeChange(ordered[split].Day, beforeCentre, afterCentre, Math.Min(shift, 999), daysHeld);
         }
 
         return null;
