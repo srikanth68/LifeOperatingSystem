@@ -72,6 +72,41 @@ services:
     env_file: ./deploy/env/vitara.env
     depends_on: [vitara]
 
+  # MyFitnessPal, reached over HTTP by vitara-worker.
+  #
+  # A separate image because the client is Python and scrapes a site that changes
+  # underneath it -- keeping it out of the .NET image means a broken scraper cannot
+  # take a backend build down with it.
+  #
+  # No published port. Only vitara-worker talks to it, over the compose network, and
+  # it holds a real MyFitnessPal password rather than a revocable token: there is no
+  # reason for it to be reachable from the host, let alone the mesh.
+  mfp:
+    # Opt-in, and it has to be. mfp-mcp is a separate MIT-licensed repository cloned
+    # alongside this one and gitignored here, so `git archive` leaves it out of the
+    # deploy tarball -- an unconditional `build: ./mfp-mcp` would fail the entire stack
+    # on any box that only has the tarball.
+    #
+    #   docker compose --profile nutrition up -d --build
+    #
+    # Vitara's worker treats a missing MFP_API_URL as "feature off" and stays quiet, so
+    # running without this profile costs nothing.
+    profiles: ["nutrition"]
+    build: ./mfp-mcp
+    image: maaya-mfp
+    restart: unless-stopped
+    logging: *logging
+    # The image entrypoint runs the MCP server over stdio; this runs the HTTP surface
+    # instead, from the same package and the same session cache.
+    entrypoint: ["python", "-m", "mfp_mcp.http_api"]
+    environment:
+      - PORT=8100
+    env_file: ./deploy/env/mfp.env
+    volumes:
+      # The 30-day session cache. Without this every restart is a fresh login, which
+      # is both slow and a good way to get an account flagged.
+      - ./deploy/data/mfp:/home/mcp/.config
+
   aasthi:
     <<: *backend
     command: ["dotnet", "/app/aasthi-api/Aasthi.API.dll"]

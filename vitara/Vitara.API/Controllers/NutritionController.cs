@@ -15,6 +15,35 @@ public class NutritionController(IVitaraRepository repo) : ControllerBase
         return Ok(await repo.GetNutritionAsync(from, to));
     }
 
+    // Whether the food diary is actually arriving.
+    //
+    // The MyFitnessPal client scrapes a site that changes underneath it, so it will
+    // break periodically -- the only question is whether anyone finds out before the
+    // gap is weeks long. Nothing in this module notifies, so saying it here is what
+    // makes it visible at all.
+    [HttpGet("status")]
+    public async Task<IActionResult> Status()
+    {
+        var state = await repo.GetSyncStateAsync("mfp");
+        if (state is null)
+            return Ok(new { configured = false, healthy = false, reason = "Nutrition sync has never run." });
+
+        var healthy = !state.IsStale && state.LastError is null;
+        return Ok(new
+        {
+            configured = true,
+            healthy,
+            stale = state.IsStale,
+            lastSyncedAt = state.LastSyncedAt,
+            lastAttemptAt = state.LastAttemptAt,
+            lastError = state.LastError,
+            daysSinceSync = state.LastSyncedAt is { } d ? (int)(DateTime.UtcNow - d).TotalDays : (int?)null,
+            reason = healthy ? null
+                : state.LastError is not null ? state.LastError
+                : "No successful nutrition sync in over two days.",
+        });
+    }
+
     [HttpGet("summary")]
     public async Task<IActionResult> Summary([FromQuery] int days = 7)
     {

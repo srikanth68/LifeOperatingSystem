@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Vitara.Application.Interfaces;
+using Vitara.Infrastructure.Nutrition;
 using Vitara.Infrastructure.Data;
 using Vitara.Infrastructure.Oura;
 using Vitara.Worker;
@@ -28,7 +29,10 @@ builder.Services.AddDbContext<VitaraDbContext>(o =>
     o.UseSqlite($"Data Source={Path.Combine(Directory.GetCurrentDirectory(), "..", "vitara.db")}"));
 builder.Services.AddScoped<IVitaraRepository, VitaraRepository>();
 builder.Services.AddScoped<IOuraClient, OuraClient>();
+builder.Services.AddScoped<INutritionSource, MfpNutritionClient>();
+builder.Services.AddHttpClient("mfp");
 builder.Services.AddHostedService<OuraSyncWorker>();
+builder.Services.AddHostedService<NutritionSyncWorker>();
 
 var host = builder.Build();
 

@@ -84,6 +84,42 @@ public class VitaraRepository(VitaraDbContext db) : IVitaraRepository
     public Task<List<DailySpo2>> GetSpo2Async(DateOnly from, DateOnly to) =>
         db.Spo2.Where(s => s.Day >= from && s.Day <= to).OrderBy(s => s.Day).ToListAsync();
 
+    public async Task<int> ReplaceMealsForDayAsync(DateOnly day, string source, IEnumerable<MealEntry> meals)
+    {
+        var incoming = meals.ToList();
+
+        // Only this source's rows for this day. Manual entries and any other source
+        // survive untouched, which is the whole reason MealEntry carries a source.
+        var existing = await db.Meals.Where(m => m.Day == day && m.Source == source).ToListAsync();
+        if (existing.Count > 0) db.Meals.RemoveRange(existing);
+
+        foreach (var m in incoming)
+        {
+            m.Day = day;
+            m.Source = source;
+            db.Meals.Add(m);
+        }
+
+        await db.SaveChangesAsync();
+        return incoming.Count;
+    }
+
+    public Task<SyncState?> GetSyncStateAsync(string source) =>
+        db.SyncStates.FirstOrDefaultAsync(s => s.Source == source);
+
+    public async Task SaveSyncStateAsync(SyncState state)
+    {
+        var existing = await db.SyncStates.FirstOrDefaultAsync(s => s.Source == state.Source);
+        if (existing is null) db.SyncStates.Add(state);
+        else
+        {
+            existing.LastSyncedAt = state.LastSyncedAt;
+            existing.LastAttemptAt = state.LastAttemptAt;
+            existing.LastError = state.LastError;
+        }
+        await db.SaveChangesAsync();
+    }
+
     // ── Heart Rate ──
     // One query for the whole batch instead of one per sample. Oura samples heart rate
     // continuously, so a two-day pull is hundreds to low thousands of rows -- and the

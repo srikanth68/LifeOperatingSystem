@@ -89,6 +89,17 @@ public class FakeRepo : IVitaraRepository
 
     public Task<DateOnly?> GetLatestDayAsync() => Task.FromResult<DateOnly?>(null);
     public Task<Dictionary<string, DateOnly>> GetLatestDaysAsync() => Task.FromResult(new Dictionary<string, DateOnly>());
+    public SyncState? SyncStateData;
+    public Task<SyncState?> GetSyncStateAsync(string source) => Task.FromResult(SyncStateData);
+    public Task SaveSyncStateAsync(SyncState state) { SyncStateData = state; return Task.CompletedTask; }
+    public Task<int> ReplaceMealsForDayAsync(DateOnly day, string source, IEnumerable<MealEntry> meals)
+    {
+        MealData.RemoveAll(m => m.Day == day && m.Source == source);
+        var list = meals.ToList();
+        foreach (var m in list) { m.Day = day; m.Source = source; }
+        MealData.AddRange(list);
+        return Task.FromResult(list.Count);
+    }
     public Task<int> PruneHeartRateAsync(DateTime before)
     {
         var removed = HeartRateData.RemoveAll(h => h.Timestamp < before);

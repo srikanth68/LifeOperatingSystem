@@ -77,6 +77,17 @@ public interface IVitaraRepository
     Task<MealEntry?> UpdateMealAsync(MealEntry meal);
     Task<bool> DeleteMealAsync(Guid id);
 
+    // Replaces one day's entries FROM ONE SOURCE, leaving every other source alone.
+    //
+    // MyFitnessPal entries get edited and deleted after the fact, so mirroring a day
+    // means replacing it rather than merging -- and replacing it without the source
+    // filter would delete food logged by hand through San.
+    Task<int> ReplaceMealsForDayAsync(DateOnly day, string source, IEnumerable<MealEntry> meals);
+
+    // Sync health for sources with no token of their own.
+    Task<SyncState?> GetSyncStateAsync(string source);
+    Task SaveSyncStateAsync(SyncState state);
+
     // Weigh-ins
     Task UpsertWeighInAsync(WeighIn weighIn);
     Task<List<WeighIn>> GetWeighInsAsync(DateOnly from, DateOnly to);

@@ -14,5 +14,11 @@ public class MealEntry
     public double Carbs { get; set; }
     public double Fat { get; set; }
     public double? Fiber { get; set; }
+    // Where this row came from. Without it a sync cannot replace its own entries
+    // without also deleting food logged by hand -- and MyFitnessPal entries are edited
+    // and deleted after the fact often enough that replacing the day is the only
+    // correct way to mirror it.
+    public string Source { get; set; } = "manual";   // manual | mfp
+
     public DateTime LoggedAt { get; set; } = DateTime.UtcNow;
 }

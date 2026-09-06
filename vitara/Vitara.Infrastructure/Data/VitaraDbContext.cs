@@ -41,6 +41,7 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
     public DbSet<Workout>                Workouts        => Set<Workout>();
     public DbSet<DailyNutrition>         Nutrition       => Set<DailyNutrition>();
     public DbSet<MealEntry>              Meals           => Set<MealEntry>();
+    public DbSet<SyncState>              SyncStates      => Set<SyncState>();
     public DbSet<WeighIn>                WeighIns        => Set<WeighIn>();
 
     protected override void OnModelCreating(ModelBuilder b)
@@ -59,6 +60,8 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
         ConfigureDayEntity<Workout>(b, w => w.Id, w => w.Day);
         ConfigureDayEntity<DailyNutrition>(b, n => n.Id, n => n.Day);
         ConfigureDayEntity<WeighIn>(b, w => w.Id, w => w.Day);
+
+        b.Entity<SyncState>(e => e.HasKey(x => x.Source));
 
         b.Entity<MealEntry>(e =>
         {
@@ -196,6 +199,18 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
         // all, and both look identical to a sync that worked.
         await AddColumnIfMissingAsync(db, "Tokens", "LastSyncAttemptAt", "TEXT");
         await AddColumnIfMissingAsync(db, "Tokens", "LastSyncError", "TEXT");
+
+        await AddColumnIfMissingAsync(db, "Meals", "Source", "TEXT NOT NULL DEFAULT 'manual'");
+
+        // Sync health for sources that have no token to hang it on.
+        await db.Database.ExecuteSqlRawAsync("""
+            CREATE TABLE IF NOT EXISTS SyncStates (
+                Source TEXT PRIMARY KEY,
+                LastSyncedAt TEXT,
+                LastAttemptAt TEXT,
+                LastError TEXT
+            );
+            """);
     }
 
     private static async Task AddColumnIfMissingAsync(VitaraDbContext db, string table, string column, string type)
