@@ -21,10 +21,24 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
     private sealed class UtcNullableDateTimeConverter() : ValueConverter<DateTime?, DateTime?>(
         v => v, v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
 
+    // ISO-8601 text, which sorts correctly as TEXT in SQLite. The existing entities
+    // configure their Day property individually; these conventions cover the health
+    // tables, which carry thirteen DateOnly columns between them and would otherwise
+    // need the same three lines repeated for each.
+    private sealed class DayConverter() : ValueConverter<DateOnly, string>(
+        d => d.ToString(DayFormat, CultureInfo.InvariantCulture),
+        s => DateOnly.ParseExact(s, DayFormat, CultureInfo.InvariantCulture, DateTimeStyles.None));
+
+    private sealed class NullableDayConverter() : ValueConverter<DateOnly?, string?>(
+        d => d.HasValue ? d.Value.ToString(DayFormat, CultureInfo.InvariantCulture) : null,
+        s => s == null ? null : DateOnly.ParseExact(s, DayFormat, CultureInfo.InvariantCulture, DateTimeStyles.None));
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
         configurationBuilder.Properties<DateTime?>().HaveConversion<UtcNullableDateTimeConverter>();
+        configurationBuilder.Properties<DateOnly>().HaveConversion<DayConverter>();
+        configurationBuilder.Properties<DateOnly?>().HaveConversion<NullableDayConverter>();
     }
 
     public DbSet<OuraToken>              Tokens          => Set<OuraToken>();
@@ -42,6 +56,19 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
     public DbSet<DailyNutrition>         Nutrition       => Set<DailyNutrition>();
     public DbSet<MealEntry>              Meals           => Set<MealEntry>();
     public DbSet<SyncState>              SyncStates      => Set<SyncState>();
+
+    // ── Health intelligence ──
+    // Additive: the typed tables above stay the source of truth for ingest and display.
+    public DbSet<Observation>            Observations    => Set<Observation>();
+    public DbSet<Device>                 Devices         => Set<Device>();
+    public DbSet<Intervention>           Interventions   => Set<Intervention>();
+    public DbSet<ExcludedPeriod>         ExcludedPeriods => Set<ExcludedPeriod>();
+    public DbSet<TravelPeriod>           TravelPeriods   => Set<TravelPeriod>();
+    public DbSet<LabPanel>               LabPanels       => Set<LabPanel>();
+    public DbSet<ReferenceRange>         ReferenceRanges => Set<ReferenceRange>();
+    public DbSet<Baseline>               Baselines       => Set<Baseline>();
+    public DbSet<DerivedMetric>          DerivedMetrics  => Set<DerivedMetric>();
+    public DbSet<Finding>                Findings        => Set<Finding>();
     public DbSet<WeighIn>                WeighIns        => Set<WeighIn>();
 
     protected override void OnModelCreating(ModelBuilder b)
@@ -62,6 +89,46 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
         ConfigureDayEntity<WeighIn>(b, w => w.Id, w => w.Day);
 
         b.Entity<SyncState>(e => e.HasKey(x => x.Source));
+
+        b.Entity<Observation>(e =>
+        {
+            e.HasKey(x => x.Id);
+            // Re-ingesting the same day must not duplicate rows. Source is part of the
+            // key because the same metric can legitimately arrive from the ring and
+            // from a manual entry on the same day, and both are real.
+            e.HasIndex(x => new { x.Metric, x.ObservedAtLocal, x.Source }).IsUnique();
+            // The query the analytics layer actually runs: one metric, one baseline
+            // bucket, over a date window.
+            e.HasIndex(x => new { x.Metric, x.BaselineSignature, x.ObservedDateLocal });
+        });
+
+        b.Entity<Device>(e => e.HasKey(x => x.Id));
+        b.Entity<Intervention>(e => e.HasKey(x => x.Id));
+        b.Entity<ExcludedPeriod>(e => e.HasKey(x => x.Id));
+        b.Entity<TravelPeriod>(e => e.HasKey(x => x.Id));
+        b.Entity<LabPanel>(e => e.HasKey(x => x.Id));
+        b.Entity<ReferenceRange>(e => { e.HasKey(x => x.Id); e.HasIndex(x => x.Metric); });
+
+        b.Entity<Baseline>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.Metric, x.BaselineSignature, x.ComputedOnLocal });
+        });
+
+        b.Entity<DerivedMetric>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.Metric, x.ObservedDateLocal }).IsUnique();
+        });
+
+        b.Entity<Finding>(e =>
+        {
+            e.HasKey(x => x.Id);
+            // One row per ongoing condition, not one per day it persists. The key is
+            // what the ledger deduplicates on.
+            e.HasIndex(x => x.Key);
+            e.HasIndex(x => x.ResolvedLocal);
+        });
 
         b.Entity<MealEntry>(e =>
         {
@@ -201,6 +268,154 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
         await AddColumnIfMissingAsync(db, "Tokens", "LastSyncError", "TEXT");
 
         await AddColumnIfMissingAsync(db, "Meals", "Source", "TEXT NOT NULL DEFAULT 'manual'");
+
+        // ── Health intelligence tables ──
+        //
+        // EnsureCreated builds these from the model on a fresh database and does
+        // nothing at all on one that already exists, which is every deployed box. So
+        // they are created by hand here too, and the two definitions have to agree --
+        // a column name that differs between them fails at query time, not at startup.
+        //
+        // These land now even though the nightly job that consumes most of them comes
+        // later. Measurement context, a device swap, the week of flu: none of it can be
+        // reconstructed afterwards from the readings. It is recorded at entry time or
+        // it is gone.
+        await db.Database.ExecuteSqlRawAsync("""
+            CREATE TABLE IF NOT EXISTS Observations (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Metric TEXT NOT NULL DEFAULT '',
+                Value REAL NOT NULL DEFAULT 0,
+                Unit TEXT NOT NULL DEFAULT '',
+                ObservedAtLocal TEXT NOT NULL,
+                ObservedDateLocal TEXT NOT NULL,
+                Tier TEXT NOT NULL DEFAULT 'dense',
+                Source TEXT NOT NULL DEFAULT 'oura',
+                SourceRecordId TEXT,
+                DeviceId INTEGER,
+                LabPanelId TEXT,
+                ContextJson TEXT,
+                BaselineSignature TEXT NOT NULL DEFAULT '',
+                EligibleForBaseline INTEGER NOT NULL DEFAULT 1,
+                ValueOriginal REAL,
+                UnitOriginal TEXT,
+                CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS IX_Observations_Identity
+                ON Observations (Metric, ObservedAtLocal, Source);
+            CREATE INDEX IF NOT EXISTS IX_Observations_Window
+                ON Observations (Metric, BaselineSignature, ObservedDateLocal);
+
+            CREATE TABLE IF NOT EXISTS Devices (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Kind TEXT NOT NULL DEFAULT '',
+                Model TEXT NOT NULL DEFAULT '',
+                Firmware TEXT,
+                ActiveFromLocal TEXT NOT NULL,
+                ActiveToLocal TEXT,
+                Notes TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS Interventions (
+                Id TEXT PRIMARY KEY,
+                Kind TEXT NOT NULL DEFAULT 'supplement',
+                Name TEXT NOT NULL DEFAULT '',
+                Dose TEXT,
+                StartedOnLocal TEXT NOT NULL,
+                EndedOnLocal TEXT,
+                Notes TEXT,
+                CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
+            );
+
+            CREATE TABLE IF NOT EXISTS ExcludedPeriods (
+                Id TEXT PRIMARY KEY,
+                StartLocal TEXT NOT NULL,
+                EndLocal TEXT NOT NULL,
+                Reason TEXT NOT NULL DEFAULT 'other',
+                ExcludeFromBaseline INTEGER NOT NULL DEFAULT 1,
+                Notes TEXT,
+                CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
+            );
+
+            CREATE TABLE IF NOT EXISTS TravelPeriods (
+                Id TEXT PRIMARY KEY,
+                StartLocal TEXT NOT NULL,
+                EndLocal TEXT NOT NULL,
+                HomeTz TEXT NOT NULL DEFAULT 'America/New_York',
+                AwayTz TEXT NOT NULL DEFAULT '',
+                Notes TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS LabPanels (
+                Id TEXT PRIMARY KEY,
+                DrawnOnLocal TEXT NOT NULL,
+                LabName TEXT,
+                Notes TEXT,
+                CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
+            );
+
+            CREATE TABLE IF NOT EXISTS ReferenceRanges (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Metric TEXT NOT NULL DEFAULT '',
+                Low REAL,
+                High REAL,
+                Unit TEXT NOT NULL DEFAULT '',
+                Sex TEXT,
+                AgeMin INTEGER,
+                AgeMax INTEGER,
+                LabName TEXT,
+                Notes TEXT
+            );
+            CREATE INDEX IF NOT EXISTS IX_ReferenceRanges_Metric ON ReferenceRanges (Metric);
+
+            CREATE TABLE IF NOT EXISTS Baselines (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Metric TEXT NOT NULL DEFAULT '',
+                BaselineSignature TEXT NOT NULL DEFAULT '',
+                ComputedOnLocal TEXT NOT NULL,
+                WindowDays INTEGER NOT NULL DEFAULT 60,
+                Mean REAL NOT NULL DEFAULT 0,
+                StdDev REAL NOT NULL DEFAULT 0,
+                Median REAL NOT NULL DEFAULT 0,
+                P25 REAL NOT NULL DEFAULT 0,
+                P75 REAL NOT NULL DEFAULT 0,
+                N INTEGER NOT NULL DEFAULT 0,
+                IsValid INTEGER NOT NULL DEFAULT 0,
+                ExclusionsJson TEXT,
+                RegimeStartLocal TEXT,
+                CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
+            );
+            CREATE INDEX IF NOT EXISTS IX_Baselines_Lookup
+                ON Baselines (Metric, BaselineSignature, ComputedOnLocal);
+
+            CREATE TABLE IF NOT EXISTS DerivedMetrics (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Metric TEXT NOT NULL DEFAULT '',
+                ObservedDateLocal TEXT NOT NULL,
+                Value REAL NOT NULL DEFAULT 0,
+                InputsJson TEXT,
+                CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS IX_DerivedMetrics_Identity
+                ON DerivedMetrics (Metric, ObservedDateLocal);
+
+            CREATE TABLE IF NOT EXISTS Findings (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Key TEXT NOT NULL DEFAULT '',
+                Type TEXT NOT NULL DEFAULT '',
+                Metric TEXT NOT NULL DEFAULT '',
+                Direction TEXT NOT NULL DEFAULT '',
+                Severity TEXT NOT NULL DEFAULT 'info',
+                Confidence REAL,
+                Summary TEXT NOT NULL DEFAULT '',
+                EvidenceJson TEXT,
+                FirstDetectedLocal TEXT NOT NULL,
+                LastDetectedLocal TEXT NOT NULL,
+                ResolvedLocal TEXT,
+                CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
+            );
+            CREATE INDEX IF NOT EXISTS IX_Findings_Key ON Findings (Key);
+            CREATE INDEX IF NOT EXISTS IX_Findings_Open ON Findings (ResolvedLocal);
+            """);
 
         // Sync health for sources that have no token to hang it on.
         await db.Database.ExecuteSqlRawAsync("""
