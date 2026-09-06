@@ -57,6 +57,26 @@ public static class SanSchema
                 DueOn TEXT
             );
             CREATE INDEX IF NOT EXISTS IX_NotificationLedger_LastNotifiedAt ON NotificationLedger(LastNotifiedAt);
+
+            CREATE TABLE IF NOT EXISTS TurnLogs (
+                Id TEXT PRIMARY KEY,
+                CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00',
+                Source TEXT NOT NULL DEFAULT 'chat',
+                Provider TEXT NOT NULL DEFAULT '',
+                Model TEXT NOT NULL DEFAULT '',
+                UserMessage TEXT NOT NULL DEFAULT '',
+                AssistantReply TEXT NOT NULL DEFAULT '',
+                ToolCallsJson TEXT NOT NULL DEFAULT '[]',
+                ToolCallCount INTEGER NOT NULL DEFAULT 0,
+                OfferedTools TEXT NOT NULL DEFAULT '',
+                ClaimedUnverifiedWrite INTEGER NOT NULL DEFAULT 0,
+                LlmMs INTEGER NOT NULL DEFAULT 0,
+                PromptChars INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS IX_TurnLogs_CreatedAt ON TurnLogs(CreatedAt);
+            -- Failures are the rows worth finding: each one is a labelled training
+            -- example whose correct answer is already known.
+            CREATE INDEX IF NOT EXISTS IX_TurnLogs_Claimed ON TurnLogs(ClaimedUnverifiedWrite);
             """, ct);
 
         // Columns added to tables that already exist in deployed databases. SQLite has

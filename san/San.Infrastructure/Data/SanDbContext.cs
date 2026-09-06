@@ -34,6 +34,7 @@ public class SanDbContext(DbContextOptions<SanDbContext> options) : DbContext(op
     public DbSet<AppSetting> Settings => Set<AppSetting>();
     public DbSet<EmailAccount> EmailAccounts => Set<EmailAccount>();
     public DbSet<NotificationLedgerEntry> NotificationLedger => Set<NotificationLedgerEntry>();
+    public DbSet<TurnLog> TurnLogs => Set<TurnLog>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {

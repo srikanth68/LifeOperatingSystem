@@ -7,6 +7,12 @@ public interface ISanRepository
     // Chat
     Task<List<ChatMessage>> GetChatHistoryAsync(int take = 50);
     Task<ChatMessage> AddChatMessageAsync(ChatMessage message);
+
+    // Training data. Deliberately not part of chat history: clearing the conversation
+    // must not wipe the record of what the model actually did.
+    Task AddTurnLogAsync(TurnLog log);
+    Task<List<TurnLog>> GetTurnLogsAsync(int take = 500, bool failuresOnly = false);
+    Task<int> CountTurnLogsAsync();
     Task ClearChatHistoryAsync();
 
     // Reminders

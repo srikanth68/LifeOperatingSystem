@@ -247,8 +247,14 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         // history (extra output conventions, a curated tool set), so sharing a llama.cpp
         // slot made every switch between talking and typing evict the other's cached
         // prefix. Separate lanes let each mode keep its own resident prefix.
+        // Wraps the executor so every tool call this turn makes is observed on the way
+        // through. The provider owns the loop and knows this privately; the executor is
+        // the one part of it the caller supplies, so decorating it captures the calls
+        // without changing IChatProvider for every implementation.
+        var recorder = new ToolCallRecorder();
+
         var (rawReply, llmMs) = await TimedAsync(
-            chat.CompleteWithToolsAsync(systemPrompt, turns, tools, executor,
+            chat.CompleteWithToolsAsync(systemPrompt, turns, tools, recorder.Wrap(executor),
                 maxSteps: 16, cacheLane: spoken ? 1 : 0));
         logger.LogInformation("San raw reply via {Provider} ({Length} chars, {LlmMs}ms): {Preview}",
             chat.ProviderName, rawReply.Length, llmMs, rawReply.Length > 800 ? rawReply[..800] + "…" : rawReply);
@@ -258,6 +264,41 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
             logger.LogInformation("Chat action block detected: {Detected}", replyText != rawReply);
 
         var assistantMsg = await repo.AddChatMessageAsync(new ChatMessage { Role = "assistant", Content = replyText });
+
+        // Kept for training, and kept even when the turn went fine.
+        //
+        // This is the pairing a fine-tune needs -- what was asked, what was offered,
+        // what was actually called -- and San computed it on every turn since it was
+        // built and threw it away at the end of the request. None of that is
+        // recoverable afterwards, which is why this is written before any training work
+        // rather than alongside it.
+        //
+        // Never allowed to fail a turn: the user asked a question, and losing their
+        // answer to bookkeeping would be a bad trade.
+        try
+        {
+            await repo.AddTurnLogAsync(new TurnLog
+            {
+                Source = spoken ? "voice" : "chat",
+                Provider = chat.ProviderName,
+                Model = chat.ModelName,
+                UserMessage = req.Content ?? "",
+                AssistantReply = replyText,
+                ToolCallsJson = recorder.ToJson(),
+                ToolCallCount = recorder.Calls.Count,
+                OfferedTools = string.Join(",", tools.Select(t => t.Name)),
+                // Recomputed over what really ran, so a turn that announced a write it
+                // never made is stored already labelled. Those rows are the examples
+                // whose correct answer is known without anyone annotating them.
+                ClaimedUnverifiedWrite = WriteClaimCheck.ClaimsUnverifiedWrite(replyText, recorder.Names),
+                LlmMs = llmMs,
+                PromptChars = systemPrompt.Length,
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not record turn log.");
+        }
 
         logger.LogInformation("Chat turn total: {TotalMs}ms (context {ContextMs}ms, llm/tools {LlmMs}ms)",
             turnSw.ElapsedMilliseconds, contextMs, llmMs);

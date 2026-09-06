@@ -18,6 +18,24 @@ public class SanRepository(SanDbContext db) : ISanRepository
         return message;
     }
 
+    public async Task AddTurnLogAsync(TurnLog log)
+    {
+        db.TurnLogs.Add(log);
+        await db.SaveChangesAsync();
+    }
+
+    // Newest first. failuresOnly narrows to turns where the model announced a write it
+    // never made -- the labelled examples, where the correct behaviour is already known
+    // without anyone annotating anything.
+    public async Task<List<TurnLog>> GetTurnLogsAsync(int take = 500, bool failuresOnly = false)
+    {
+        var q = db.TurnLogs.AsQueryable();
+        if (failuresOnly) q = q.Where(t => t.ClaimedUnverifiedWrite);
+        return await q.OrderByDescending(t => t.CreatedAt).Take(Math.Clamp(take, 1, 20000)).ToListAsync();
+    }
+
+    public async Task<int> CountTurnLogsAsync() => await db.TurnLogs.CountAsync();
+
     public async Task ClearChatHistoryAsync()
     {
         db.ChatMessages.RemoveRange(db.ChatMessages);
