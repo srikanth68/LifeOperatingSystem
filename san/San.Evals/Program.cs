@@ -74,8 +74,8 @@ foreach (var c in cases)
 
     for (var i = 0; i < runs; i++)
     {
-        string reply;
-        try { reply = await client.AskAsync(c.SystemPrompt, c.UserMessage); }
+        ModelReply reply;
+        try { reply = await client.AskAsync(c.SystemPrompt, c.UserMessage, c.Tools); }
         catch (Exception ex)
         {
             // A transport failure is not a model failure, and silently scoring it as
@@ -153,8 +153,13 @@ if (outPath is not null)
 Console.WriteLine();
 return 0;
 
-static string Flatten(string reply)
+// A tool-selection failure often has empty prose -- the whole failure IS the call list,
+// or its absence -- so both are printed. "called nothing" is the single most
+// informative thing a failing tool case can say.
+static string Flatten(ModelReply reply)
 {
-    var one = string.Join(" ", reply.Split('\n', StringSplitOptions.RemoveEmptyEntries)).Trim();
-    return one.Length <= 160 ? one : one[..160] + "…";
+    var calls = reply.ToolNames.Count == 0 ? "called nothing" : "called " + string.Join(", ", reply.ToolNames);
+    var text = string.Join(" ", reply.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries)).Trim();
+    if (text.Length > 140) text = text[..140] + "…";
+    return string.IsNullOrEmpty(text) ? $"[{calls}]" : $"[{calls}] {text}";
 }
