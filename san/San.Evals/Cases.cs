@@ -23,7 +23,7 @@ namespace San.Evals;
 // that differently would measure something the running system does not care about.
 public static class Cases
 {
-    public static List<EvalCase> Build(string chatPrompt)
+    public static List<EvalCase> Build(string chatPrompt, List<San.Application.Interfaces.ToolDefinition>? catalogue = null)
     {
         var withConventions = chatPrompt + "\n\n" + SanOutputConventions.Text;
         var voice = chatPrompt + "\n\n" + SanOutputConventions.Voice;
@@ -38,7 +38,8 @@ public static class Cases
         var withContext = withConventions +
             "\n\nSYSTEM CONTEXT (live):\nVault: net worth 70450.32 USD, cash 18230.10 USD across 4 accounts.";
 
-        var tools = ToolFixtures.Catalogue;
+        // The frozen eleven by default; the real forty-eight when one is supplied.
+        var tools = catalogue ?? ToolFixtures.Catalogue;
 
         return
         [

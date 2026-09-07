@@ -45,6 +45,17 @@ if (!File.Exists(promptPath))
 }
 
 var chatPrompt = await File.ReadAllTextAsync(promptPath);
+
+// An exported catalogue makes the tool cases measure selection among the real
+// forty-eight rather than a representative eleven -- a materially harder question,
+// and the one that decides whether the fixture result transfers.
+var toolsPath = arg("--tools", null);
+List<San.Application.Interfaces.ToolDefinition>? catalogue = null;
+if (toolsPath is not null)
+{
+    if (!File.Exists(toolsPath)) { Console.Error.WriteLine($"Tool catalogue not found: {toolsPath}"); return 2; }
+    catalogue = ToolFixtures.LoadFrom(toolsPath);
+}
 var client = new ModelClient(url!, temp, enableThinking: false);
 
 string model;
@@ -55,13 +66,14 @@ catch (Exception ex)
     return 2;
 }
 
-var cases = Cases.Build(chatPrompt)
+var cases = Cases.Build(chatPrompt, catalogue)
     .Where(c => filter is null || c.Category.Equals(filter, StringComparison.OrdinalIgnoreCase))
     .ToList();
 
 Console.WriteLine();
 Console.WriteLine($"model   {model}");
 Console.WriteLine($"prompt  {Path.GetFileName(promptPath)} ({chatPrompt.Length} chars)");
+Console.WriteLine($"tools   {(catalogue is null ? "fixture (11)" : $"{Path.GetFileName(toolsPath)} ({catalogue.Count})")}");
 Console.WriteLine($"runs    {runs} per case at temp {temp}   ({cases.Count * runs} calls)");
 Console.WriteLine();
 

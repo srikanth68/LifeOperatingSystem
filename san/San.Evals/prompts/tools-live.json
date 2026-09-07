@@ -1,0 +1,832 @@
+[
+  {
+    "name": "reminder_create",
+    "description": "Create a reminder. Use for ANY \"remind me...\" - never Apple Reminders, never action_add (that's silent backlog). text* \u00b7 dueAt* \u00b7 notifyTelegram (true)",
+    "parameters": [
+      {
+        "name": "text",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "dueAt",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "notifyTelegram",
+        "type": "boolean",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "reminders_list",
+    "description": "Reminders with ids for update/complete/delete.",
+    "parameters": []
+  },
+  {
+    "name": "reminder_update",
+    "description": "Edit text or due time; re-arms the notification. reminderId* \u00b7 text* \u00b7 dueAt* \u00b7 notifyTelegram",
+    "parameters": [
+      {
+        "name": "reminderId",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "text",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "dueAt",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "notifyTelegram",
+        "type": "boolean",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "reminder_complete",
+    "description": "Tick off / reopen a reminder. reminderId* \u00b7 done",
+    "parameters": [
+      {
+        "name": "reminderId",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "done",
+        "type": "boolean",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "reminder_delete",
+    "description": "Permanently delete. Prefer reminder_complete unless removal is explicit. reminderId*",
+    "parameters": [
+      {
+        "name": "reminderId",
+        "type": "string",
+        "required": true
+      }
+    ]
+  },
+  {
+    "name": "alert_create",
+    "description": "Create an alert. type* spending_threshold | goal_deadline | document_expiry | custom \u00b7 title* \u00b7 description thresholdValue dollars - required for spending_threshold only triggerAt - required for all other types notifyTelegram (true)",
+    "parameters": [
+      {
+        "name": "type",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "thresholdValue",
+        "type": "number",
+        "required": false
+      },
+      {
+        "name": "triggerAt",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "notifyTelegram",
+        "type": "boolean",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "alerts_list",
+    "description": "Alerts with ids. For \"what alerts do I have\". Active ones already appear in agenda_now.",
+    "parameters": []
+  },
+  {
+    "name": "alert_delete",
+    "description": "- alertId* from alerts_list.",
+    "parameters": [
+      {
+        "name": "alertId",
+        "type": "string",
+        "required": true
+      }
+    ]
+  },
+  {
+    "name": "calendar_event_create",
+    "description": "Create a calendar event. Use for \"schedule...\", \"put it on my calendar\" - never an external calendar app. title* \u00b7 startTime* \u00b7 endTime* \u00b7 description \u00b7 location",
+    "parameters": [
+      {
+        "name": "title",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "startTime",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "endTime",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "location",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "calendar_events_list",
+    "description": "Upcoming events in a window. For \"what's on my calendar\", \"am I free on X\", \"when is Y\". General \"what should I be doing\" -> agenda_now. from (today) \u00b7 to (+1 week)",
+    "parameters": [
+      {
+        "name": "from",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "to",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "person_create",
+    "description": "Add a contact. name* \u00b7 phone \u00b7 email \u00b7 birthday yyyy-MM-dd or MM-dd \u00b7 relationship (other) \u00b7 notes \u00b7 tags csv",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "phone",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "email",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "birthday",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "relationship",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "notes",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "tags",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "person_update",
+    "description": "Update a contact. Send ALL fields - omitted ones are overwritten. personId* \u00b7 name* \u00b7 phone \u00b7 email \u00b7 birthday \u00b7 relationship \u00b7 notes \u00b7 tags",
+    "parameters": [
+      {
+        "name": "personId",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "phone",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "email",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "birthday",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "relationship",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "notes",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "tags",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "person_delete",
+    "description": "- personId* from san_people.",
+    "parameters": [
+      {
+        "name": "personId",
+        "type": "string",
+        "required": true
+      }
+    ]
+  },
+  {
+    "name": "food_log",
+    "description": "Log a meal to Vitara nutrition. For \"I ate...\". Pass per-100g macros if known so calories compute; otherwise name + qty is fine. foodName* \u00b7 mealType breakfast|lunch|dinner|snack (snack) \u00b7 day \u00b7 qty (1) \u00b7 unit \u00b7 servingSizeG \u00b7 calPer100 \u00b7 protPer100 \u00b7 carbsPer100 \u00b7 fatPer100",
+    "parameters": [
+      {
+        "name": "foodName",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "mealType",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "day",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "qty",
+        "type": "number",
+        "required": false
+      },
+      {
+        "name": "unit",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "servingSizeG",
+        "type": "number",
+        "required": false
+      },
+      {
+        "name": "calPer100",
+        "type": "number",
+        "required": false
+      },
+      {
+        "name": "protPer100",
+        "type": "number",
+        "required": false
+      },
+      {
+        "name": "carbsPer100",
+        "type": "number",
+        "required": false
+      },
+      {
+        "name": "fatPer100",
+        "type": "number",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "weight_log",
+    "description": "Record body weight. API stores KILOGRAMS - convert pounds (lb / 2.20462) before sending. weightKg* \u00b7 day",
+    "parameters": [
+      {
+        "name": "weightKg",
+        "type": "number",
+        "required": true
+      },
+      {
+        "name": "day",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "workout_log",
+    "description": "Log a workout. For \"I ran...\", \"log my workout\". activity* \u00b7 day \u00b7 calories \u00b7 distance METRES \u00b7 intensity \u00b7 label",
+    "parameters": [
+      {
+        "name": "activity",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "day",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "calories",
+        "type": "number",
+        "required": false
+      },
+      {
+        "name": "distance",
+        "type": "number",
+        "required": false
+      },
+      {
+        "name": "intensity",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "habit_checkin",
+    "description": "Mark a habit done/not-done. Needs the GUID - call karma_habits first. habitId* \u00b7 completed \u00b7 date \u00b7 note",
+    "parameters": [
+      {
+        "name": "habitId",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "completed",
+        "type": "boolean",
+        "required": false
+      },
+      {
+        "name": "date",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "note",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "habit_create",
+    "description": "Karma habit - a repeating action (\"meditate every morning\"). One-off outcome -> goal_create. name* \u00b7 description \u00b7 emoji (\u2705) \u00b7 category (personal) \u00b7 notifyTime HH:mm \u00b7 notifyMessage",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "emoji",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "category",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "notifyTime",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "notifyMessage",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "goals_list",
+    "description": "Karma goals with progress and ids. For \"what are my goals\", \"how far along am I\".",
+    "parameters": []
+  },
+  {
+    "name": "goal_create",
+    "description": "Karma goal - an outcome over time (\"run a half marathon\"). Repeating daily action -> habit_create. title* \u00b7 description \u00b7 category (personal) \u00b7 targetDate \u00b7 progress (0)",
+    "parameters": [
+      {
+        "name": "title",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "category",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "targetDate",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "progress",
+        "type": "number",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "goal_progress_set",
+    "description": "Set goal progress 0-100; 100 auto-completes. Use to sync goals with real data (e.g. Vitara weight -> weight goal). goalId* \u00b7 progress*",
+    "parameters": [
+      {
+        "name": "goalId",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "progress",
+        "type": "number",
+        "required": true
+      }
+    ]
+  },
+  {
+    "name": "property_financial_add",
+    "description": "Add income/expense against a property. Call aasthi_properties first for the id. propertyId* \u00b7 type* income|expense \u00b7 category* rent|repairs|tax|insurance|... \u00b7 amount* positive \u00b7 date* \u00b7 notes",
+    "parameters": [
+      {
+        "name": "propertyId",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "type",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "category",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "amount",
+        "type": "number",
+        "required": true
+      },
+      {
+        "name": "date",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "notes",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "property_task_create",
+    "description": "Create a maintenance task against a property. Call aasthi_properties first for the id. propertyId* \u00b7 title* \u00b7 dueDate \u00b7 priority low|medium|high|urgent (medium)",
+    "parameters": [
+      {
+        "name": "propertyId",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "dueDate",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "priority",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "northstar_sync",
+    "description": "Re-pull every module's state into the brain and distil to knowledge entries. Run before a review/briefing if data looks stale (also auto-runs every 15 min).",
+    "parameters": []
+  },
+  {
+    "name": "memory_save",
+    "description": "Persist durable memory to NorthStar - use this, not internal memory, for preferences, decisions, notable events, learned procedures. One fact per call. Write ABSOLUTE dates, never \"today\"/\"tomorrow\". Save only what you have confirmed. content* \u00b7 kind observation|preference|event|decision|skill \u00b7 tags csv \u00b7 importance 1-5",
+    "parameters": [
+      {
+        "name": "content",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "kind",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "tags",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "importance",
+        "type": "number",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "memory_recall",
+    "description": "Full-text relevance-ranked search of long-term memory. Call FIRST when you need context on the user, past decisions, or prior sessions. query* \u00b7 limit 1-50",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "memory_recent",
+    "description": "Most recent memories, newest first - resume where the last session ended. Not a search; topic-specific -> memory_recall. limit 1-100",
+    "parameters": [
+      {
+        "name": "limit",
+        "type": "number",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "fact_set",
+    "description": "Set a stable single-valued profile fact (overwrites). Free-form knowledge -> memory_save. key* snake_case \u00b7 value*",
+    "parameters": [
+      {
+        "name": "key",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "value",
+        "type": "string",
+        "required": true
+      }
+    ]
+  },
+  {
+    "name": "facts_list",
+    "description": "All profile key-value facts. For \"what do you know about me\", or to read a setting before acting.",
+    "parameters": []
+  },
+  {
+    "name": "journal_add",
+    "description": "Append to the user's daily journal. USE THIS when they are recounting their day, thinking out loud, or say to log/journal something - not memory_save, which is for durable facts and is read back on every turn. Entries append, so several a day is normal. text* \u00b7 day yyyy-MM-dd (defaults to today)",
+    "parameters": [
+      {
+        "name": "text",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "day",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "journal_read",
+    "description": "Read back the daily journal, newest first. USE THIS for 'what did I do last week', 'what was I thinking about on Tuesday', or before any review or reflection. days (14) \u00b7 limit (50)",
+    "parameters": [
+      {
+        "name": "days",
+        "type": "number",
+        "required": false
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "context_brief",
+    "description": "Full cross-module briefing: user facts, module snapshots + health, pending actions, active insights, recent knowledge. Ideal session-start call.",
+    "parameters": []
+  },
+  {
+    "name": "action_add",
+    "description": "Queue a passive backlog task (never notifies - for \"remind me\" use reminder_create). title* \u00b7 description \u00b7 priority 1 urgent-5 someday \u00b7 dueDate",
+    "parameters": [
+      {
+        "name": "title",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "priority",
+        "type": "number",
+        "required": false
+      },
+      {
+        "name": "dueDate",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "actions_pending",
+    "description": "Pending actions, priority-ordered, with GUIDs. For \"what should I do now\" prefer agenda_now. limit",
+    "parameters": [
+      {
+        "name": "limit",
+        "type": "number",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "action_complete",
+    "description": "Complete a queued action. actionId* from actions_pending.",
+    "parameters": [
+      {
+        "name": "actionId",
+        "type": "string",
+        "required": true
+      }
+    ]
+  },
+  {
+    "name": "agenda_now",
+    "description": "Ranked NOW list merging calendar, reminders, active alerts, NorthStar items, property tasks, today's unticked habits. Overdue/in-progress first. For \"what's on\", \"what should I be doing\", \"what am I forgetting\", \"where do I need to be\". Prefer over querying modules separately. limit (12)",
+    "parameters": [
+      {
+        "name": "limit",
+        "type": "number",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "maaya_search",
+    "description": "Search the whole system at once: Sutra docs, Aasthi property/maintenance records, Vault transactions, NorthStar memory. Use whenever the user asks where something is or to find something without naming a module - \"find the HVAC invoice\", \"what did I spend at Home Depot\", \"when did I last service the boiler\". Results grouped by source; empty groups omitted. query*",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": true
+      }
+    ]
+  },
+  {
+    "name": "vault_finances",
+    "description": "Net worth, cash, debt, 30-day spending by category. For \"how much do I have\", \"what's my net worth\", \"what am I spending on\". Specific merchant/transaction -> maaya_search.",
+    "parameters": []
+  },
+  {
+    "name": "vitara_health",
+    "description": "Readiness, sleep, activity, heart metrics, recent workouts. For \"how did I sleep\", \"what's my readiness\", \"am I recovered\".",
+    "parameters": []
+  },
+  {
+    "name": "aasthi_properties",
+    "description": "Real-estate portfolio: properties, values, profit. For \"my properties\", \"how are rentals doing\". Specific repair/cost/vendor -> maaya_search.",
+    "parameters": []
+  },
+  {
+    "name": "property_rent_status",
+    "description": "Rent and recurring bills per property this month: expected vs received, and what is late. For \"did rent come in\", \"is the mortgage paid\", \"what is overdue on the rentals\".",
+    "parameters": []
+  },
+  {
+    "name": "property_unreceipted",
+    "description": "Confirmed one-off property spending this year with no receipt attached. For \"what am I missing receipts for\", \"tax paperwork\". Recurring bills are excluded - the bank record covers those. year",
+    "parameters": [
+      {
+        "name": "year",
+        "type": "number",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "sutra_documents",
+    "description": "Document vault. No query -> stats (counts by category, expiring soon). With query -> matching docs. query",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "karma_habits",
+    "description": "Today's check-ins + active goals, with habit ids for habit_checkin. For \"did I do my habits\", \"how are my streaks\".",
+    "parameters": []
+  },
+  {
+    "name": "nexus_market",
+    "description": "Monitor status: tracked symbols, alert COUNT, market open/closed. Actual alerts -> nexus_alerts.",
+    "parameters": []
+  },
+  {
+    "name": "nexus_alerts",
+    "description": "Alerts Sentinel raised (symbol, kind, message, timestamp), newest first. days (7) \u00b7 limit (50)",
+    "parameters": [
+      {
+        "name": "days",
+        "type": "number",
+        "required": false
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "san_people",
+    "description": "Contacts. For \"who is X\", \"what's X's number\", \"whose birthday is coming up\" (query birthdays). Returns ids. query*",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": true
+      }
+    ]
+  },
+  {
+    "name": "maaya_status",
+    "description": "Health of all 8 modules with latency. Call only AFTER a tool errors, to check if that module is down. Never speculatively.",
+    "parameters": []
+  }
+]

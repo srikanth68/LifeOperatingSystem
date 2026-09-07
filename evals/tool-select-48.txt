@@ -1,0 +1,33 @@
+
+model   gemma-4-E4B-it-Q4_K_M.gguf
+prompt  chat.txt (1887 chars)
+tools   tools-live.json (48)
+runs    10 per case at temp 0.7   (70 calls)
+
+  tool-select/agenda_not_fanout  1/10     tool-select/agenda_not_fanout  2/10     tool-select/agenda_not_fanout  3/10     tool-select/agenda_not_fanout  4/10     tool-select/agenda_not_fanout  5/10     tool-select/agenda_not_fanout  6/10     tool-select/agenda_not_fanout  7/10     tool-select/agenda_not_fanout  8/10     tool-select/agenda_not_fanout  9/10     tool-select/agenda_not_fanout  10/10     tool-select    agenda_not_fanout           10/10  ok      
+  tool-select/create_reminder_acts  1/10     tool-select/create_reminder_acts  2/10     tool-select/create_reminder_acts  3/10     tool-select/create_reminder_acts  4/10     tool-select/create_reminder_acts  5/10     tool-select/create_reminder_acts  6/10     tool-select/create_reminder_acts  7/10     tool-select/create_reminder_acts  8/10     tool-select/create_reminder_acts  9/10     tool-select/create_reminder_acts  10/10     tool-select    create_reminder_acts        10/10  ok      
+  tool-select/complete_looks_first  1/10     tool-select/complete_looks_first  2/10     tool-select/complete_looks_first  3/10     tool-select/complete_looks_first  4/10     tool-select/complete_looks_first  5/10     tool-select/complete_looks_first  6/10     tool-select/complete_looks_first  7/10     tool-select/complete_looks_first  8/10     tool-select/complete_looks_first  9/10     tool-select/complete_looks_first  10/10     tool-select    complete_looks_first         2/10  BAD      
+  tool-select/search_not_single_module  1/10     tool-select/search_not_single_module  2/10     tool-select/search_not_single_module  3/10     tool-select/search_not_single_module  4/10     tool-select/search_not_single_module  5/10     tool-select/search_not_single_module  6/10     tool-select/search_not_single_module  7/10     tool-select/search_not_single_module  8/10     tool-select/search_not_single_module  9/10     tool-select/search_not_single_module  10/10     tool-select    search_not_single_module    10/10  ok      
+  tool-select/rent_status_tool  1/10     tool-select/rent_status_tool  2/10     tool-select/rent_status_tool  3/10     tool-select/rent_status_tool  4/10     tool-select/rent_status_tool  5/10     tool-select/rent_status_tool  6/10     tool-select/rent_status_tool  7/10     tool-select/rent_status_tool  8/10     tool-select/rent_status_tool  9/10     tool-select/rent_status_tool  10/10     tool-select    rent_status_tool            10/10  ok      
+  tool-select/habit_log_acts  1/10     tool-select/habit_log_acts  2/10     tool-select/habit_log_acts  3/10     tool-select/habit_log_acts  4/10     tool-select/habit_log_acts  5/10     tool-select/habit_log_acts  6/10     tool-select/habit_log_acts  7/10     tool-select/habit_log_acts  8/10     tool-select/habit_log_acts  9/10     tool-select/habit_log_acts  10/10     tool-select    habit_log_acts               0/10  BAD      
+  tool-select/no_tool_applies  1/10     tool-select/no_tool_applies  2/10     tool-select/no_tool_applies  3/10     tool-select/no_tool_applies  4/10     tool-select/no_tool_applies  5/10     tool-select/no_tool_applies  6/10     tool-select/no_tool_applies  7/10     tool-select/no_tool_applies  8/10     tool-select/no_tool_applies  9/10     tool-select/no_tool_applies  10/10     tool-select    no_tool_applies             10/10  ok      
+
+BY CATEGORY
+  tool-select      52/70    74.3%
+
+WHAT FAILURE LOOKED LIKE
+  complete_looks_first  (expected: Calls something (a list, or the agenda) to find the id. Does not answer in prose.)
+    - [called nothing] What is the ID for the Scoter Street task?
+    - [called nothing] I need the property ID for Scoter Street to mark that task complete. Can you provide that?
+    - [called nothing] I need the property ID for Scoter Street to mark the task complete. Can you provide it?
+  habit_log_acts  (expected: Records it rather than saying it will.)
+    - [called nothing] What kind of reading was it?
+    - [called nothing] What kind of reading was it?
+    - [called nothing] What kind of reading was it?
+
+AGAINST baseline.json
+  complete_looks_first       100% -> 20%  WORSE
+  habit_log_acts             70% -> 0%  WORSE
+
+
+[exited with code 0]

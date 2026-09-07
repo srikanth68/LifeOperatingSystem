@@ -1,0 +1,112 @@
+{
+  "version": 3,
+  "targets": {
+    "net8.0": {
+      "San.Application/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v8.0",
+        "dependencies": {
+          "San.Domain": "1.0.0"
+        },
+        "compile": {
+          "bin/placeholder/San.Application.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/San.Application.dll": {}
+        }
+      },
+      "San.Domain/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v8.0",
+        "compile": {
+          "bin/placeholder/San.Domain.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/San.Domain.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "San.Application/1.0.0": {
+      "type": "project",
+      "path": "../San.Application/San.Application.csproj",
+      "msbuildProject": "../San.Application/San.Application.csproj"
+    },
+    "San.Domain/1.0.0": {
+      "type": "project",
+      "path": "../San.Domain/San.Domain.csproj",
+      "msbuildProject": "../San.Domain/San.Domain.csproj"
+    }
+  },
+  "projectFileDependencyGroups": {
+    "net8.0": [
+      "San.Application >= 1.0.0"
+    ]
+  },
+  "packageFolders": {
+    "C:\\Users\\srila\\.nuget\\packages\\": {}
+  },
+  "project": {
+    "version": "1.0.0",
+    "restore": {
+      "projectUniqueName": "C:\\Users\\srila\\Claude Workspace\\maaya\\san\\San.Evals\\San.Evals.csproj",
+      "projectName": "San.Evals",
+      "projectPath": "C:\\Users\\srila\\Claude Workspace\\maaya\\san\\San.Evals\\San.Evals.csproj",
+      "packagesPath": "C:\\Users\\srila\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\srila\\Claude Workspace\\maaya\\san\\San.Evals\\obj\\",
+      "projectStyle": "PackageReference",
+      "configFilePaths": [
+        "C:\\Users\\srila\\AppData\\Roaming\\NuGet\\NuGet.Config"
+      ],
+      "originalTargetFrameworks": [
+        "net8.0"
+      ],
+      "sources": {
+        "https://api.nuget.org/v3/index.json": {}
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "projectReferences": {
+            "C:\\Users\\srila\\Claude Workspace\\maaya\\san\\San.Application\\San.Application.csproj": {
+              "projectPath": "C:\\Users\\srila\\Claude Workspace\\maaya\\san\\San.Application\\San.Application.csproj"
+            }
+          }
+        }
+      },
+      "warningProperties": {
+        "warnAsError": [
+          "NU1605"
+        ]
+      },
+      "restoreAuditProperties": {
+        "enableAudit": "true",
+        "auditLevel": "low",
+        "auditMode": "direct"
+      }
+    },
+    "frameworks": {
+      "net8.0": {
+        "targetAlias": "net8.0",
+        "imports": [
+          "net461",
+          "net462",
+          "net47",
+          "net471",
+          "net472",
+          "net48",
+          "net481"
+        ],
+        "assetTargetFallback": true,
+        "warn": true,
+        "frameworkReferences": {
+          "Microsoft.NETCore.App": {
+            "privateAssets": "all"
+          }
+        },
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.422/PortableRuntimeIdentifierGraph.json"
+      }
+    }
+  }
+}

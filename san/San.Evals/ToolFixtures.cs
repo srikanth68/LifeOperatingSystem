@@ -1,3 +1,4 @@
+using System.Text.Json;
 using San.Application.Interfaces;
 
 namespace San.Evals;
@@ -16,6 +17,30 @@ namespace San.Evals;
 // suite spending its whole budget re-reading schemas it is not testing.
 public static class ToolFixtures
 {
+    // Loads a catalogue exported from the live MCP source.
+    //
+    // The eleven-tool fixture below measures whether the model can choose at all. This
+    // loads the real forty-eight, which measures the harder question: whether it can
+    // still choose when the catalogue is four times bigger and full of near neighbours.
+    // The gateway itself is behind an API key and its list grows whenever a tool is
+    // added, so the export is frozen to a file rather than fetched.
+    public static List<ToolDefinition> LoadFrom(string path)
+    {
+        using var stream = File.OpenRead(path);
+        var raw = JsonSerializer.Deserialize<List<ExportedTool>>(stream,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? [];
+
+        return raw.Select(t => new ToolDefinition(
+            t.Name,
+            t.Description,
+            t.Parameters.ToDictionary(
+                p => p.Name,
+                p => new ToolParameter(p.Type, "", p.Required)))).ToList();
+    }
+
+    private sealed record ExportedParam(string Name, string Type, bool Required);
+    private sealed record ExportedTool(string Name, string Description, List<ExportedParam> Parameters);
+
     private static ToolDefinition T(string name, string description, params (string Name, string Type, string Desc, bool Req)[] ps)
         => new(name, description, ps.ToDictionary(p => p.Name, p => new ToolParameter(p.Type, p.Desc, p.Req)));
 
