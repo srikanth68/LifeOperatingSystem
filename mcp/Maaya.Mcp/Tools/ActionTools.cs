@@ -123,11 +123,15 @@ public sealed class ActionTools(ModuleGateway gw)
     }
 
     [McpServerTool(Name = "reminder_complete")]
-    [Description("Tick off / reopen a reminder. reminderId* · done")]
-    public Task<string> ReminderComplete(
-        string reminderId,
-        bool done = true) =>
-        gw.SendAsync("san", HttpMethod.Patch, $"/api/reminders/{reminderId}/done", done);
+    [Description("Tick off / reopen a reminder. reminder* is its TEXT (\"tree trimming\") or its id - no lookup needed. done")]
+    public async Task<string> ReminderComplete(
+        string reminder,
+        bool done = true)
+    {
+        var (id, error) = NameResolver.Resolve(reminder, await gw.GetAsync("san", "/api/reminders"), "reminder");
+        if (error is not null) return Fail(error);
+        return await gw.SendAsync("san", HttpMethod.Patch, $"/api/reminders/{id}/done", done);
+    }
 
     [McpServerTool(Name = "reminder_delete")]
     [Description("Permanently delete. Prefer reminder_complete unless removal is explicit. reminderId*")]
@@ -277,13 +281,17 @@ public sealed class ActionTools(ModuleGateway gw)
     // ── Karma: habits & goals ──
 
     [McpServerTool(Name = "habit_checkin")]
-    [Description("Mark a habit done/not-done. Needs the GUID - call karma_habits first. habitId* · completed · date · note")]
-    public Task<string> HabitCheckin(
-        string habitId,
+    [Description("Mark a habit done/not-done. habit* is its NAME (\"reading\") or its id - no lookup needed. completed · date · note")]
+    public async Task<string> HabitCheckin(
+        string habit,
         bool completed = true,
         string? date = null,
-        string? note = null) =>
-        gw.SendAsync("karma", HttpMethod.Post, $"/api/habits/{habitId}/log", new { date, completed, note });
+        string? note = null)
+    {
+        var (habitId, error) = NameResolver.Resolve(habit, await gw.GetAsync("karma", "/api/habits/today"), "habit");
+        if (error is not null) return Fail(error);
+        return await gw.SendAsync("karma", HttpMethod.Post, $"/api/habits/{habitId}/log", new { date, completed, note });
+    }
 
     [McpServerTool(Name = "habit_create")]
     [Description("Karma habit - a repeating action (\"meditate every morning\"). One-off outcome -> goal_create. name* · description · emoji (✅) · category (personal) · notifyTime HH:mm · notifyMessage")]

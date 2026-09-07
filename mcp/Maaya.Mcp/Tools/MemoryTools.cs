@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.ComponentModel;
 using ModelContextProtocol.Server;
 
@@ -84,9 +85,15 @@ public sealed class MemoryTools(ModuleGateway gw)
         gw.GetAsync("northstar", $"/api/actions?status=pending&limit={limit}");
 
     [McpServerTool(Name = "action_complete")]
-    [Description("Complete a queued action. actionId* from actions_pending.")]
-    public Task<string> ActionComplete(
-        string actionId) =>
-        gw.SendAsync("northstar", HttpMethod.Patch, $"/api/actions/{actionId}",
+    [Description("Complete a queued action. action* is its TITLE (\"tree trimming\") or its id - no lookup needed.")]
+    public async Task<string> ActionComplete(
+        string action)
+    {
+        var (id, error) = NameResolver.Resolve(
+            action, await gw.GetAsync("northstar", "/api/actions?status=pending&limit=100"), "action");
+        if (error is not null) return $"{{\"error\":{JsonSerializer.Serialize(error)}}}";
+
+        return await gw.SendAsync("northstar", HttpMethod.Patch, $"/api/actions/{id}",
             new { status = "completed", resolvedBy = "mcp-agent" });
+    }
 }

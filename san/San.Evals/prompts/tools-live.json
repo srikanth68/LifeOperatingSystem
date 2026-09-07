@@ -53,10 +53,10 @@
   },
   {
     "name": "reminder_complete",
-    "description": "Tick off / reopen a reminder. reminderId* \u00b7 done",
+    "description": "Tick off / reopen a reminder. reminder* is its TEXT (\"tree trimming\") or its id - no lookup needed. done",
     "parameters": [
       {
-        "name": "reminderId",
+        "name": "reminder",
         "type": "string",
         "required": true
       },
@@ -385,10 +385,10 @@
   },
   {
     "name": "habit_checkin",
-    "description": "Mark a habit done/not-done. Needs the GUID - call karma_habits first. habitId* \u00b7 completed \u00b7 date \u00b7 note",
+    "description": "Mark a habit done/not-done. habit* is its NAME (\"reading\") or its id - no lookup needed. completed \u00b7 date \u00b7 note",
     "parameters": [
       {
-        "name": "habitId",
+        "name": "habit",
         "type": "string",
         "required": true
       },
@@ -714,10 +714,10 @@
   },
   {
     "name": "action_complete",
-    "description": "Complete a queued action. actionId* from actions_pending.",
+    "description": "Complete a queued action. action* is its TITLE (\"tree trimming\") or its id - no lookup needed.",
     "parameters": [
       {
-        "name": "actionId",
+        "name": "action",
         "type": "string",
         "required": true
       }

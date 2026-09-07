@@ -1,0 +1,234 @@
+[
+  {
+    "name": "agenda_now",
+    "description": "Ranked NOW list merging calendar, reminders, active alerts, NorthStar items, property tasks, today's unticked habits. Overdue/in-progress first. For \"what's on\", \"what should I be doing\", \"what am I forgetting\", \"where do I need to be\". Prefer over querying modules separately. limit (12)",
+    "parameters": [
+      {
+        "name": "limit",
+        "type": "number",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "maaya_search",
+    "description": "Search the whole system at once: Sutra docs, Aasthi property/maintenance records, Vault transactions, NorthStar memory. Use whenever the user asks where something is or to find something without naming a module - \"find the HVAC invoice\", \"what did I spend at Home Depot\", \"when did I last service the boiler\". Results grouped by source; empty groups omitted. query*",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": true
+      }
+    ]
+  },
+  {
+    "name": "maaya_status",
+    "description": "Health of all 8 modules with latency. Call only AFTER a tool errors, to check if that module is down. Never speculatively.",
+    "parameters": []
+  },
+  {
+    "name": "reminders_list",
+    "description": "Reminders with ids for update/complete/delete.",
+    "parameters": []
+  },
+  {
+    "name": "reminder_create",
+    "description": "Create a reminder. Use for ANY \"remind me...\" - never Apple Reminders, never action_add (that's silent backlog). text* \u00b7 dueAt* \u00b7 notifyTelegram (true)",
+    "parameters": [
+      {
+        "name": "text",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "dueAt",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "notifyTelegram",
+        "type": "boolean",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "reminder_complete",
+    "description": "Tick off / reopen a reminder. reminderId* \u00b7 done",
+    "parameters": [
+      {
+        "name": "reminderId",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "done",
+        "type": "boolean",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "actions_pending",
+    "description": "Pending actions, priority-ordered, with GUIDs. For \"what should I do now\" prefer agenda_now. limit",
+    "parameters": [
+      {
+        "name": "limit",
+        "type": "number",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "action_complete",
+    "description": "Complete a queued action. actionId* from actions_pending.",
+    "parameters": [
+      {
+        "name": "actionId",
+        "type": "string",
+        "required": true
+      }
+    ]
+  },
+  {
+    "name": "karma_habits",
+    "description": "Today's check-ins + active goals, with habit ids for habit_checkin. For \"did I do my habits\", \"how are my streaks\".",
+    "parameters": []
+  },
+  {
+    "name": "habit_checkin",
+    "description": "Mark a habit done/not-done. Needs the GUID - call karma_habits first. habitId* \u00b7 completed \u00b7 date \u00b7 note",
+    "parameters": [
+      {
+        "name": "habitId",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "completed",
+        "type": "boolean",
+        "required": false
+      },
+      {
+        "name": "date",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "note",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "journal_add",
+    "description": "Append to the user's daily journal. USE THIS when they are recounting their day, thinking out loud, or say to log/journal something - not memory_save, which is for durable facts and is read back on every turn. Entries append, so several a day is normal. text* \u00b7 day yyyy-MM-dd (defaults to today)",
+    "parameters": [
+      {
+        "name": "text",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "day",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "memory_save",
+    "description": "Persist durable memory to NorthStar - use this, not internal memory, for preferences, decisions, notable events, learned procedures. One fact per call. Write ABSOLUTE dates, never \"today\"/\"tomorrow\". Save only what you have confirmed. content* \u00b7 kind observation|preference|event|decision|skill \u00b7 tags csv \u00b7 importance 1-5",
+    "parameters": [
+      {
+        "name": "content",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "kind",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "tags",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "importance",
+        "type": "number",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "memory_recall",
+    "description": "Full-text relevance-ranked search of long-term memory. Call FIRST when you need context on the user, past decisions, or prior sessions. query* \u00b7 limit 1-50",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "calendar_events_list",
+    "description": "Upcoming events in a window. For \"what's on my calendar\", \"am I free on X\", \"when is Y\". General \"what should I be doing\" -> agenda_now. from (today) \u00b7 to (+1 week)",
+    "parameters": [
+      {
+        "name": "from",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "to",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "vault_finances",
+    "description": "Net worth, cash, debt, 30-day spending by category. For \"how much do I have\", \"what's my net worth\", \"what am I spending on\". Specific merchant/transaction -> maaya_search.",
+    "parameters": []
+  },
+  {
+    "name": "vitara_health",
+    "description": "Readiness, sleep, activity, heart metrics, recent workouts. For \"how did I sleep\", \"what's my readiness\", \"am I recovered\".",
+    "parameters": []
+  },
+  {
+    "name": "aasthi_properties",
+    "description": "Real-estate portfolio: properties, values, profit. For \"my properties\", \"how are rentals doing\". Specific repair/cost/vendor -> maaya_search.",
+    "parameters": []
+  },
+  {
+    "name": "property_rent_status",
+    "description": "Rent and recurring bills per property this month: expected vs received, and what is late. For \"did rent come in\", \"is the mortgage paid\", \"what is overdue on the rentals\".",
+    "parameters": []
+  },
+  {
+    "name": "sutra_documents",
+    "description": "Document vault. No query -> stats (counts by category, expiring soon). With query -> matching docs. query",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "nexus_market",
+    "description": "Monitor status: tracked symbols, alert COUNT, market open/closed. Actual alerts -> nexus_alerts.",
+    "parameters": []
+  }
+]
