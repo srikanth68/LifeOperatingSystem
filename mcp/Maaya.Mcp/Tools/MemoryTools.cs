@@ -49,7 +49,7 @@ public sealed class MemoryTools(ModuleGateway gw)
     // relevance-ranked into San's context on every turn, and a diary retrieved by
     // accident during a reminder request is how the model learns to answer with prose
     // instead of a tool call.
-    [McpServerTool(Name = "journal_add")]
+    [McpServerTool(Name = "journal_log")]
     [Description("Append to the user's daily journal. USE THIS when they are recounting their day, thinking out loud, or say to log/journal something - not memory_save, which is for durable facts and is read back on every turn. Entries append, so several a day is normal. text* · day yyyy-MM-dd (defaults to today)")]
     public Task<string> JournalAdd(
         string text,

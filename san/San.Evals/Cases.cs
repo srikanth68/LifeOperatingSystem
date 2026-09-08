@@ -127,7 +127,7 @@ public static class Cases
 
             new("habit_log_acts", "tool-select", withTools,
                 "I did 30 minutes of reading today, log it.",
-                r => r.CalledAnyOf("habit_checkin", "journal_add"),
+                r => r.CalledAnyOf("habit_checkin", "journal_log"),
                 "Records it rather than saying it will.",
                 tools),
 

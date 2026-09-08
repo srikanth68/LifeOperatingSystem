@@ -639,7 +639,7 @@
     "parameters": []
   },
   {
-    "name": "journal_add",
+    "name": "journal_log",
     "description": "Append to the user's daily journal. USE THIS when they are recounting their day, thinking out loud, or say to log/journal something - not memory_save, which is for durable facts and is read back on every turn. Entries append, so several a day is normal. text* · day yyyy-MM-dd (defaults to today)",
     "parameters": [
       {

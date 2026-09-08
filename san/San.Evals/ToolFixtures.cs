@@ -7,7 +7,7 @@ namespace San.Evals;
 //
 // A FIXTURE, deliberately, and this is the one thing to understand about it. The real
 // catalogue is served by the MCP gateway at runtime and changes whenever a tool is
-// added -- journal_add appeared last week. An eval whose tool list moves underneath it
+// added -- journal_log appeared last week. An eval whose tool list moves underneath it
 // cannot compare two runs, so a score would drift for reasons that have nothing to do
 // with the model. These names and descriptions mirror the live ones; the point is that
 // they are frozen.
@@ -82,7 +82,7 @@ public static class ToolFixtures
             "Record a habit done today. name*",
             ("name", "string", "The habit.", true)),
 
-        T("journal_add",
+        T("journal_log",
             "Append to the user's daily log in their own words. text*",
             ("text", "string", "What to record.", true)),
     ];
