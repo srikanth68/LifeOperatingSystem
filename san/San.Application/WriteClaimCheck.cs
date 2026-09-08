@@ -105,10 +105,15 @@ public static class WriteClaimCheck
     // would be exactly as unverified as the call. Flagging it routes into the same
     // nudge, and the model makes the call properly on the second pass.
     //
-    // snake_case immediately followed by "(" is the whole signal, and it is a narrow
-    // one: every tool in both catalogues is named that way, and prose is not.
+    // snake_case immediately followed by a bracket is the whole signal, and it is a
+    // narrow one: every tool in both catalogues is named that way, and prose is not.
+    //
+    // A brace counts as well as a paren. Over thirty runs the model also produced
+    // action_complete{action:<|"|>tree trimming at Scoter Street<|"|>} -- its own call
+    // format half-decoded, template tokens and all. Nothing about that is a sentence,
+    // and matching only "(" would have handed it straight to the user.
     private static readonly System.Text.RegularExpressions.Regex ToolCallLiteral = new(
-        @"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\s*\(",
+        @"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\s*[({]",
         System.Text.RegularExpressions.RegexOptions.Compiled);
 
     public static bool WritesInProseInsteadOfCalling(string? content) =>

@@ -159,6 +159,8 @@ public class WriteClaimCheckTests
     [Theory]
     [InlineData("reminder_create(text=\"call the plumber\", dueOn=\"2026-09-08T09:00\")")]
     [InlineData("I'll use habit_checkin(habit=\"reading\") for that.")]
+    // The call format half-decoded, template tokens and all. Seen once in thirty runs.
+    [InlineData("action_complete{action:<|\"|>tree trimming at Scoter Street<|\"|>}")]
     public void SpotsItInEitherShape(string reply)
         => Assert.True(WriteClaimCheck.WritesInProseInsteadOfCalling(reply));
 
