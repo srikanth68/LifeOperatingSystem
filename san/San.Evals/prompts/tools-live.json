@@ -831,7 +831,7 @@
   },
   {
     "name": "health_findings",
-    "description": "What Vitara has CONCLUDED about the user's health: what is off their personal baseline, early illness signs, sustained changes, drift, sleep debt, and missing data. Computed in code, not guessed. For \"is anything off\", \"how am I really doing\", \"anything I should know\". Raw last-night numbers -> vitara_health.",
+    "description": "What Vitara has CONCLUDED about the user's health: what is off their personal baseline, early illness signs, sustained changes, drift, sleep debt, and missing data. Computed in code, not guessed. For \"is anything off\", \"how am I really doing\", \"anything I should know\". READ THE status FIELD FIRST - an empty findings list can mean the analysis has never run, which is NOT the same as the user being fine. Raw last-night numbers -> vitara_health.",
     "parameters": []
   },
   {

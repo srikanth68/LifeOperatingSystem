@@ -98,7 +98,7 @@ public sealed class ModuleTools(ModuleGateway gw)
     // this reports what they mean against sixty days of the user's own history -- what
     // is off baseline, what has stepped to a new level, what is drifting.
     [McpServerTool(Name = "health_findings")]
-    [Description("What Vitara has CONCLUDED about the user's health: what is off their personal baseline, early illness signs, sustained changes, drift, sleep debt, and missing data. Computed in code, not guessed. For \"is anything off\", \"how am I really doing\", \"anything I should know\". Raw last-night numbers -> vitara_health.")]
+    [Description("What Vitara has CONCLUDED about the user's health: what is off their personal baseline, early illness signs, sustained changes, drift, sleep debt, and missing data. Computed in code, not guessed. For \"is anything off\", \"how am I really doing\", \"anything I should know\". READ THE status FIELD FIRST - an empty findings list can mean the analysis has never run, which is NOT the same as the user being fine. Raw last-night numbers -> vitara_health.")]
     public Task<string> HealthFindings() => gw.GetAsync("vitara", "/api/health/summary");
 
     [McpServerTool(Name = "health_baselines")]

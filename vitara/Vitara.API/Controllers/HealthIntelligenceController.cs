@@ -118,13 +118,38 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         var baselineDay = await repo.GetLatestBaselineDayAsync();
         var latestData = await repo.GetLatestObservationDayAsync();
 
+        var daysBehind = baselineDay is null ? (int?)null : today.DayNumber - baselineDay.Value.DayNumber;
+
+        // Said in words, because the dates alone were not enough.
+        //
+        // Asked "is anything wrong with my health", San answered "nothing is flagged as
+        // being outside your normal range" -- from an empty findings list, on a box
+        // where the analysis had not run once. Zero findings and no analysis are the
+        // same JSON shape, and the model read the reassuring one. computedThrough and
+        // daysBehind were both sitting right there and it went straight past them.
+        //
+        // A number a model may or may not interpret is not a safeguard. A sentence that
+        // says "this has never been computed, do not tell the user they are fine" is.
+        var status =
+            baselineDay is null
+                ? "NO ANALYSIS YET. Baselines have never been computed, so an empty findings list means " +
+                  "nothing has been checked - it does NOT mean the user is fine. Say that plainly."
+            : daysBehind >= 3
+                ? $"STALE. Last computed {daysBehind} days ago, so findings may be out of date. " +
+                  "Say so before reporting them."
+            : findings.Count == 0
+                ? $"Analysis current through {baselineDay:yyyy-MM-dd}. Nothing is outside this user's " +
+                  "normal range."
+                : $"Analysis current through {baselineDay:yyyy-MM-dd}.";
+
         return Ok(new
         {
             // Recency first and unavoidably. San reads this, and an analysis with no
             // date attached reads as today's no matter how old it is.
+            status,
             latestDataDay = latestData?.ToString("yyyy-MM-dd"),
             computedThrough = baselineDay?.ToString("yyyy-MM-dd"),
-            daysBehind = baselineDay is null ? (int?)null : today.DayNumber - baselineDay.Value.DayNumber,
+            daysBehind,
 
             activeFindings = findings.Count,
             bySeverity = findings.GroupBy(f => f.Severity).ToDictionary(g => g.Key, g => g.Count()),
