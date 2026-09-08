@@ -129,7 +129,17 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
 
             var timeContext = await moduleContext.BuildTimeContextAsync(null, ct);
             var userTurn = new ChatTurn("user", "New emails since last check:\n\n" + string.Join("\n\n", batch));
-            var (tools, executor) = await toolRouter.ResolveAsync(ct);
+            var (allTools, executor) = await toolRouter.ResolveAsync(ct);
+
+            // The prompt says to make reminders, not NorthStar action items. Saying so
+            // is not enough on its own -- a tool the model can see is a tool it
+            // eventually reaches for, and this one had been quietly filling NorthStar
+            // with things the user never looked at. Taking it off the table for this
+            // run is the half that cannot be talked out of.
+            //
+            // Only for triage. action_add is still there in chat, where the user asks
+            // for a backlog item deliberately.
+            var tools = allTools.Where(t => !EmailTriageDefaults.WithheldTools.Contains(t.Name)).ToList();
             var basePrompt = await repo.GetSettingAsync(EmailTriageDefaults.PromptKey) ?? EmailTriageDefaults.Prompt;
             var systemPrompt = basePrompt + "\n\n" + timeContext + "\n\n" + SanOutputConventions.Text;
 

@@ -7,6 +7,17 @@ public static class EmailTriageDefaults
 {
     public const string PromptKey = "email.triage_prompt";
 
+    // Tools triage does not get, however the prompt is edited.
+    //
+    // The prompt is user-editable and stored in settings, so an instruction in it is a
+    // request rather than a guarantee -- and the default prompt itself asked for
+    // NorthStar action items until it was changed. Withholding the tool is what makes
+    // the rule hold: email produces reminders, which the user sees, not backlog entries
+    // in a module they do not open.
+    //
+    // action_add remains available in chat, where it is asked for deliberately.
+    public static readonly HashSet<string> WithheldTools = ["action_add"];
+
     // Must be the worker's ENTIRE reply to suppress the notification — see the
     // whole-reply check in EmailTriageWorker for why a substring match was unsafe.
     public const string NothingImportant = FindingParser.NothingImportant;
@@ -23,7 +34,10 @@ public static class EmailTriageDefaults
         "- save a durable fact or memory to NorthStar when an email reveals something lasting about " +
         "the user (a new account, a policy number, a changed address, a person's details)\n" +
         "- add a person to contacts when someone new is clearly a recurring correspondent\n" +
-        "- add an action item to NorthStar for something that needs doing but has no fixed date\n\n" +
+        "- create a REMINDER for something that needs doing but has no stated deadline. Give it a " +
+        "sensible near-term date — tomorrow morning unless the email implies otherwise — rather than " +
+        "skipping it for want of a date. Do NOT add NorthStar action items from email: everything " +
+        "actionable belongs in reminders, where the user actually sees it.\n\n" +
         "Prefer acting over reporting, but only when the email genuinely supports it — never invent " +
         "amounts, dates, or identifiers that are not in the message. If a detail you need is missing, " +
         "say so in the summary instead of guessing. Never take an action that sends anything on the " +
