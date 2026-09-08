@@ -117,7 +117,7 @@ public sealed class ModuleTools(ModuleGateway gw)
             : gw.GetAsync("sutra", $"/api/documents?q={Uri.EscapeDataString(query)}");
 
     [McpServerTool(Name = "karma_habits")]
-    [Description("Today's check-ins + active goals, with habit ids for habit_checkin. For \"did I do my habits\", \"how are my streaks\".")]
+    [Description("Today's check-ins + active goals. For \"did I do my habits\", \"how are my streaks\".")]
     public async Task<string> KarmaHabits()
     {
         var habits = await gw.GetAsync("karma", "/api/habits/today");

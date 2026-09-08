@@ -143,11 +143,20 @@ public partial class LlamaCppAgentChatProvider(HttpClient http, IConfiguration c
                 // exactly one chance to either do the work or take the claim back. The
                 // nudge is worded so it stays harmless if the check misfires on a reply
                 // that was describing something from an earlier turn.
-                if (!nudged && toolExecutor is not null && WriteClaimCheck.ClaimsUnverifiedWrite(content, executed))
+                // The same nudge catches a second, stranger shape: the model writing
+                // the call out as text -- action_complete(action="tree trimming") --
+                // with nothing on the wire. Right tool, right argument, wrong channel,
+                // and the user gets handed the raw string.
+                var wroteInProse = !executed.Any(WriteClaimCheck.IsWriteTool)
+                    && WriteClaimCheck.WritesInProseInsteadOfCalling(content);
+
+                if (!nudged && toolExecutor is not null
+                    && (WriteClaimCheck.ClaimsUnverifiedWrite(content, executed) || wroteInProse))
                 {
                     nudged = true;
                     logger.LogWarning(
-                        "Reply claims a completed action but no write tool ran this turn (tools used: {Tools}) - re-prompting once.",
+                        "Reply {What} but no write tool ran this turn (tools used: {Tools}) - re-prompting once.",
+                        wroteInProse ? "wrote a tool call out as text" : "claims a completed action",
                         executed.Count == 0 ? "none" : string.Join(", ", executed));
                     messages.Add(JsonDocument.Parse(message.GetRawText()).RootElement.Clone());
                     messages.Add(new
@@ -157,8 +166,9 @@ public partial class LlamaCppAgentChatProvider(HttpClient http, IConfiguration c
                             "SYSTEM CHECK: no tool ran during this turn, so nothing was written to Maaya just now. " +
                             "If your previous reply claimed you had just created, saved, scheduled, logged or updated " +
                             "something, that claim is false - either call the correct tool now to actually do it, or " +
-                            "correct the statement plainly. If you were describing something from an earlier turn, " +
-                            "repeat your answer unchanged.",
+                            "correct the statement plainly. If you wrote a tool call out as text rather than " +
+                            "calling it, make the call properly now. If you were describing something from an " +
+                            "earlier turn, repeat your answer unchanged.",
                     });
                     continue;
                 }

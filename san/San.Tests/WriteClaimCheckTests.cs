@@ -107,4 +107,66 @@ public class WriteClaimCheckTests
     [Fact]
     public void TreatsAnEmptyReplyAsNoClaim()
         => Assert.False(WriteClaimCheck.ClaimsUnverifiedWrite("   ", NoTools));
+
+    // ── The terse confirmation, from the 48-tool run ────────────────────────────
+
+    [Fact]
+    public void CatchesACompletionStatedWithNoSubject()
+    {
+        // Verbatim from the eval: asked to log 30 minutes of reading, the model said
+        // this and called nothing. No "I have", no "is" -- both earlier branches miss it.
+        Assert.True(WriteClaimCheck.ClaimsUnverifiedWrite("Habit reading done for today.", NoTools));
+    }
+
+    [Theory]
+    [InlineData("Reminder saved.")]
+    [InlineData("Task complete.")]
+    [InlineData("Logged - habit checked in for today.")]
+    public void CatchesTheOtherTerseShapes(string reply)
+        => Assert.True(WriteClaimCheck.ClaimsUnverifiedWrite(reply, NoTools));
+
+    [Fact]
+    public void DoesNotFlagTheSameSentenceAsAQuestion()
+    {
+        // San asking is the behaviour we want more of, not less.
+        Assert.False(WriteClaimCheck.ClaimsUnverifiedWrite("Is the reading habit done for today?", NoTools));
+        Assert.False(WriteClaimCheck.ClaimsUnverifiedWrite("Do you want that task marked complete?", NoTools));
+    }
+
+    [Fact]
+    public void DoesNotFlagAnOrdinaryDone()
+    {
+        // "done" on its own carries no claim about San's own writes.
+        Assert.False(WriteClaimCheck.ClaimsUnverifiedWrite("All done - anything else?", NoTools));
+        Assert.False(WriteClaimCheck.ClaimsUnverifiedWrite("That is done then.", NoTools));
+    }
+
+    [Fact]
+    public void ATerseClaimIsFineWhenTheWriteActuallyHappened()
+        => Assert.False(WriteClaimCheck.ClaimsUnverifiedWrite(
+            "Habit reading done for today.", ["habit_checkin"]));
+
+    // ── The call written out as text ────────────────────────────────────────────
+
+    [Fact]
+    public void SpotsACallEmittedAsProse()
+    {
+        // Also verbatim: the right tool and the right argument, on the wrong channel.
+        Assert.True(WriteClaimCheck.WritesInProseInsteadOfCalling(
+            "action_complete(action=\"tree trimming at Scoter Street\")"));
+    }
+
+    [Theory]
+    [InlineData("reminder_create(text=\"call the plumber\", dueOn=\"2026-09-08T09:00\")")]
+    [InlineData("I'll use habit_checkin(habit=\"reading\") for that.")]
+    public void SpotsItInEitherShape(string reply)
+        => Assert.True(WriteClaimCheck.WritesInProseInsteadOfCalling(reply));
+
+    [Theory]
+    [InlineData("Your net worth is 70,450 (cash 18,230).")]
+    [InlineData("I can check that for you.")]
+    [InlineData("The rent came in on the 3rd.")]
+    [InlineData("")]
+    public void LeavesOrdinaryProseAlone(string reply)
+        => Assert.False(WriteClaimCheck.WritesInProseInsteadOfCalling(reply));
 }

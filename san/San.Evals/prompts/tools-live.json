@@ -1,7 +1,7 @@
 [
   {
     "name": "reminder_create",
-    "description": "Create a reminder. Use for ANY \"remind me...\" - never Apple Reminders, never action_add (that's silent backlog). text* \u00b7 dueAt* \u00b7 notifyTelegram (true)",
+    "description": "Create a reminder. Use for ANY \"remind me...\" - never Apple Reminders, never action_add (that's silent backlog). text* · dueAt* · notifyTelegram (true)",
     "parameters": [
       {
         "name": "text",
@@ -27,7 +27,7 @@
   },
   {
     "name": "reminder_update",
-    "description": "Edit text or due time; re-arms the notification. reminderId* \u00b7 text* \u00b7 dueAt* \u00b7 notifyTelegram",
+    "description": "Edit text or due time; re-arms the notification. reminderId* · text* · dueAt* · notifyTelegram",
     "parameters": [
       {
         "name": "reminderId",
@@ -53,7 +53,7 @@
   },
   {
     "name": "reminder_complete",
-    "description": "Tick off / reopen a reminder. reminder* is its TEXT (\"tree trimming\") or its id - no lookup needed. done",
+    "description": "Tick off a reminder - defaults to DONE, so just call it. reminder* is its TEXT (\"tree trimming\") or its id; a name that matches nothing comes back with the list, so never ask the user first. done (true)",
     "parameters": [
       {
         "name": "reminder",
@@ -80,7 +80,7 @@
   },
   {
     "name": "alert_create",
-    "description": "Create an alert. type* spending_threshold | goal_deadline | document_expiry | custom \u00b7 title* \u00b7 description thresholdValue dollars - required for spending_threshold only triggerAt - required for all other types notifyTelegram (true)",
+    "description": "Create an alert. type* spending_threshold | goal_deadline | document_expiry | custom · title* · description thresholdValue dollars - required for spending_threshold only triggerAt - required for all other types notifyTelegram (true)",
     "parameters": [
       {
         "name": "type",
@@ -132,7 +132,7 @@
   },
   {
     "name": "calendar_event_create",
-    "description": "Create a calendar event. Use for \"schedule...\", \"put it on my calendar\" - never an external calendar app. title* \u00b7 startTime* \u00b7 endTime* \u00b7 description \u00b7 location",
+    "description": "Create a calendar event. Use for \"schedule...\", \"put it on my calendar\" - never an external calendar app. title* · startTime* · endTime* · description · location",
     "parameters": [
       {
         "name": "title",
@@ -163,7 +163,7 @@
   },
   {
     "name": "calendar_events_list",
-    "description": "Upcoming events in a window. For \"what's on my calendar\", \"am I free on X\", \"when is Y\". General \"what should I be doing\" -> agenda_now. from (today) \u00b7 to (+1 week)",
+    "description": "Upcoming events in a window. For \"what's on my calendar\", \"am I free on X\", \"when is Y\". General \"what should I be doing\" -> agenda_now. from (today) · to (+1 week)",
     "parameters": [
       {
         "name": "from",
@@ -179,7 +179,7 @@
   },
   {
     "name": "person_create",
-    "description": "Add a contact. name* \u00b7 phone \u00b7 email \u00b7 birthday yyyy-MM-dd or MM-dd \u00b7 relationship (other) \u00b7 notes \u00b7 tags csv",
+    "description": "Add a contact. name* · phone · email · birthday yyyy-MM-dd or MM-dd · relationship (other) · notes · tags csv",
     "parameters": [
       {
         "name": "name",
@@ -220,7 +220,7 @@
   },
   {
     "name": "person_update",
-    "description": "Update a contact. Send ALL fields - omitted ones are overwritten. personId* \u00b7 name* \u00b7 phone \u00b7 email \u00b7 birthday \u00b7 relationship \u00b7 notes \u00b7 tags",
+    "description": "Update a contact. Send ALL fields - omitted ones are overwritten. personId* · name* · phone · email · birthday · relationship · notes · tags",
     "parameters": [
       {
         "name": "personId",
@@ -277,7 +277,7 @@
   },
   {
     "name": "food_log",
-    "description": "Log a meal to Vitara nutrition. For \"I ate...\". Pass per-100g macros if known so calories compute; otherwise name + qty is fine. foodName* \u00b7 mealType breakfast|lunch|dinner|snack (snack) \u00b7 day \u00b7 qty (1) \u00b7 unit \u00b7 servingSizeG \u00b7 calPer100 \u00b7 protPer100 \u00b7 carbsPer100 \u00b7 fatPer100",
+    "description": "Log a meal to Vitara nutrition. For \"I ate...\". Pass per-100g macros if known so calories compute; otherwise name + qty is fine. foodName* · mealType breakfast|lunch|dinner|snack (snack) · day · qty (1) · unit · servingSizeG · calPer100 · protPer100 · carbsPer100 · fatPer100",
     "parameters": [
       {
         "name": "foodName",
@@ -333,7 +333,7 @@
   },
   {
     "name": "weight_log",
-    "description": "Record body weight. API stores KILOGRAMS - convert pounds (lb / 2.20462) before sending. weightKg* \u00b7 day",
+    "description": "Record body weight. API stores KILOGRAMS - convert pounds (lb / 2.20462) before sending. weightKg* · day",
     "parameters": [
       {
         "name": "weightKg",
@@ -349,7 +349,7 @@
   },
   {
     "name": "workout_log",
-    "description": "Log a workout. For \"I ran...\", \"log my workout\". activity* \u00b7 day \u00b7 calories \u00b7 distance METRES \u00b7 intensity \u00b7 label",
+    "description": "Log a workout. For \"I ran...\", \"log my workout\". activity* · day · calories · distance METRES · intensity · label",
     "parameters": [
       {
         "name": "activity",
@@ -385,7 +385,7 @@
   },
   {
     "name": "habit_checkin",
-    "description": "Mark a habit done/not-done. habit* is its NAME (\"reading\") or its id - no lookup needed. completed \u00b7 date \u00b7 note",
+    "description": "Tick off a habit - defaults to DONE today, so just call it. habit* is its NAME (\"reading\") or its id; a name that matches nothing comes back with the list, so never ask the user first. completed (true) · date (today) · note",
     "parameters": [
       {
         "name": "habit",
@@ -411,7 +411,7 @@
   },
   {
     "name": "habit_create",
-    "description": "Karma habit - a repeating action (\"meditate every morning\"). One-off outcome -> goal_create. name* \u00b7 description \u00b7 emoji (\u2705) \u00b7 category (personal) \u00b7 notifyTime HH:mm \u00b7 notifyMessage",
+    "description": "Karma habit - a repeating action (\"meditate every morning\"). One-off outcome -> goal_create. name* · description · emoji (✅) · category (personal) · notifyTime HH:mm · notifyMessage",
     "parameters": [
       {
         "name": "name",
@@ -452,7 +452,7 @@
   },
   {
     "name": "goal_create",
-    "description": "Karma goal - an outcome over time (\"run a half marathon\"). Repeating daily action -> habit_create. title* \u00b7 description \u00b7 category (personal) \u00b7 targetDate \u00b7 progress (0)",
+    "description": "Karma goal - an outcome over time (\"run a half marathon\"). Repeating daily action -> habit_create. title* · description · category (personal) · targetDate · progress (0)",
     "parameters": [
       {
         "name": "title",
@@ -483,7 +483,7 @@
   },
   {
     "name": "goal_progress_set",
-    "description": "Set goal progress 0-100; 100 auto-completes. Use to sync goals with real data (e.g. Vitara weight -> weight goal). goalId* \u00b7 progress*",
+    "description": "Set goal progress 0-100; 100 auto-completes. Use to sync goals with real data (e.g. Vitara weight -> weight goal). goalId* · progress*",
     "parameters": [
       {
         "name": "goalId",
@@ -499,7 +499,7 @@
   },
   {
     "name": "property_financial_add",
-    "description": "Add income/expense against a property. Call aasthi_properties first for the id. propertyId* \u00b7 type* income|expense \u00b7 category* rent|repairs|tax|insurance|... \u00b7 amount* positive \u00b7 date* \u00b7 notes",
+    "description": "Add income/expense against a property. Call aasthi_properties first for the id. propertyId* · type* income|expense · category* rent|repairs|tax|insurance|... · amount* positive · date* · notes",
     "parameters": [
       {
         "name": "propertyId",
@@ -535,7 +535,7 @@
   },
   {
     "name": "property_task_create",
-    "description": "Create a maintenance task against a property. Call aasthi_properties first for the id. propertyId* \u00b7 title* \u00b7 dueDate \u00b7 priority low|medium|high|urgent (medium)",
+    "description": "Create a maintenance task against a property. Call aasthi_properties first for the id. propertyId* · title* · dueDate · priority low|medium|high|urgent (medium)",
     "parameters": [
       {
         "name": "propertyId",
@@ -566,7 +566,7 @@
   },
   {
     "name": "memory_save",
-    "description": "Persist durable memory to NorthStar - use this, not internal memory, for preferences, decisions, notable events, learned procedures. One fact per call. Write ABSOLUTE dates, never \"today\"/\"tomorrow\". Save only what you have confirmed. content* \u00b7 kind observation|preference|event|decision|skill \u00b7 tags csv \u00b7 importance 1-5",
+    "description": "Persist durable memory to NorthStar - use this, not internal memory, for preferences, decisions, notable events, learned procedures. One fact per call. Write ABSOLUTE dates, never \"today\"/\"tomorrow\". Save only what you have confirmed. content* · kind observation|preference|event|decision|skill · tags csv · importance 1-5",
     "parameters": [
       {
         "name": "content",
@@ -592,7 +592,7 @@
   },
   {
     "name": "memory_recall",
-    "description": "Full-text relevance-ranked search of long-term memory. Call FIRST when you need context on the user, past decisions, or prior sessions. query* \u00b7 limit 1-50",
+    "description": "Full-text relevance-ranked search of long-term memory. Call FIRST when you need context on the user, past decisions, or prior sessions. query* · limit 1-50",
     "parameters": [
       {
         "name": "query",
@@ -619,7 +619,7 @@
   },
   {
     "name": "fact_set",
-    "description": "Set a stable single-valued profile fact (overwrites). Free-form knowledge -> memory_save. key* snake_case \u00b7 value*",
+    "description": "Set a stable single-valued profile fact (overwrites). Free-form knowledge -> memory_save. key* snake_case · value*",
     "parameters": [
       {
         "name": "key",
@@ -640,7 +640,7 @@
   },
   {
     "name": "journal_add",
-    "description": "Append to the user's daily journal. USE THIS when they are recounting their day, thinking out loud, or say to log/journal something - not memory_save, which is for durable facts and is read back on every turn. Entries append, so several a day is normal. text* \u00b7 day yyyy-MM-dd (defaults to today)",
+    "description": "Append to the user's daily journal. USE THIS when they are recounting their day, thinking out loud, or say to log/journal something - not memory_save, which is for durable facts and is read back on every turn. Entries append, so several a day is normal. text* · day yyyy-MM-dd (defaults to today)",
     "parameters": [
       {
         "name": "text",
@@ -656,7 +656,7 @@
   },
   {
     "name": "journal_read",
-    "description": "Read back the daily journal, newest first. USE THIS for 'what did I do last week', 'what was I thinking about on Tuesday', or before any review or reflection. days (14) \u00b7 limit (50)",
+    "description": "Read back the daily journal, newest first. USE THIS for 'what did I do last week', 'what was I thinking about on Tuesday', or before any review or reflection. days (14) · limit (50)",
     "parameters": [
       {
         "name": "days",
@@ -677,7 +677,7 @@
   },
   {
     "name": "action_add",
-    "description": "Queue a passive backlog task (never notifies - for \"remind me\" use reminder_create). title* \u00b7 description \u00b7 priority 1 urgent-5 someday \u00b7 dueDate",
+    "description": "Queue a passive backlog task (never notifies - for \"remind me\" use reminder_create). title* · description · priority 1 urgent-5 someday · dueDate",
     "parameters": [
       {
         "name": "title",
@@ -789,7 +789,7 @@
   },
   {
     "name": "karma_habits",
-    "description": "Today's check-ins + active goals, with habit ids for habit_checkin. For \"did I do my habits\", \"how are my streaks\".",
+    "description": "Today's check-ins + active goals. For \"did I do my habits\", \"how are my streaks\".",
     "parameters": []
   },
   {
@@ -799,7 +799,7 @@
   },
   {
     "name": "nexus_alerts",
-    "description": "Alerts Sentinel raised (symbol, kind, message, timestamp), newest first. days (7) \u00b7 limit (50)",
+    "description": "Alerts Sentinel raised (symbol, kind, message, timestamp), newest first. days (7) · limit (50)",
     "parameters": [
       {
         "name": "days",

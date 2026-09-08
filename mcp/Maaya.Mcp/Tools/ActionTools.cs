@@ -123,7 +123,7 @@ public sealed class ActionTools(ModuleGateway gw)
     }
 
     [McpServerTool(Name = "reminder_complete")]
-    [Description("Tick off / reopen a reminder. reminder* is its TEXT (\"tree trimming\") or its id - no lookup needed. done")]
+    [Description("Tick off a reminder - defaults to DONE, so just call it. reminder* is its TEXT (\"tree trimming\") or its id; a name that matches nothing comes back with the list, so never ask the user first. done (true)")]
     public async Task<string> ReminderComplete(
         string reminder,
         bool done = true)
@@ -281,7 +281,7 @@ public sealed class ActionTools(ModuleGateway gw)
     // ── Karma: habits & goals ──
 
     [McpServerTool(Name = "habit_checkin")]
-    [Description("Mark a habit done/not-done. habit* is its NAME (\"reading\") or its id - no lookup needed. completed · date · note")]
+    [Description("Tick off a habit - defaults to DONE today, so just call it. habit* is its NAME (\"reading\") or its id; a name that matches nothing comes back with the list, so never ask the user first. completed (true) · date (today) · note")]
     public async Task<string> HabitCheckin(
         string habit,
         bool completed = true,

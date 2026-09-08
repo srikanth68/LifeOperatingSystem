@@ -65,6 +65,55 @@ public static class WriteClaimCheck
         System.Text.RegularExpressions.RegexOptions.IgnoreCase
         | System.Text.RegularExpressions.RegexOptions.Compiled);
 
+    // A completion stated without a subject.
+    //
+    // Measured against the real catalogue, "I did 30 minutes of reading today, log it"
+    // came back as the flat sentence "Habit reading done for today." -- with nothing
+    // called. It reads as a confirmation and it is a lie, and it slips past both
+    // branches above: there is no "I have", and no "is" or "are" either.
+    //
+    // Only fires next to a noun San actually writes, so an ordinary "all done" or
+    // "that's done then" stays well clear of it.
+    private static readonly System.Text.RegularExpressions.Regex TerseCompletion = new(
+        @"\b(?:reminders?|tasks?|actions?|goals?|habits?|events?|alerts?|entr(?:y|ies)|logs?)\b" +
+        @"[^.!?]{0,40}?\b(?:done|complete|completed|logged|recorded|saved|checked\s+in)\b",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    // Questions are the one shape that must never be flagged. "Is the reading habit
+    // done for today?" is San asking, and nudging it for asking would teach the loop
+    // to stop asking.
+    private static readonly System.Text.RegularExpressions.Regex Interrogative = new(
+        @"^\s*(?:is|are|was|were|did|do|does|have|has|had|shall|should|can|could|would|will|want|which|who|what|when)\b",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static readonly System.Text.RegularExpressions.Regex Sentences = new(
+        @"[^.!?\n]+[.!?]?", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    // The model writing a call out instead of making one.
+    //
+    // Against the real forty-eight tools, two runs in ten answered "mark the tree
+    // trimming complete" with the literal text action_complete(action="tree trimming
+    // at Scoter Street") and no tool_calls on the wire at all. It had picked the right
+    // tool and the right argument; it simply emitted them as prose, and the user would
+    // have been handed that raw string with nothing done.
+    //
+    // Deliberately NOT parsed and executed. Running a call the model never formally
+    // made would mean writing to the user's data off a regex over free text, which is
+    // the kind of guess the rest of this system refuses to make -- and the argument
+    // would be exactly as unverified as the call. Flagging it routes into the same
+    // nudge, and the model makes the call properly on the second pass.
+    //
+    // snake_case immediately followed by "(" is the whole signal, and it is a narrow
+    // one: every tool in both catalogues is named that way, and prose is not.
+    private static readonly System.Text.RegularExpressions.Regex ToolCallLiteral = new(
+        @"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\s*\(",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    public static bool WritesInProseInsteadOfCalling(string? content) =>
+        !string.IsNullOrWhiteSpace(content) && ToolCallLiteral.IsMatch(content);
+
     // True when the reply announces a write -- completed, or about to happen -- and no
     // write tool ran this turn.
     public static bool ClaimsUnverifiedWrite(string? content, IEnumerable<string> executedTools)
@@ -75,9 +124,16 @@ public static class WriteClaimCheck
 
         // Sentence by sentence, so a conditional in one clause cannot excuse a flat
         // declaration in another: "I need the id. I will now mark it complete." is
-        // still a claim, made by the second sentence.
-        foreach (var sentence in content.Split('.', '!', '?', '\n'))
+        // still a claim, made by the second sentence. The terminator is kept rather
+        // than split away, because whether a sentence was a question decides whether
+        // it counts at all.
+        foreach (System.Text.RegularExpressions.Match m in Sentences.Matches(content))
         {
+            var sentence = m.Value;
+            if (sentence.Contains('?') || Interrogative.IsMatch(sentence)) continue;
+
+            if (TerseCompletion.IsMatch(sentence)) return true;
+
             if (!IntentPattern.IsMatch(sentence)) continue;
             if (Conditional.IsMatch(sentence)) continue;
             return true;
