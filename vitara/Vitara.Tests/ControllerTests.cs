@@ -131,6 +131,48 @@ public class FakeRepo : IVitaraRepository
         Task.FromResult(BaselineData.Where(b => b.ComputedOnLocal == computedOn).ToList());
     public Task SaveDerivedMetricsAsync(IEnumerable<DerivedMetric> metrics) { DerivedData.AddRange(metrics); return Task.CompletedTask; }
 
+    public Task<List<DerivedMetric>> GetDerivedMetricsAsync(DateOnly from, DateOnly to) =>
+        Task.FromResult(DerivedData.Where(d => d.ObservedDateLocal >= from && d.ObservedDateLocal <= to).ToList());
+
+    public List<Finding> FindingData { get; } = [];
+
+    // The same reconcile-don't-insert contract the real repository implements: match
+    // on key, keep the original detection date, resolve what is no longer detected.
+    // A fake that merely appends would let a test pass while the behaviour findings
+    // depend on -- one row per condition, not one per day -- was broken.
+    public Task<FindingSync> SyncFindingsAsync(IEnumerable<Finding> detected, DateOnly asOf)
+    {
+        var incoming = detected.ToList();
+        var open = FindingData.Where(f => f.ResolvedLocal is null).ToList();
+        int opened = 0, continued = 0;
+
+        foreach (var f in incoming)
+        {
+            var existing = open.FirstOrDefault(o => o.Key == f.Key);
+            if (existing is null) { FindingData.Add(f); opened++; }
+            else
+            {
+                existing.LastDetectedLocal = asOf;
+                existing.Severity = f.Severity;
+                existing.Summary = f.Summary;
+                continued++;
+            }
+        }
+
+        var keys = incoming.Select(f => f.Key).ToHashSet();
+        var resolved = open.Where(f => !keys.Contains(f.Key)).ToList();
+        foreach (var f in resolved) f.ResolvedLocal = asOf;
+
+        return Task.FromResult(new FindingSync(opened, continued, resolved.Count));
+    }
+
+    public Task<List<Finding>> GetFindingsAsync(bool activeOnly = true, int limit = 100) =>
+        Task.FromResult(FindingData
+            .Where(f => !activeOnly || f.ResolvedLocal is null)
+            .OrderByDescending(f => f.LastDetectedLocal)
+            .Take(limit)
+            .ToList());
+
     public Task<List<ExcludedPeriod>> GetExcludedPeriodsAsync() => Task.FromResult(ExcludedData);
     public Task<List<TravelPeriod>> GetTravelPeriodsAsync() => Task.FromResult(TravelData);
     public Task<List<Device>> GetDevicesAsync() => Task.FromResult(DeviceData);

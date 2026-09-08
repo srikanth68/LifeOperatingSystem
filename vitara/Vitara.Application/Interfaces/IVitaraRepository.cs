@@ -103,6 +103,22 @@ public interface IVitaraRepository
     Task SaveBaselinesAsync(IEnumerable<Baseline> baselines);
     Task<List<Baseline>> GetBaselinesAsync(DateOnly computedOn);
     Task SaveDerivedMetricsAsync(IEnumerable<DerivedMetric> metrics);
+    Task<List<DerivedMetric>> GetDerivedMetricsAsync(DateOnly from, DateOnly to);
+
+    // Reconciles a detection pass against what is already open.
+    //
+    // NOT an insert. A finding persists while the condition does, so the same elevated
+    // resting heart rate on four consecutive mornings has to be one ongoing finding
+    // that can be reported as "for the fourth day" -- not four identical rows, and not
+    // four notifications. Matching is on Key, which the detectors derive from content
+    // in code precisely so it is stable across runs.
+    //
+    // A finding that is open but no longer detected is RESOLVED, not deleted. The
+    // condition ending is itself information, and a system that silently drops a row
+    // can never tell the user that something went back to normal.
+    Task<FindingSync> SyncFindingsAsync(IEnumerable<Finding> detected, DateOnly asOf);
+
+    Task<List<Finding>> GetFindingsAsync(bool activeOnly = true, int limit = 100);
 
     Task<List<ExcludedPeriod>> GetExcludedPeriodsAsync();
     Task<List<TravelPeriod>> GetTravelPeriodsAsync();
@@ -119,3 +135,11 @@ public interface IVitaraRepository
     // Sync tracking
     Task<DateOnly?> GetLatestDayAsync();
 }
+
+// What one detection pass did to the open set.
+//
+// Reported rather than inferred from row counts, because the three outcomes mean
+// different things to the caller: only Opened is genuinely new, Continued is a
+// condition that is still true and must not re-notify, and Resolved is the good news
+// that has to travel too.
+public record FindingSync(int Opened, int Continued, int Resolved);

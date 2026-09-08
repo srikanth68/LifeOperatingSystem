@@ -122,6 +122,12 @@ public static class HealthThresholds
     // Drift: how many days without movement before a slow trend is worth saying.
     public static int DriftMinDays => EnvInt("VITARA_DRIFT_MIN_DAYS", 14);
 
+    // How much accumulated deficit over a fortnight is worth raising. Five hours --
+    // roughly twenty-five minutes a night. Below that it sits inside the error of the
+    // need estimate the debt is measured against, and reporting it would mean
+    // reporting that estimate's own uncertainty back as a finding.
+    public static double SleepDebtThresholdMinutes => Env("VITARA_SLEEP_DEBT_MINUTES", 300);
+
     // Days without an expected reading before absence becomes a finding.
     public static int StalenessDays => EnvInt("VITARA_STALENESS_DAYS", 3);
 }

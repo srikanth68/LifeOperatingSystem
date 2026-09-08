@@ -94,6 +94,17 @@ public sealed class ModuleTools(ModuleGateway gw)
     [Description("Readiness, sleep, activity, heart metrics, recent workouts. For \"how did I sleep\", \"what's my readiness\", \"am I recovered\".")]
     public Task<string> VitaraHealth() => gw.GetAsync("vitara", "/api/dashboard");
 
+    // The derived layer, not the raw one. vitara_health reports last night's numbers;
+    // this reports what they mean against sixty days of the user's own history -- what
+    // is off baseline, what has stepped to a new level, what is drifting.
+    [McpServerTool(Name = "health_findings")]
+    [Description("What Vitara has CONCLUDED about the user's health: what is off their personal baseline, early illness signs, sustained changes, drift, sleep debt, and missing data. Computed in code, not guessed. For \"is anything off\", \"how am I really doing\", \"anything I should know\". Raw last-night numbers -> vitara_health.")]
+    public Task<string> HealthFindings() => gw.GetAsync("vitara", "/api/health/summary");
+
+    [McpServerTool(Name = "health_baselines")]
+    [Description("What is NORMAL for this user per metric - mean, spread, sample size, and whether there is enough data to be valid. Use before calling a reading high or low, so \"high\" means high FOR THEM rather than against a population.")]
+    public Task<string> HealthBaselines() => gw.GetAsync("vitara", "/api/health/baselines");
+
     [McpServerTool(Name = "aasthi_properties")]
     [Description("Real-estate portfolio: properties, values, profit. For \"my properties\", \"how are rentals doing\". Specific repair/cost/vendor -> maaya_search.")]
     public Task<string> AasthiProperties() => gw.GetAsync("aasthi", "/api/properties");

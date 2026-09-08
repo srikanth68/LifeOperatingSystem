@@ -187,6 +187,65 @@ public class VitaraRepository(VitaraDbContext db) : IVitaraRepository
         await db.SaveChangesAsync();
     }
 
+    public Task<List<DerivedMetric>> GetDerivedMetricsAsync(DateOnly from, DateOnly to) =>
+        db.DerivedMetrics
+            .Where(m => m.ObservedDateLocal >= from && m.ObservedDateLocal <= to)
+            .OrderBy(m => m.ObservedDateLocal)
+            .ToListAsync();
+
+    public async Task<FindingSync> SyncFindingsAsync(IEnumerable<Finding> detected, DateOnly asOf)
+    {
+        var incoming = detected.ToList();
+
+        // Every finding still open, whether or not this pass detected anything. An
+        // empty detection set is meaningful: it means everything open has resolved.
+        var open = await db.Findings.Where(f => f.ResolvedLocal == null).ToListAsync();
+        var byKey = open.ToDictionary(f => f.Key);
+
+        int opened = 0, continued = 0;
+
+        foreach (var f in incoming)
+        {
+            if (byKey.TryGetValue(f.Key, out var existing))
+            {
+                // FirstDetectedLocal is deliberately left alone. It is what lets the
+                // finding be reported as "for the fourth morning" rather than as
+                // something new every single day, which is the difference between a
+                // system that is tracking a condition and one that is just repeating
+                // itself.
+                existing.LastDetectedLocal = asOf;
+                existing.Severity = f.Severity;
+                existing.Confidence = f.Confidence;
+                existing.Summary = f.Summary;
+                existing.EvidenceJson = f.EvidenceJson;
+                continued++;
+            }
+            else
+            {
+                db.Findings.Add(f);
+                opened++;
+            }
+        }
+
+        // Open, and not detected this pass: the condition has ended. Recorded rather
+        // than removed -- "your resting heart rate is back to normal" is worth as much
+        // as the original finding was, and a deleted row can never say it.
+        var stillDetected = incoming.Select(f => f.Key).ToHashSet();
+        var resolved = open.Where(f => !stillDetected.Contains(f.Key)).ToList();
+        foreach (var f in resolved) f.ResolvedLocal = asOf;
+
+        await db.SaveChangesAsync();
+        return new FindingSync(opened, continued, resolved.Count);
+    }
+
+    public Task<List<Finding>> GetFindingsAsync(bool activeOnly = true, int limit = 100) =>
+        db.Findings
+            .Where(f => !activeOnly || f.ResolvedLocal == null)
+            .OrderByDescending(f => f.LastDetectedLocal)
+            .ThenByDescending(f => f.Id)
+            .Take(Math.Clamp(limit, 1, 500))
+            .ToListAsync();
+
     public Task<List<ExcludedPeriod>> GetExcludedPeriodsAsync() => db.ExcludedPeriods.ToListAsync();
     public Task<List<TravelPeriod>> GetTravelPeriodsAsync() => db.TravelPeriods.ToListAsync();
     public Task<List<Device>> GetDevicesAsync() => db.Devices.OrderBy(d => d.ActiveFromLocal).ToListAsync();

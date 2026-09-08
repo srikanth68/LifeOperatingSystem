@@ -18,6 +18,13 @@ signature change is rare enough to be worth doing deliberately.
 
     python scripts/refresh-eval-tools.py            # rewrites, prints what changed
     python scripts/refresh-eval-tools.py --check    # exits 1 if stale, writes nothing
+    python scripts/refresh-eval-tools.py --add-new  # also append newly declared tools
+
+--add-new is separate because appending changes the CATALOGUE SIZE, and catalogue size
+is one of the things the eval measures: tool selection got measurably worse going from
+eleven tools to forty-eight. A run against a bigger catalogue is not comparable to the
+baseline before it, so growing it is a decision rather than a refresh. Parameters are
+left empty for appended tools -- fill them in by hand if the tool takes any.
 """
 
 import glob
@@ -66,6 +73,13 @@ def main():
         )
 
     added = [n for n in source if not any(t["name"] == n for t in tools)]
+
+    if added and "--add-new" in sys.argv and not check_only:
+        for name in added:
+            tools.append({"name": name, "description": source[name], "parameters": []})
+        print("appended: " + ", ".join(added))
+        print("NOTE: parameters left empty -- fill them in by hand for any tool that takes some.")
+        added = []
 
     changed = []
     for t in tools:

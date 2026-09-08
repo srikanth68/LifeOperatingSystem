@@ -109,6 +109,7 @@ builder.Services.AddHostedService<InsightWorker>();
 builder.Services.AddHostedService<CommitmentWorker>();
 builder.Services.AddHostedService<MorningBriefWorker>();
 builder.Services.AddHostedService<PropertyLedgerWorker>();
+builder.Services.AddHostedService<HealthFindingsWorker>();
 
 var host = builder.Build();
 

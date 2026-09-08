@@ -546,6 +546,40 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
         }
     }
 
+    public async Task<List<HealthFinding>> GetHealthFindingsAsync(CancellationToken ct = default)
+    {
+        var root = await TryGetJsonAsync("vitara", "/api/health/summary", ct);
+        if (root is null) return [];
+
+        // Vitara being unreachable, or having computed nothing yet, both come back as
+        // an empty list rather than an exception. A missing health analysis must not
+        // take down the worker that reads it -- and "no findings" is also the correct
+        // answer on a morning when nothing is wrong.
+        if (!root.Value.TryGetProperty("findings", out var arr) || arr.ValueKind != JsonValueKind.Array)
+            return [];
+
+        var findings = new List<HealthFinding>();
+
+        foreach (var f in arr.EnumerateArray())
+        {
+            var key = Str(f, "key");
+            var summary = Str(f, "summary");
+
+            // A finding with no key cannot be deduplicated, and one with no summary has
+            // nothing to say. Either way it is not worth notifying about.
+            if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(summary)) continue;
+
+            findings.Add(new HealthFinding(
+                key,
+                Str(f, "type") ?? "",
+                Str(f, "severity") ?? "info",
+                summary,
+                f.TryGetProperty("daysRunning", out var d) && d.TryGetInt32(out var days) ? days : 1));
+        }
+
+        return findings;
+    }
+
     private async Task<JsonElement?> TryGetJsonAsync(string client, string path, CancellationToken ct)
     {
         var (json, _) = await TryGetJsonWithErrorAsync(client, path, ct);

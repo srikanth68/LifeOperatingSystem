@@ -160,6 +160,35 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
 
         logger.LogInformation("Derived metrics: {Baselines} baselines ({Valid} valid), {Derived} derived values.",
             baselines.Count, baselines.Count(b => b.IsValid), derived.Count);
+
+        await DetectAsync(repo, observations, baselines, asOf);
+    }
+
+    // The step that makes the statistics speak.
+    //
+    // Everything above computes what is true; this decides what is worth saying. It is
+    // kept separate and reads back from storage rather than reusing the in-memory
+    // derived list, because a detector needs the last several days of z-scores and
+    // this pass only computed today's.
+    private async Task DetectAsync(
+        IVitaraRepository repo, IReadOnlyList<Observation> observations,
+        IReadOnlyList<Baseline> baselines, DateOnly asOf)
+    {
+        var derived = await repo.GetDerivedMetricsAsync(asOf.AddDays(-120), asOf);
+
+        var findings = FindingRun.Detect(new FindingRunInputs(observations, baselines, derived, asOf));
+        var sync = await repo.SyncFindingsAsync(findings, asOf);
+
+        // Opened and resolved are events; continued is a condition that is still true
+        // and must not be announced again. Logged separately so the container log shows
+        // which of the three happened without anyone diffing row counts.
+        if (sync.Opened > 0 || sync.Resolved > 0)
+            logger.LogInformation(
+                "Findings: {Opened} opened, {Continued} continuing, {Resolved} resolved — {Keys}",
+                sync.Opened, sync.Continued, sync.Resolved,
+                findings.Count == 0 ? "none" : string.Join(", ", findings.Select(f => f.Key)));
+        else
+            logger.LogDebug("Findings: {Continued} continuing, nothing new.", sync.Continued);
     }
 
     private static List<DerivedMetric> ComputeLoadAndSleep(IReadOnlyList<Observation> observations, DateOnly asOf)

@@ -58,4 +58,11 @@ public interface IModuleContextService
     // container's own clock) — shared by time-context building and chat action scheduling
     // (e.g. converting "9am tomorrow" reminders to UTC) so both use the same source of truth.
     Task<TimeZoneInfo> ResolveTimeZoneAsync(CancellationToken ct = default);
+
+    // Vitara's active health findings — what it has concluded, not what it measured.
+    //
+    // Deliberately typed rather than raw JSON. These go to the notification ledger,
+    // which needs a key and a severity per finding; handing a worker a JSON blob to
+    // pick apart is how the key ends up derived in three places and matching in none.
+    Task<List<HealthFinding>> GetHealthFindingsAsync(CancellationToken ct = default);
 }
