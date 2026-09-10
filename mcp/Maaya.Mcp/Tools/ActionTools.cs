@@ -105,7 +105,7 @@ public sealed class ActionTools(ModuleGateway gw)
     }
 
     [McpServerTool(Name = "reminders_list")]
-    [Description("Reminders with ids for update/complete/delete.")]
+    [Description("Reminders with ids for update/complete/delete. Report times from dueAtLocal, which is already the user's wall-clock time - dueAt is UTC and will be several hours out.")]
     public Task<string> RemindersList() => gw.GetAsync("san", "/api/reminders");
 
     [McpServerTool(Name = "reminder_update")]

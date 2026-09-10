@@ -22,7 +22,7 @@
   },
   {
     "name": "reminders_list",
-    "description": "Reminders with ids for update/complete/delete.",
+    "description": "Reminders with ids for update/complete/delete. Report times from dueAtLocal, which is already the user's wall-clock time - dueAt is UTC and will be several hours out.",
     "parameters": []
   },
   {

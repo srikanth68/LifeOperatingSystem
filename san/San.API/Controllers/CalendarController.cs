@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using San.Application;
 using San.Application.DTOs;
 using San.Application.Interfaces;
 using San.Domain.Entities;
@@ -7,7 +8,7 @@ using San.Domain.Entities;
 namespace San.API.Controllers;
 
 [ApiController, Route("api/calendar")]
-public class CalendarController(ISanRepository repo, IGoogleCalendarService google) : ControllerBase
+public class CalendarController(ISanRepository repo, IGoogleCalendarService google, IModuleContextService moduleContext) : ControllerBase
 {
     [HttpGet("events")]
     public async Task<IActionResult> GetEvents([FromQuery] DateTime? from, [FromQuery] DateTime? to)
@@ -15,7 +16,8 @@ public class CalendarController(ISanRepository repo, IGoogleCalendarService goog
         var start = from ?? DateTime.UtcNow.Date;
         var end = to ?? start.AddDays(7);
         var events = await repo.GetCalendarEventsAsync(start, end);
-        return Ok(events.Select(ToResult));
+        var tzAll = await moduleContext.ResolveTimeZoneAsync();
+        return Ok(events.Select(e => ToResult(e, tzAll)));
     }
 
     [HttpGet("now-next")]
@@ -27,10 +29,11 @@ public class CalendarController(ISanRepository repo, IGoogleCalendarService goog
 
         var current = events.FirstOrDefault(e => e.StartTime <= now && e.EndTime >= now);
         var upcoming = events.Where(e => e.StartTime > now && e.StartTime <= windowEnd).ToList();
+        var tzNow = await moduleContext.ResolveTimeZoneAsync();
 
         return Ok(new NowNextResult(
-            current is not null ? ToResult(current) : null,
-            upcoming.Select(ToResult).ToList(),
+            current is not null ? ToResult(current, tzNow) : null,
+            upcoming.Select(e => ToResult(e, tzNow)).ToList(),
             now));
     }
 
@@ -51,7 +54,7 @@ public class CalendarController(ISanRepository repo, IGoogleCalendarService goog
         };
 
         var saved = await repo.UpsertCalendarEventAsync(ev);
-        return Ok(ToResult(saved));
+        return Ok(ToResult(saved, await moduleContext.ResolveTimeZoneAsync()));
     }
 
     [AllowAnonymous]
@@ -83,8 +86,10 @@ public class CalendarController(ISanRepository repo, IGoogleCalendarService goog
         return Ok(new { synced = count });
     }
 
-    private static CalendarEventResult ToResult(CalendarEvent e) =>
-        new(e.Id, e.Title, e.Description, e.StartTime, e.EndTime,
+    private static CalendarEventResult ToResult(CalendarEvent e, TimeZoneInfo tz) =>
+        new(e.Id, e.Title, e.Description,
+            LocalTimeText.AsUtc(e.StartTime), LocalTimeText.AsUtc(e.EndTime),
             e.Location, e.Source, e.ExternalId, e.CalendarName,
-            e.AllDay, e.CreatedAt, e.UpdatedAt);
+            e.AllDay, LocalTimeText.AsUtc(e.CreatedAt), LocalTimeText.AsUtc(e.UpdatedAt),
+            LocalTimeText.Local(e.StartTime, tz), LocalTimeText.Local(e.EndTime, tz));
 }

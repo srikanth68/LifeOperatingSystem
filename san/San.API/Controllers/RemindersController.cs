@@ -7,10 +7,14 @@ using San.Domain.Entities;
 namespace San.API.Controllers;
 
 [ApiController, Route("api/reminders")]
-public class RemindersController(ISanRepository repo, ILogger<RemindersController> logger) : ControllerBase
+public class RemindersController(ISanRepository repo, IModuleContextService moduleContext, ILogger<RemindersController> logger) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetAll() => Ok((await repo.GetRemindersAsync()).Select(ToResult));
+    public async Task<IActionResult> GetAll()
+    {
+        var tz = await moduleContext.ResolveTimeZoneAsync();
+        return Ok((await repo.GetRemindersAsync()).Select(r => ToResult(r, tz)));
+    }
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] ReminderUpsertRequest req)
@@ -33,12 +37,12 @@ public class RemindersController(ISanRepository repo, ILogger<RemindersControlle
         {
             logger.LogInformation("Reminder \"{New}\" already covered by \"{Existing}\" — not creating a second.",
                 req.Text, existing.Text);
-            return Ok(ToResult(existing));
+            return Ok(ToResult(existing, await moduleContext.ResolveTimeZoneAsync()));
         }
 
         var reminder = new Reminder { Text = req.Text, DueAt = req.DueAt, NotifyTelegram = req.NotifyTelegram };
         var saved = await repo.AddReminderAsync(reminder);
-        return Ok(ToResult(saved));
+        return Ok(ToResult(saved, await moduleContext.ResolveTimeZoneAsync()));
     }
 
     [HttpPut("{id:guid}")]
@@ -54,20 +58,22 @@ public class RemindersController(ISanRepository repo, ILogger<RemindersControlle
             // Editing the due date re-arms the Telegram notification.
             r.NotifiedAt = null;
         });
-        return updated is null ? NotFound() : Ok(ToResult(updated));
+        return updated is null ? NotFound() : Ok(ToResult(updated, await moduleContext.ResolveTimeZoneAsync()));
     }
 
     [HttpPatch("{id:guid}/done")]
     public async Task<IActionResult> SetDone(Guid id, [FromBody] bool done)
     {
         var updated = await repo.UpdateReminderAsync(id, r => r.Done = done);
-        return updated is null ? NotFound() : Ok(ToResult(updated));
+        return updated is null ? NotFound() : Ok(ToResult(updated, await moduleContext.ResolveTimeZoneAsync()));
     }
 
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id) =>
         await repo.DeleteReminderAsync(id) ? NoContent() : NotFound();
 
-    private static ReminderResult ToResult(Reminder r) =>
-        new(r.Id, r.Text, r.DueAt, r.Done, r.NotifyTelegram, r.NotifiedAt, r.CreatedAt);
+    private static ReminderResult ToResult(Reminder r, TimeZoneInfo tz) =>
+        new(r.Id, r.Text, LocalTimeText.AsUtc(r.DueAt), r.Done, r.NotifyTelegram,
+            LocalTimeText.AsUtc(r.NotifiedAt), LocalTimeText.AsUtc(r.CreatedAt),
+            LocalTimeText.Local(r.DueAt, tz));
 }

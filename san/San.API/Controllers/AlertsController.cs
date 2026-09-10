@@ -7,12 +7,16 @@ using San.Domain.Entities;
 namespace San.API.Controllers;
 
 [ApiController, Route("api/alerts")]
-public class AlertsController(ISanRepository repo, ILogger<AlertsController> logger) : ControllerBase
+public class AlertsController(ISanRepository repo, IModuleContextService moduleContext, ILogger<AlertsController> logger) : ControllerBase
 {
     private static readonly string[] ValidTypes = ["spending_threshold", "goal_deadline", "document_expiry", "custom"];
 
     [HttpGet]
-    public async Task<IActionResult> GetAll() => Ok((await repo.GetAlertsAsync()).Select(ToResult));
+    public async Task<IActionResult> GetAll()
+    {
+        var tz = await moduleContext.ResolveTimeZoneAsync();
+        return Ok((await repo.GetAlertsAsync()).Select(a => ToResult(a, tz)));
+    }
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] AlertUpsertRequest req)
@@ -36,7 +40,7 @@ public class AlertsController(ISanRepository repo, ILogger<AlertsController> log
             {
                 logger.LogInformation("Alert \"{New}\" already covered by \"{Existing}\" — not creating a second.",
                     req.Title, dupe.Title);
-                return Ok(ToResult(dupe));
+                return Ok(ToResult(dupe, await moduleContext.ResolveTimeZoneAsync()));
             }
         }
 
@@ -47,7 +51,7 @@ public class AlertsController(ISanRepository repo, ILogger<AlertsController> log
             Active = req.Active, NotifyTelegram = req.NotifyTelegram,
         };
         var saved = await repo.AddAlertAsync(alert);
-        return Ok(ToResult(saved));
+        return Ok(ToResult(saved, await moduleContext.ResolveTimeZoneAsync()));
     }
 
     [HttpPut("{id:guid}")]
@@ -64,13 +68,16 @@ public class AlertsController(ISanRepository repo, ILogger<AlertsController> log
             // Editing re-arms the alert.
             a.TriggeredAt = null;
         });
-        return updated is null ? NotFound() : Ok(ToResult(updated));
+        return updated is null ? NotFound() : Ok(ToResult(updated, await moduleContext.ResolveTimeZoneAsync()));
     }
 
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id) =>
         await repo.DeleteAlertAsync(id) ? NoContent() : NotFound();
 
-    private static AlertResult ToResult(Alert a) =>
-        new(a.Id, a.Type, a.Title, a.Description, a.ThresholdValue, a.TriggerAt, a.Active, a.NotifyTelegram, a.TriggeredAt, a.CreatedAt);
+    private static AlertResult ToResult(Alert a, TimeZoneInfo tz) =>
+        new(a.Id, a.Type, a.Title, a.Description, a.ThresholdValue,
+            LocalTimeText.AsUtc(a.TriggerAt), a.Active, a.NotifyTelegram,
+            LocalTimeText.AsUtc(a.TriggeredAt), LocalTimeText.AsUtc(a.CreatedAt),
+            LocalTimeText.Local(a.TriggerAt, tz));
 }
