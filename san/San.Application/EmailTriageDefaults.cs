@@ -28,7 +28,14 @@ public static class EmailTriageDefaults
         "For anything genuinely actionable or important — a bill, a deadline, a real person needing a " +
         "reply, a property issue, a scheduled event — act on it with your tools rather than just " +
         "describing it. You may:\n" +
-        "- create a reminder, alert, or calendar event for anything with a time or deadline\n" +
+        "- when something has a date or time, decide which of the two it is by asking whether the " +
+        "user would be BUSY then. Something that happens AT a time and occupies it — an appointment, " +
+        "a viewing, a meeting, a flight, a service visit — is a CALENDAR EVENT. Something they must " +
+        "DO BY a time, where the time is only a deadline — pay a bill, renew a policy, call someone " +
+        "back, file something — is a REMINDER. \"Dentist Tuesday 3pm\" is an event; \"card payment " +
+        "due Tuesday\" is a reminder. If it is genuinely both, create the event and leave the " +
+        "reminder out.\n" +
+        "- use an alert only for a threshold being crossed, not for anything with a fixed date\n" +
         "- create a property task in Aasthi for maintenance, repairs, or anything tied to a property\n" +
         "- record a property income/expense entry when an email is clearly a bill or payment for one\n" +
         "- save a durable fact or memory to NorthStar when an email reveals something lasting about " +

@@ -41,4 +41,35 @@ public class EmailTriageDefaultsTests
         // should stay short enough to justify each entry.
         Assert.Single(EmailTriageDefaults.WithheldTools);
     }
+
+    // ── reminder vs calendar event ──────────────────────────────────────────────
+
+    [Fact]
+    public void ThePromptGivesTheModelATestItCanApply()
+    {
+        // No code decides this, deliberately. Nothing in an email reliably says
+        // whether "Tuesday 3pm" is an appointment or a deadline -- that is judgement,
+        // and it is the kind a language model is actually good at. What it needed was
+        // a test it can apply rather than two tool names and no way to choose.
+        Assert.Contains("BUSY then", EmailTriageDefaults.Prompt);
+        Assert.Contains("CALENDAR EVENT", EmailTriageDefaults.Prompt);
+    }
+
+    [Fact]
+    public void AndAWorkedExampleOfEachSide()
+    {
+        // The abstract rule alone left the two nearest cases ambiguous: both are a
+        // weekday plus a time, and only one of them occupies the day.
+        Assert.Contains("Dentist Tuesday 3pm", EmailTriageDefaults.Prompt);
+        Assert.Contains("card payment due Tuesday", EmailTriageDefaults.Prompt);
+    }
+
+    [Fact]
+    public void AlertsAreNoLongerOfferedForDatedThings()
+    {
+        // Alerts used to sit in the same breath as reminders and events, which made a
+        // third plausible answer to a two-way question. They are for thresholds.
+        Assert.Contains("threshold being crossed, not for anything with a fixed date",
+            EmailTriageDefaults.Prompt);
+    }
 }
