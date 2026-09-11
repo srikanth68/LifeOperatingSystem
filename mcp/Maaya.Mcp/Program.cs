@@ -59,6 +59,9 @@ var modules = new Dictionary<string, string>
 {
     ["vault"] = Environment.GetEnvironmentVariable("VAULT_API_URL") ?? "http://localhost:5000",
     ["vitara"] = Environment.GetEnvironmentVariable("VITARA_API_URL") ?? "http://localhost:5100",
+    // Vitara's computation half. 5110 rather than a fresh 5800 on purpose: the port
+    // says it is a sibling of vitara, not another top-level module.
+    ["insight"] = Environment.GetEnvironmentVariable("INSIGHT_API_URL") ?? "http://localhost:5110",
     ["aasthi"] = Environment.GetEnvironmentVariable("AASTHI_API_URL") ?? "http://localhost:5200",
     ["san"] = Environment.GetEnvironmentVariable("SAN_API_URL") ?? "http://localhost:5300",
     ["sutra"] = Environment.GetEnvironmentVariable("SUTRA_API_URL") ?? "http://localhost:5400",

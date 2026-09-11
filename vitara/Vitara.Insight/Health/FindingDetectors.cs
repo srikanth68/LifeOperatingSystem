@@ -2,7 +2,7 @@ using System.Text.Json;
 using Vitara.Domain.Entities;
 using Vitara.Domain.Health;
 
-namespace Vitara.Application.Health;
+namespace Vitara.Insight.Health;
 
 // One day's z-scores for the three metrics the illness signal reads.
 public record DailyVitals(DateOnly Day, double? RestingHrZ, double? HrvZ, double? SkinTempZ);

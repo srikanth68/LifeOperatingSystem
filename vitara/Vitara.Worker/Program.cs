@@ -33,7 +33,6 @@ builder.Services.AddScoped<INutritionSource, MfpNutritionClient>();
 builder.Services.AddHttpClient("mfp");
 builder.Services.AddHostedService<OuraSyncWorker>();
 builder.Services.AddHostedService<NutritionSyncWorker>();
-builder.Services.AddHostedService<DerivedMetricsWorker>();
 
 var host = builder.Build();
 

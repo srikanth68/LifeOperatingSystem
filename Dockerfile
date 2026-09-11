@@ -11,6 +11,7 @@ RUN dotnet publish vault/Vault.API/Vault.API.csproj           -c Release -o /out
     dotnet publish vault/Vault.Worker/Vault.Worker.csproj     -c Release -o /out/vault-worker   && \
     dotnet publish vitara/Vitara.API/Vitara.API.csproj        -c Release -o /out/vitara-api     && \
     dotnet publish vitara/Vitara.Worker/Vitara.Worker.csproj  -c Release -o /out/vitara-worker  && \
+    dotnet publish vitara/Vitara.Insight/Vitara.Insight.csproj -c Release -o /out/vitara-insight && \
     dotnet publish aasthi/Aasthi.API/Aasthi.API.csproj        -c Release -o /out/aasthi-api     && \
     dotnet publish san/San.API/San.API.csproj                 -c Release -o /out/san-api        && \
     dotnet publish san/San.Worker/San.Worker.csproj           -c Release -o /out/san-worker     && \

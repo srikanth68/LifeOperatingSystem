@@ -33,6 +33,10 @@ builder.Configuration["Llm:Model"]    = Environment.GetEnvironmentVariable("LLM_
 
 var vaultUrl     = Environment.GetEnvironmentVariable("VAULT_API_URL")     ?? "http://localhost:5000";
 var vitaraUrl    = Environment.GetEnvironmentVariable("VITARA_API_URL")    ?? "http://localhost:5100";
+// Vitara's computation half, a separate process since the health analysis was split
+// out of ingestion. Health FINDINGS come from here; raw sleep and readiness still
+// come from vitara.
+var insightUrl   = Environment.GetEnvironmentVariable("INSIGHT_API_URL")   ?? "http://localhost:5110";
 var aasthiUrl    = Environment.GetEnvironmentVariable("AASTHI_API_URL")    ?? "http://localhost:5200";
 var northstarUrl = Environment.GetEnvironmentVariable("NORTHSTAR_API_URL") ?? "http://localhost:5500";
 var sutraUrl     = Environment.GetEnvironmentVariable("SUTRA_API_URL")     ?? "http://localhost:5400";
@@ -82,6 +86,7 @@ switch (builder.Configuration["Llm:Provider"])
 
 builder.Services.AddHttpClient("vault",     c => c.BaseAddress = new Uri(vaultUrl));
 builder.Services.AddHttpClient("vitara",    c => c.BaseAddress = new Uri(vitaraUrl));
+builder.Services.AddHttpClient("insight",   c => c.BaseAddress = new Uri(insightUrl));
 builder.Services.AddHttpClient("aasthi",    c => c.BaseAddress = new Uri(aasthiUrl));
 builder.Services.AddHttpClient("northstar", c => c.BaseAddress = new Uri(northstarUrl));
 builder.Services.AddHttpClient("sutra",     c => c.BaseAddress = new Uri(sutraUrl));

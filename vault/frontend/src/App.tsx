@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import MaayaDashboard  from './pages/MaayaDashboard';
 import VaultModule     from './pages/VaultModule';
 import VitaraModule    from './pages/VitaraModule';
+import InsightModule   from './pages/InsightModule';
 import NexusModule     from './pages/NexusModule';
 import AasthiModule    from './pages/AasthiModule';
 import SanModule       from './pages/SanModule';
@@ -20,7 +21,7 @@ import type { ProbeResult } from './services/auth';
 import { useSystemStatus } from './services/systemStatus';
 import './styles/index.css';
 
-export type ModuleId = 'home' | 'vault' | 'vitara' | 'nexus' | 'aasthi' | 'san' | 'northstar' | 'karma' | 'sutra' | 'settings';
+export type ModuleId = 'home' | 'vault' | 'vitara' | 'insight' | 'nexus' | 'aasthi' | 'san' | 'northstar' | 'karma' | 'sutra' | 'settings';
 
 /* ── SVG icon library ── */
 function Icon({ name }: { name: string }) {
@@ -115,6 +116,7 @@ function MaayaLogo({ size = 24 }: { size?: number }) {
 const CORE_MODULES: { id: ModuleId; label: string; color: string }[] = [
   { id: 'vault',     label: 'Vault',     color: 'var(--vault)'     },
   { id: 'vitara',    label: 'Vitara',    color: 'var(--vitara)'    },
+  { id: 'insight',   label: 'Insight',   color: 'var(--insight)'   },
   { id: 'nexus',     label: 'Nexus',     color: 'var(--nexus)'     },
   { id: 'aasthi',    label: 'Aasthi',    color: 'var(--aasthi)'    },
   { id: 'san',       label: 'San',       color: 'var(--san)'       },
@@ -310,6 +312,7 @@ export default function App() {
       case 'home':      return <MaayaDashboard onNavigate={navigate} />;
       case 'vault':     return <VaultModule />;
       case 'vitara':    return <VitaraModule />;
+      case 'insight':   return <InsightModule />;
       case 'nexus':     return <NexusModule />;
       case 'aasthi':    return <AasthiModule />;
       case 'san':       return <SanModule />;

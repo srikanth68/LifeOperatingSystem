@@ -7,7 +7,7 @@ import path from 'path'
 // in prod, nginx does the same (see vault/frontend/nginx.conf). Keeps the browser
 // single-origin so an HTTPS page can call the APIs without mixed-content/CORS.
 const modules: Record<string, number> = {
-  vault: 5000, vitara: 5100, aasthi: 5200, san: 5300,
+  vault: 5000, vitara: 5100, insight: 5110, aasthi: 5200, san: 5300,
   sutra: 5400, northstar: 5500, karma: 5600, nexus: 5700,
 }
 

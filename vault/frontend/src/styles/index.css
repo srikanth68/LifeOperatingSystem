@@ -43,6 +43,13 @@
   --vitara-dim:     rgba(6,200,160,0.1);
   --vitara-glow:    rgba(6,200,160,0.2);
 
+  /* Insight reads the same data Vitara collects, so it sits next to Vitara's teal
+     rather than claiming a new hue — deeper and bluer, which is also what separates
+     the two tabs at a glance without making them look unrelated. */
+  --insight:        #2f9fd0;
+  --insight-dim:    rgba(47,159,208,0.1);
+  --insight-glow:   rgba(47,159,208,0.2);
+
   --nexus:          #4f9ef8;
   --nexus-dim:      rgba(79,158,248,0.1);
   --nexus-glow:     rgba(79,158,248,0.2);

@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
-using Vitara.Application.Health;
+using Vitara.Insight.Health;
 using Vitara.Application.Interfaces;
 using Vitara.Domain.Health;
 
-namespace Vitara.API.Controllers;
+namespace Vitara.Insight.Controllers;
 
 // The read surface for the derived layer.
 //
@@ -161,6 +161,10 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
                 {
                     f.Key,
                     f.Type,
+                    // Carried even though Summary already names it in prose. The key is
+                    // colon-delimited and the summary is a sentence; a caller that wants
+                    // to group or label by metric should not have to parse either.
+                    f.Metric,
                     f.Severity,
                     f.Summary,
                     daysRunning = f.LastDetectedLocal.DayNumber - f.FirstDetectedLocal.DayNumber + 1,

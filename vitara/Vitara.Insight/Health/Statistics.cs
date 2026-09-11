@@ -1,4 +1,4 @@
-namespace Vitara.Application.Health;
+namespace Vitara.Insight.Health;
 
 // The arithmetic every derived metric is built from.
 //

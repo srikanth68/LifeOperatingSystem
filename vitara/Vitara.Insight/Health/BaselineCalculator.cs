@@ -2,7 +2,7 @@ using System.Text.Json;
 using Vitara.Domain.Entities;
 using Vitara.Domain.Health;
 
-namespace Vitara.Application.Health;
+namespace Vitara.Insight.Health;
 
 // Everything that can disqualify a reading from shaping what counts as normal.
 public record BaselineInputs(

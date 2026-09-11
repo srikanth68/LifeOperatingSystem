@@ -1,12 +1,12 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Vitara.Application.Health;
+using Vitara.Insight.Health;
 using Vitara.Application.Interfaces;
 using Vitara.Domain.Entities;
 using Vitara.Domain.Health;
 
-namespace Vitara.Worker;
+namespace Vitara.Insight;
 
 // Turns what Oura reported into what it means: baselines, z-scores, load ratios,
 // sleep debt, drift. Pure arithmetic, no model involvement anywhere.

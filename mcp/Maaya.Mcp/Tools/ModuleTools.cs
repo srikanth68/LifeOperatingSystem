@@ -99,11 +99,11 @@ public sealed class ModuleTools(ModuleGateway gw)
     // is off baseline, what has stepped to a new level, what is drifting.
     [McpServerTool(Name = "health_findings")]
     [Description("What Vitara has CONCLUDED about the user's health: what is off their personal baseline, early illness signs, sustained changes, drift, sleep debt, and missing data. Computed in code, not guessed. For \"is anything off\", \"how am I really doing\", \"anything I should know\". READ THE status FIELD FIRST - an empty findings list can mean the analysis has never run, which is NOT the same as the user being fine. Raw last-night numbers -> vitara_health.")]
-    public Task<string> HealthFindings() => gw.GetAsync("vitara", "/api/health/summary");
+    public Task<string> HealthFindings() => gw.GetAsync("insight", "/api/health/summary");
 
     [McpServerTool(Name = "health_baselines")]
     [Description("What is NORMAL for this user per metric - mean, spread, sample size, and whether there is enough data to be valid. Use before calling a reading high or low, so \"high\" means high FOR THEM rather than against a population.")]
-    public Task<string> HealthBaselines() => gw.GetAsync("vitara", "/api/health/baselines");
+    public Task<string> HealthBaselines() => gw.GetAsync("insight", "/api/health/baselines");
 
     [McpServerTool(Name = "aasthi_properties")]
     [Description("Real-estate portfolio: properties, values, profit. For \"my properties\", \"how are rentals doing\". Specific repair/cost/vendor -> maaya_search.")]

@@ -72,6 +72,28 @@ services:
     env_file: ./deploy/env/vitara.env
     depends_on: [vitara]
 
+  # The computation half of health, split out from vitara-worker.
+  #
+  # Ingestion and analysis fail for unrelated reasons -- a vendor moving an endpoint
+  # versus a detector with a bad threshold -- and neither should be able to stop the
+  # other. A wedged detector loop must not stop tonight's sleep being fetched.
+  #
+  # Shares vitara.db rather than keeping its own: the analysis needs every raw
+  # observation, and copying health data across a process boundary would buy
+  # separation at the cost of a sync problem and two versions of the truth. The write
+  # sets are disjoint instead -- the worker owns the typed tables, this owns the
+  # derived ones -- so SQLite never has two processes contending for the same row.
+  #
+  # depends_on vitara because Vitara.API owns schema creation. Two processes racing to
+  # CREATE TABLE IF NOT EXISTS on a cold boot is how the database ends up locked.
+  vitara-insight:
+    <<: *backend
+    command: ["dotnet", "/app/vitara-insight/Vitara.Insight.dll"]
+    working_dir: /data/vitara/run
+    env_file: ./deploy/env/vitara.env
+    ports: ["5110:5110"]
+    depends_on: [vitara]
+
   # MyFitnessPal, reached over HTTP by vitara-worker.
   #
   # A separate image because the client is Python and scrapes a site that changes

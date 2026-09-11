@@ -1,4 +1,4 @@
-namespace Vitara.Application.Health;
+namespace Vitara.Insight.Health;
 
 public record SleepNeedEstimate(double Minutes, string Basis, bool IsUserSupplied);
 

@@ -1,4 +1,4 @@
-namespace Vitara.Application.Health;
+namespace Vitara.Insight.Health;
 
 // A detected step to a new level.
 public record RegimeChange(DateOnly ChangePointLocal, double Before, double After, double ShiftInSigmas, int DaysHeld)

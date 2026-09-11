@@ -2,7 +2,7 @@ using System.Text.Json;
 using Vitara.Domain.Entities;
 using Vitara.Domain.Health;
 
-namespace Vitara.Application.Health;
+namespace Vitara.Insight.Health;
 
 // Everything a detection pass reads. No database, no clock.
 public record FindingRunInputs(

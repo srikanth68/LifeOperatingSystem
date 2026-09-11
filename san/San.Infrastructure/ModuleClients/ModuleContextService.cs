@@ -548,7 +548,7 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
 
     public async Task<List<HealthFinding>> GetHealthFindingsAsync(CancellationToken ct = default)
     {
-        var root = await TryGetJsonAsync("vitara", "/api/health/summary", ct);
+        var root = await TryGetJsonAsync("insight", "/api/health/summary", ct);
         if (root is null) return [];
 
         // Vitara being unreachable, or having computed nothing yet, both come back as

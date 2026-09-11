@@ -27,6 +27,7 @@
     <ProjectReference Include="..\Vitara.Application\Vitara.Application.csproj" />
     <ProjectReference Include="..\Vitara.Infrastructure\Vitara.Infrastructure.csproj" />
     <ProjectReference Include="..\Vitara.API\Vitara.API.csproj" />
+    <ProjectReference Include="..\Vitara.Insight\Vitara.Insight.csproj" />
   </ItemGroup>
 
 </Project>

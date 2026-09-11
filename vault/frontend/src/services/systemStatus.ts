@@ -7,6 +7,7 @@ import { moduleApi } from './apiHost';
 const MODULES: { id: string; label: string; url: string }[] = [
   { id: 'vault',     label: 'Vault',     url: `${moduleApi(5000)}/api/summary` },
   { id: 'vitara',    label: 'Vitara',    url: `${moduleApi(5100)}/api/oura/status` },
+  { id: 'insight',   label: 'Insight',   url: `${moduleApi(5110)}/api/health/summary` },
   { id: 'aasthi',    label: 'Aasthi',    url: `${moduleApi(5200)}/api/properties` },
   { id: 'san',       label: 'San',       url: `${moduleApi(5300)}/api/chat/messages` },
   { id: 'sutra',     label: 'Sutra',     url: `${moduleApi(5400)}/api/documents` },

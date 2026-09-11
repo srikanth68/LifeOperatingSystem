@@ -1,4 +1,4 @@
-using Vitara.Application.Health;
+using Vitara.Insight.Health;
 using Vitara.Domain.Entities;
 
 namespace Vitara.Tests;

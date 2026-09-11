@@ -5,7 +5,7 @@
 //   - no CORS preflight, no per-host allow-lists (fixes the .nord / IP origin pain)
 //   - the browser only ever talks to ONE local address — nothing fans out
 const PORT_TO_MODULE: Record<number, string> = {
-  5000: 'vault', 5100: 'vitara', 5200: 'aasthi', 5300: 'san',
+  5000: 'vault', 5100: 'vitara', 5110: 'insight', 5200: 'aasthi', 5300: 'san',
   5400: 'sutra', 5500: 'northstar', 5600: 'karma', 5700: 'nexus',
 };
 

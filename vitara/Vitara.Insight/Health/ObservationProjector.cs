@@ -1,7 +1,7 @@
 using Vitara.Domain.Entities;
 using Vitara.Domain.Health;
 
-namespace Vitara.Application.Health;
+namespace Vitara.Insight.Health;
 
 // Turns Vitara's typed rows into flat observations.
 //
