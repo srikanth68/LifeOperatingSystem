@@ -562,3 +562,87 @@ h1.module-title  { font-size: 1.35rem; margin-bottom: 0; }
   border-radius: var(--r-sm); padding: 0.45rem 0.7rem; color: var(--text);
   font-size: 0.85rem; width: 90px; font-family: inherit;
 }
+
+/* ── Apple Health import ──────────────────────────────────────────────────────
+ * Two steps on purpose: read, then save. The preview is the whole point, so it
+ * gets real table formatting rather than a toast. */
+
+.vitara-import-sub { max-width: 68ch; }
+
+.vitara-import-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.vitara-import-result {
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vitara-import-ok { margin: 0; color: var(--vitara); font-size: 0.88rem; }
+
+.vitara-import-table {
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  width: 100%;
+  max-width: 520px;
+}
+
+.vitara-import-table th {
+  text-align: left;
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding: 0 14px 6px 0;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.vitara-import-table td {
+  padding: 6px 14px 6px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text1);
+}
+
+.vitara-import-table th.num,
+.vitara-import-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A column that matched a metric and produced nothing. The most useful row in the
+   table and the easiest to miss in a count, so it is dimmed rather than removed. */
+.vitara-import-dead td { color: var(--warn, #d09a36); }
+
+.vitara-import-warnings {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.8rem;
+  color: var(--warn, #d09a36);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vitara-import-ignored {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text3);
+  line-height: 1.5;
+}
+
+.vitara-import-samplehead {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text3);
+}

@@ -4,10 +4,24 @@
     <ProjectReference Include="..\Vitara.Domain\Vitara.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+
+  <!-- The importer's cell and delimiter readers are internal: they are parsing
+       details, not API. The tests still need at them, because a CSV reader that gets
+       quoting wrong is exactly the kind of thing that has to be pinned down. -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Vitara.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
 
 </Project>

@@ -1243,9 +1243,170 @@ function NutritionPage() {
   );
 }
 
+
+// ── APPLE HEALTH IMPORT ───────────────────────────────────────────────────────
+
+// Uploading an Apple Health export as a spreadsheet.
+//
+// TWO STEPS, NOT ONE. Apple's own export is XML in a zip, so whatever lands here came
+// out of a third-party export app -- and those disagree about column names, date
+// formats, units, and whether a row is a day or a single sample, with nothing in the
+// file saying which. The server guesses, and a guess about health data belongs in
+// front of the user before it reaches the database rather than after.
+//
+// So: upload reads and reports, and nothing is written until Save is pressed.
+
+interface MappedColumn { column: string; metric: string; rows: number }
+
+interface ImportResult {
+  shape: string;
+  rowsRead: number;
+  firstDay: string | null;
+  lastDay: string | null;
+  days: number;
+  readings: number;
+  recognised: MappedColumn[];
+  ignored: string[];
+  warnings: string[];
+  sample: { day: string; metric: string; value: number }[];
+  written: Record<string, number> | null;
+  committed: boolean;
+}
+
+function ImportPanel() {
+  const [file, setFile]       = useState<File | null>(null);
+  const [result, setResult]   = useState<ImportResult | null>(null);
+  const [error, setError]     = useState<string | null>(null);
+  const [busy, setBusy]       = useState(false);
+
+  const send = async (endpoint: 'preview' | 'commit') => {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const res = await fetch(`${API}/api/healthimport/${endpoint}`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body,
+      });
+
+      const json = await res.json();
+      if (!res.ok) { setError(json?.error ?? `${res.status} ${res.statusText}`); setResult(null); }
+      else setResult(json as ImportResult);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pick = (f: File | null) => { setFile(f); setResult(null); setError(null); };
+
+  return (
+    <div className="module-section">
+      <h2 className="module-h2">Import Apple Health</h2>
+      <p className="module-muted vitara-import-sub">
+        A .csv, .tsv or .xlsx export from an Apple Health export app. Both common
+        layouts work — one row per day with a column per metric, or one row per sample.
+        Nothing is saved until you confirm.
+      </p>
+
+      <div className="vitara-import-row">
+        <input
+          type="file"
+          accept=".csv,.tsv,.txt,.xlsx,.xlsm"
+          onChange={e => pick(e.target.files?.[0] ?? null)}
+        />
+        <button className="btn-ghost" disabled={!file || busy} onClick={() => send('preview')}>
+          {busy ? 'Reading…' : 'Read file'}
+        </button>
+        {result && !result.committed && result.readings > 0 && (
+          <button className="btn-primary" disabled={busy} onClick={() => send('commit')}>
+            Save {result.readings} readings
+          </button>
+        )}
+      </div>
+
+      {error && <p className="module-error">{error}</p>}
+
+      {result && (
+        <div className="vitara-import-result">
+          {result.committed ? (
+            <p className="vitara-import-ok">
+              Saved. {Object.entries(result.written ?? {})
+                .map(([k, v]) => (v > 0 ? `${v} ${k}` : k))
+                .join(' · ') || 'Nothing was stored.'}
+            </p>
+          ) : (
+            <p className="module-muted">
+              {result.readings > 0
+                ? `Read ${result.readings} readings across ${result.days} day(s)` +
+                  (result.firstDay ? `, ${result.firstDay} to ${result.lastDay}.` : '.')
+                : 'Nothing usable was found in that file.'}
+            </p>
+          )}
+
+          {result.recognised.length > 0 && (
+            <table className="vitara-import-table">
+              <thead>
+                <tr><th>Column</th><th>Read as</th><th className="num">Values</th></tr>
+              </thead>
+              <tbody>
+                {result.recognised.map(m => (
+                  <tr key={m.column + m.metric} className={m.rows === 0 ? 'vitara-import-dead' : ''}>
+                    <td>{m.column}</td>
+                    <td>{m.metric.replace(/_/g, ' ')}</td>
+                    <td className="num">{m.rows}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* Warnings are shown above the ignored list, because a recognised column
+              that produced nothing is a real problem while an unknown column usually
+              is not. */}
+          {result.warnings.length > 0 && (
+            <ul className="vitara-import-warnings">
+              {result.warnings.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          )}
+
+          {result.ignored.length > 0 && (
+            <p className="vitara-import-ignored">
+              <strong>Not imported:</strong> {result.ignored.join(', ')}
+            </p>
+          )}
+
+          {!result.committed && result.sample.length > 0 && (
+            <>
+              <p className="vitara-import-samplehead">First few rows as read:</p>
+              <table className="vitara-import-table">
+                <thead><tr><th>Day</th><th>Metric</th><th className="num">Value</th></tr></thead>
+                <tbody>
+                  {result.sample.map((r, i) => (
+                    <tr key={i}>
+                      <td>{r.day}</td>
+                      <td>{r.metric.replace(/_/g, ' ')}</td>
+                      <td className="num">{r.value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── ROOT ──────────────────────────────────────────────────────────────────────
 
-type Page = 'today' | 'sleep' | 'body' | 'activity' | 'readiness' | 'protocols' | 'nutrition';
+type Page = 'today' | 'sleep' | 'body' | 'activity' | 'readiness' | 'protocols' | 'nutrition' | 'import';
 
 const PAGES: { id: Page; label: string }[] = [
   { id: 'today',     label: 'Today' },
@@ -1255,6 +1416,7 @@ const PAGES: { id: Page; label: string }[] = [
   { id: 'readiness', label: 'Readiness' },
   { id: 'nutrition', label: 'Nutrition' },
   { id: 'protocols', label: 'Protocols' },
+  { id: 'import',    label: 'Import' },
 ];
 
 function VitaraInner() {
@@ -1278,7 +1440,15 @@ function VitaraInner() {
 
       {isPending && <div className="v-connecting"><div className="v-connecting-dot"/>Connecting to Vitara...</div>}
       {!isPending && isError && <BackendDown/>}
-      {!isPending && !isError && status && !status.linked && <NotLinked/>}
+      {/* Import is shown whether or not Oura is linked. A manual upload is the
+          fallback for having no ring connected, so gating it behind a working
+          connection would hide it in the one case it exists for. */}
+      {!isPending && !isError && status && !status.linked && (
+        <>
+          <NotLinked/>
+          <ImportPanel/>
+        </>
+      )}
       {!isPending && !isError && status?.linked && (
         <>
           {status.expired && <OuraExpiredBanner/>}
@@ -1294,6 +1464,7 @@ function VitaraInner() {
           {page === 'readiness' && <ReadinessPage/>}
           {page === 'nutrition' && <NutritionPage/>}
           {page === 'protocols' && <ProtocolsPage/>}
+          {page === 'import'    && <ImportPanel/>}
         </>
       )}
     </div>
