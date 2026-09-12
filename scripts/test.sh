@@ -21,6 +21,7 @@ vault/Vault.API/Vault.API.csproj
 vault/Vault.Worker/Vault.Worker.csproj
 vitara/Vitara.API/Vitara.API.csproj
 vitara/Vitara.Worker/Vitara.Worker.csproj
+vitara/Vitara.Insight/Vitara.Insight.csproj
 aasthi/Aasthi.API/Aasthi.API.csproj
 san/San.API/San.API.csproj
 san/San.Worker/San.Worker.csproj
@@ -37,6 +38,8 @@ san/San.Tests/San.Tests.csproj
 karma/Karma.Tests/Karma.Tests.csproj
 northstar/NorthStar.Tests/NorthStar.Tests.csproj
 vitara/Vitara.Tests/Vitara.Tests.csproj
+aasthi/Aasthi.Tests/Aasthi.Tests.csproj
+mcp/Maaya.Mcp.Tests/Maaya.Mcp.Tests.csproj
 "
 
 failed=0
