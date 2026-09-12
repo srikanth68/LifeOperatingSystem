@@ -11,17 +11,14 @@ namespace Vitara.Tests;
 // SleepSession has no type field, so each one became its own observation and each was
 // counted as a night.
 //
-// The numbers below are real, taken from the database on 2026-09-12:
-//
-//     2026-09-04   13, 9, 5, 382 minutes
-//     2026-08-10   0, 504 minutes
-//     2026-09-10   392, 2 minutes
+// The shapes below come from a real database: several few-minute sessions beside the
+// actual night, and zero-minute sessions.
 //
 // Against a need of about seven hours, each of those junk rows contributed a full
-// night's deficit -- 2026-09-04 alone manufactured around twenty-one hours.
+// night's deficit -- a single such day manufactured around twenty-one hours.
 public class SleepProjectionTests
 {
-    private static readonly DateOnly Day = new(2026, 9, 4);
+    private static readonly DateOnly Day = new(2026, 1, 15);
 
     private static SleepSession Session(
         int minutes, int hour = 7, double? hrv = null, double? temp = null, int? score = null, string? id = null) => new()
@@ -43,7 +40,7 @@ public class SleepProjectionTests
     [Fact]
     public void TheRealDayThatCausedThis()
     {
-        // 13, 9, 5, 382 became four nights. It is one night of 409 minutes.
+        // Four sessions became four nights. They are one night.
         var obs = ObservationProjector.FromSleep(
             [Session(13, 3), Session(9, 4), Session(5, 5), Session(382, 7)]);
 
@@ -54,7 +51,7 @@ public class SleepProjectionTests
     [Fact]
     public void AZeroMinuteSessionDoesNotBecomeANight()
     {
-        // 0, 504. The zero row was a full night's deficit on its own.
+        // A zero-minute session beside the real night was a full night's deficit on its own.
         var obs = ObservationProjector.FromSleep([Session(0, 2), Session(504, 7)]);
 
         Assert.Equal(504, Value(obs, MetricKeys.TotalSleepMinutes));

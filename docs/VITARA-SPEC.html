@@ -1,0 +1,1692 @@
+<title>Vitara Technical Specification</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@600;700&display=swap">
+<style>
+  :root {
+    --paper:      #F6F8FA;
+    --surface:    #FFFFFF;
+    --sunk:       #EAEEF3;
+    --ink:        #12161C;
+    --ink-soft:   #44505E;
+    --ink-faint:  #6C7887;
+    --rule:       #D2DAE3;
+    --rule-soft:  #E3E9EF;
+    --accent:     #1D5E7A;
+    --accent-dim: #E2EDF2;
+    --warn:       #9A6B1E;
+    --danger:     #B4523C;
+    --good:       #2E7D53;
+
+    --serif: "IBM Plex Serif", Iowan Old Style, Georgia, serif;
+    --sans:  "IBM Plex Sans", -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;
+    --mono:  "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #0D1117;
+      --surface:    #151B23;
+      --sunk:       #1A212A;
+      --ink:        #E4EAF0;
+      --ink-soft:   #A3AFBD;
+      --ink-faint:  #7B8796;
+      --rule:       #28303A;
+      --rule-soft:  #1F262E;
+      --accent:     #6BB2CE;
+      --accent-dim: #142B36;
+      --warn:       #D3A759;
+      --danger:     #E08A72;
+      --good:       #6BBF8E;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:      #0D1117;
+    --surface:    #151B23;
+    --sunk:       #1A212A;
+    --ink:        #E4EAF0;
+    --ink-soft:   #A3AFBD;
+    --ink-faint:  #7B8796;
+    --rule:       #28303A;
+    --rule-soft:  #1F262E;
+    --accent:     #6BB2CE;
+    --accent-dim: #142B36;
+    --warn:       #D3A759;
+    --danger:     #E08A72;
+    --good:       #6BBF8E;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15.5px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .shell {
+    display: grid;
+    grid-template-columns: 1fr;
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 0 22px 96px;
+  }
+
+  @media (min-width: 1100px) {
+    .shell { grid-template-columns: 232px minmax(0, 1fr); gap: 60px; padding-right: 44px; }
+  }
+
+  /* ── Masthead ───────────────────────────────────────── */
+
+  .masthead {
+    grid-column: 1 / -1;
+    border-bottom: 2px solid var(--ink);
+    padding: 58px 0 26px;
+    margin-bottom: 44px;
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 16px;
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-weight: 700;
+    font-size: clamp(36px, 5.6vw, 54px);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin: 0 0 18px;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    font-family: var(--serif);
+    font-size: clamp(16px, 2vw, 19px);
+    line-height: 1.52;
+    color: var(--ink-soft);
+    max-width: 64ch;
+    margin: 0 0 26px;
+  }
+
+  .masthead-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px 26px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink-faint);
+  }
+  .masthead-meta b { color: var(--ink-soft); font-weight: 500; }
+
+  /* ── Rail ───────────────────────────────────────────── */
+
+  .rail { display: none; }
+
+  @media (min-width: 1100px) {
+    .rail {
+      display: block;
+      position: sticky;
+      top: 28px;
+      align-self: start;
+      max-height: calc(100vh - 56px);
+      overflow-y: auto;
+    }
+    .rail ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+    .rail a {
+      display: flex;
+      gap: 9px;
+      font-size: 12.5px;
+      line-height: 1.35;
+      color: var(--ink-faint);
+      text-decoration: none;
+      border-left: 2px solid var(--rule-soft);
+      padding: 2px 0 2px 11px;
+    }
+    .rail a:hover { color: var(--accent); border-left-color: var(--accent); }
+    .rail a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .rail .n { font-family: var(--mono); font-size: 10.5px; color: var(--accent); padding-top: 1px; }
+  }
+
+  /* ── Body ───────────────────────────────────────────── */
+
+  main { min-width: 0; }
+  section { margin-bottom: 60px; scroll-margin-top: 22px; }
+
+  h2 {
+    font-family: var(--serif);
+    font-size: 27px;
+    font-weight: 600;
+    line-height: 1.18;
+    letter-spacing: -0.012em;
+    margin: 0 0 5px;
+    text-wrap: balance;
+  }
+
+  .sect-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 9px;
+  }
+
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 32px 0 8px;
+    color: var(--ink);
+  }
+
+  h4 {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    margin: 24px 0 6px;
+    color: var(--accent);
+  }
+
+  p { margin: 0 0 15px; max-width: 72ch; }
+  a { color: var(--accent); text-underline-offset: 2px; }
+  strong { font-weight: 600; }
+
+  ul, ol { margin: 0 0 17px; padding-left: 21px; max-width: 72ch; }
+  li { margin-bottom: 6px; }
+  li::marker { color: var(--ink-faint); }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.87em;
+    background: var(--sunk);
+    padding: 1.5px 5px;
+    border-radius: 3px;
+  }
+
+  pre {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    background: var(--sunk);
+    border-left: 2px solid var(--rule);
+    padding: 15px 17px;
+    margin: 0 0 19px;
+    overflow-x: auto;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+
+  /* ── Callouts ───────────────────────────────────────── */
+
+  .why {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-dim);
+    padding: 15px 18px;
+    margin: 0 0 20px;
+    max-width: 72ch;
+  }
+  .why .tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 7px;
+  }
+  .why p { margin-bottom: 0; }
+  .why p + p { margin-top: 11px; }
+
+  .trap { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 9%, transparent); }
+  .trap .tag { color: var(--danger); }
+
+  /* ── Tables ─────────────────────────────────────────── */
+
+  .tw { overflow-x: auto; margin: 0 0 20px; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 540px; }
+
+  th {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 500;
+    padding: 0 14px 7px 0;
+    border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 8px 14px 8px 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+
+  td:last-child, th:last-child { padding-right: 0; }
+
+  .m { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  .muted { color: var(--ink-faint); }
+
+  /* ── Schema block ───────────────────────────────────── */
+
+  .schema {
+    border: 1px solid var(--rule);
+    background: var(--surface);
+    margin: 0 0 18px;
+  }
+  .schema-head {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 11px 15px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--sunk);
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .schema-head .owner {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .schema-body { padding: 13px 15px; }
+  .schema-body p { font-size: 13.5px; margin: 0 0 11px; color: var(--ink-soft); }
+  .schema-body table { min-width: 460px; }
+
+  /* ── Diagram ────────────────────────────────────────── */
+
+  figure { margin: 0 0 22px; }
+  figure svg { display: block; width: 100%; height: auto; }
+  figcaption { font-size: 12.5px; color: var(--ink-faint); margin-top: 11px; max-width: 68ch; line-height: 1.5; }
+
+  footer {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--rule);
+    padding-top: 22px;
+    margin-top: 22px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 30px;
+  }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="shell">
+
+  <header class="masthead">
+    <p class="eyebrow">Maaya OS · Vitara + Insight · technical specification</p>
+    <h1>Vitara Technical Specification</h1>
+    <p class="standfirst">
+      Everything Vitara collects, everything Insight computes from it, and why each
+      decision was made that way. Written for someone who has never seen this system —
+      no prior context assumed.
+    </p>
+    <div class="masthead-meta">
+      <span><b>Modules</b> vitara · vitara-worker · vitara-insight</span>
+      <span><b>Store</b> one SQLite file, 28 tables</span>
+      <span><b>Tests</b> 283</span>
+      <span><b>Read from</b> f0c22b4</span>
+    </div>
+  </header>
+
+  <nav class="rail" aria-label="Contents">
+    <ol>
+      <li><a href="#what"><span class="n">01</span><span>What this is</span></a></li>
+      <li><a href="#shape"><span class="n">02</span><span>The pipeline</span></a></li>
+      <li><a href="#oura"><span class="n">03</span><span>What we pull from Oura</span></a></li>
+      <li><a href="#other"><span class="n">04</span><span>The other sources</span></a></li>
+      <li><a href="#tiers"><span class="n">05</span><span>Metrics and tiers</span></a></li>
+      <li><a href="#schema"><span class="n">06</span><span>The database</span></a></li>
+      <li><a href="#projection"><span class="n">07</span><span>Projection</span></a></li>
+      <li><a href="#baselines"><span class="n">08</span><span>Baselines</span></a></li>
+      <li><a href="#stats"><span class="n">09</span><span>The algorithms</span></a></li>
+      <li><a href="#detectors"><span class="n">10</span><span>Detectors</span></a></li>
+      <li><a href="#correlations"><span class="n">11</span><span>Correlations</span></a></li>
+      <li><a href="#lifecycle"><span class="n">12</span><span>Finding lifecycle</span></a></li>
+      <li><a href="#thresholds"><span class="n">13</span><span>Every threshold</span></a></li>
+      <li><a href="#api"><span class="n">14</span><span>API surface</span></a></li>
+      <li><a href="#schedule"><span class="n">15</span><span>Scheduling</span></a></li>
+      <li><a href="#failures"><span class="n">16</span><span>Failures that shaped this</span></a></li>
+      <li><a href="#gaps"><span class="n">17</span><span>What is not built</span></a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- 01 ───────────────────────────────────────────── -->
+    <section id="what">
+      <span class="sect-num">01</span>
+      <h2>What this is</h2>
+
+      <p>
+        Vitara is the health module of Maaya OS, a self-hosted personal system running
+        on one Mac mini. It does two jobs that used to be one, and are now deliberately
+        separate processes:
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Process</th><th>Job</th><th>Port</th></tr></thead>
+          <tbody>
+            <tr><td class="m">vitara</td><td><b>Ingestion.</b> Pulls from Oura, accepts Apple Health imports and manual entry, serves raw readings.</td><td class="num">5100</td></tr>
+            <tr><td class="m">vitara-worker</td><td>The sync loops that fetch from Oura and MyFitnessPal.</td><td class="num">—</td></tr>
+            <tr><td class="m">vitara-insight</td><td><b>Analysis.</b> Baselines, statistics, findings, correlations.</td><td class="num">5110</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The business question it answers</h3>
+      <p>
+        A ring reports last night's numbers. That is not useful on its own, because
+        "HRV 38ms" means nothing without knowing what <em>your</em> HRV usually is. A
+        population reference is worse than useless here — an athlete's normal and a
+        sedentary person's normal differ by more than any illness would move either.
+      </p>
+      <p>So the system answers three questions the device cannot:</p>
+      <ol>
+        <li><b>What is normal for this person?</b> — baselines, per metric, over sixty days, excluding periods that should not count.</li>
+        <li><b>Is anything off it right now?</b> — findings, computed in code, deduplicated and rate-limited before they reach the user.</li>
+        <li><b>What moves with what?</b> — correlations between what the person does and how they recover.</li>
+      </ol>
+
+      <div class="why">
+        <span class="tag">The architectural rule</span>
+        <p>
+          <b>No language model touches any of this.</b> Everything from raw reading to
+          finding is deterministic arithmetic. The model is shown findings afterwards
+          and asked what is worth saying; it is never asked what happened.
+        </p>
+        <p>
+          That is why identity keys for findings are derived from content in code. A
+          model asked to generate a key produces a different one every run for the same
+          condition, and then nothing can be deduplicated, cooled down, or resolved —
+          the same elevated heart rate would arrive as a fresh alert every morning.
+        </p>
+      </div>
+    </section>
+
+    <!-- 02 ───────────────────────────────────────────── -->
+    <section id="shape">
+      <span class="sect-num">02</span>
+      <h2>The pipeline</h2>
+
+      <figure>
+        <svg viewBox="0 0 720 470" role="img" aria-label="Data flows from Oura, Apple Health and manual entry into typed tables, is projected into flat observations, then baselined, turned into derived metrics, and finally into findings and correlations which reach the user through San or the Insight tab.">
+          <defs>
+            <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-faint)"/>
+            </marker>
+          </defs>
+
+          <!-- sources -->
+          <g font-family="IBM Plex Mono, monospace" font-size="11">
+            <rect x="14" y="16" width="150" height="34" fill="var(--surface)" stroke="var(--rule)"/>
+            <text x="89" y="37" fill="var(--ink)" text-anchor="middle">Oura API</text>
+
+            <rect x="184" y="16" width="150" height="34" fill="var(--surface)" stroke="var(--rule)"/>
+            <text x="259" y="37" fill="var(--ink)" text-anchor="middle">Apple Health</text>
+
+            <rect x="354" y="16" width="150" height="34" fill="var(--surface)" stroke="var(--rule)"/>
+            <text x="429" y="37" fill="var(--ink)" text-anchor="middle">Manual entry</text>
+
+            <rect x="524" y="16" width="150" height="34" fill="var(--surface)" stroke="var(--rule)"/>
+            <text x="599" y="37" fill="var(--ink)" text-anchor="middle">MyFitnessPal</text>
+          </g>
+
+          <g stroke="var(--ink-faint)" stroke-width="1.2" marker-end="url(#ar)" fill="none">
+            <path d="M 89 50 L 89 82"/>
+            <path d="M 259 50 L 259 82"/>
+            <path d="M 429 50 L 429 82"/>
+            <path d="M 599 50 L 599 82"/>
+          </g>
+
+          <!-- typed tables -->
+          <rect x="14" y="84" width="660" height="46" fill="var(--accent-dim)" stroke="var(--accent)"/>
+          <text x="344" y="104" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="var(--ink)" text-anchor="middle">TYPED TABLES</text>
+          <text x="344" y="121" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--ink-soft)" text-anchor="middle">Sleep · Readiness · Activity · Stress · Spo2 · Workouts · WeighIns · Measurements · Nutrition</text>
+
+          <path d="M 344 130 L 344 166" stroke="var(--ink-faint)" stroke-width="1.2" marker-end="url(#ar)" fill="none"/>
+          <text x="356" y="152" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--ink-faint)">ObservationProjector</text>
+
+          <!-- observations -->
+          <rect x="150" y="168" width="388" height="44" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+          <text x="344" y="187" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="var(--ink)" text-anchor="middle">Observations</text>
+          <text x="344" y="203" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--ink-soft)" text-anchor="middle">flat: metric · value · day · tier · source · signature</text>
+
+          <path d="M 344 212 L 344 248" stroke="var(--ink-faint)" stroke-width="1.2" marker-end="url(#ar)" fill="none"/>
+          <text x="356" y="234" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--ink-faint)">BaselineCalculator</text>
+
+          <!-- baselines -->
+          <rect x="150" y="250" width="388" height="44" fill="var(--surface)" stroke="var(--rule)"/>
+          <text x="344" y="269" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="var(--ink)" text-anchor="middle">Baselines + DerivedMetrics</text>
+          <text x="344" y="285" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--ink-soft)" text-anchor="middle">what is normal · z-scores · ACWR · sleep debt · slopes</text>
+
+          <g stroke="var(--ink-faint)" stroke-width="1.2" marker-end="url(#ar)" fill="none">
+            <path d="M 250 294 L 250 330"/>
+            <path d="M 440 294 L 440 330"/>
+          </g>
+          <text x="120" y="316" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--ink-faint)">FindingRun</text>
+          <text x="452" y="316" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--ink-faint)">Correlations</text>
+
+          <!-- outputs -->
+          <rect x="150" y="332" width="196" height="42" fill="var(--surface)" stroke="var(--rule)"/>
+          <text x="248" y="350" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="var(--ink)" text-anchor="middle">Findings</text>
+          <text x="248" y="365" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--ink-soft)" text-anchor="middle">opened · continued · resolved</text>
+
+          <rect x="358" y="332" width="180" height="42" fill="var(--surface)" stroke="var(--rule)"/>
+          <text x="448" y="350" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="var(--ink)" text-anchor="middle">Correlations</text>
+          <text x="448" y="365" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--ink-soft)" text-anchor="middle">driver → outcome, lagged</text>
+
+          <g stroke="var(--ink-faint)" stroke-width="1.2" marker-end="url(#ar)" fill="none">
+            <path d="M 248 374 L 248 410"/>
+            <path d="M 448 374 L 448 410"/>
+          </g>
+
+          <rect x="130" y="412" width="236" height="40" fill="var(--accent-dim)" stroke="var(--accent)"/>
+          <text x="248" y="430" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="var(--ink)" text-anchor="middle">San → Telegram</text>
+          <text x="248" y="445" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--ink-soft)" text-anchor="middle">deduplicated, cooled down</text>
+
+          <rect x="378" y="412" width="176" height="40" fill="var(--accent-dim)" stroke="var(--accent)"/>
+          <text x="466" y="430" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="var(--ink)" text-anchor="middle">Insight tab</text>
+          <text x="466" y="445" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--ink-soft)" text-anchor="middle">the dashboard</text>
+
+          <!-- boundary label -->
+          <line x1="690" y1="84" x2="690" y2="130" stroke="var(--accent)" stroke-width="2"/>
+          <text x="700" y="104" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--accent)">vitara</text>
+          <text x="700" y="116" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--accent)">writes</text>
+
+          <line x1="690" y1="168" x2="690" y2="374" stroke="var(--accent)" stroke-width="2"/>
+          <text x="700" y="265" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--accent)">insight</text>
+          <text x="700" y="277" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--accent)">writes</text>
+        </svg>
+        <figcaption>
+          Two processes share one SQLite file and never write the same table.
+          <code>vitara-worker</code> owns everything that arrives; <code>vitara-insight</code>
+          owns everything derived. Both read all of it.
+        </figcaption>
+      </figure>
+
+      <div class="why">
+        <span class="tag">Why one database, split by ownership</span>
+        <p>
+          The alternative — a second store for the analysis — buys process separation at
+          the price of a sync problem and two versions of the truth. The analysis needs
+          every raw observation, so copying health data across a process boundary would
+          mean keeping two copies in step forever.
+        </p>
+        <p>
+          Instead the <em>write sets</em> are disjoint. SQLite in WAL mode serialises the
+          writes it must, and no two processes ever contend for the same row. Only
+          <code>vitara</code> creates schema: two processes racing to
+          <code>CREATE TABLE IF NOT EXISTS</code> on a cold boot is how the database ends
+          up locked.
+        </p>
+      </div>
+    </section>
+
+    <!-- 03 ───────────────────────────────────────────── -->
+    <section id="oura">
+      <span class="sect-num">03</span>
+      <h2>What we pull from Oura</h2>
+
+      <p>
+        Oura is an OAuth2 API. Vitara stores a refresh token and pulls eight collections.
+        Each becomes one typed table; every table is keyed by <code>Id</code> (Oura's own
+        identifier or the ISO date) so a re-sync updates rather than duplicates.
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Oura endpoint</th><th>Table</th><th>Fields stored</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="m">sleep</td>
+              <td class="m">Sleep</td>
+              <td class="m">Day · BedtimeStart · BedtimeEnd · TotalSleepMinutes · RemMinutes · DeepMinutes · LightMinutes · AwakeMinutes · AvgHrv · LowestHr · AvgBreathingRate · AvgSpo2 · SkinTempDeviation</td>
+            </tr>
+            <tr>
+              <td class="m">daily_sleep</td>
+              <td class="m">Sleep <span class="muted">(score only)</span></td>
+              <td class="m">Score</td>
+            </tr>
+            <tr>
+              <td class="m">daily_readiness</td>
+              <td class="m">Readiness</td>
+              <td class="m">Score · TemperatureDeviation · HrvBalance · RecoveryIndex · RestingHeartRate · ActivityBalance · SleepBalance · Level</td>
+            </tr>
+            <tr>
+              <td class="m">daily_activity</td>
+              <td class="m">Activity</td>
+              <td class="m">Score · Steps · ActiveCalories · TotalCalories · EquivalentWalkingDistance · High/Medium/Low ActivityMinutes · SedentaryMinutes · RestMinutes · AvgMet</td>
+            </tr>
+            <tr>
+              <td class="m">daily_stress</td>
+              <td class="m">Stress</td>
+              <td class="m">StressHighSeconds · RecoveryHighSeconds · DaySummary</td>
+            </tr>
+            <tr>
+              <td class="m">daily_resilience</td>
+              <td class="m">Resilience</td>
+              <td class="m">Level · SleepRecovery · DaytimeRecovery · Stress</td>
+            </tr>
+            <tr>
+              <td class="m">daily_cardiovascular_age</td>
+              <td class="m">CardiovascularAge</td>
+              <td class="m">VascularAge</td>
+            </tr>
+            <tr>
+              <td class="m">workout</td>
+              <td class="m">Workouts</td>
+              <td class="m">Activity · StartTime · EndTime · Calories · Distance · Intensity · Label</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="why">
+        <span class="tag">Two things worth knowing about the sync</span>
+        <p>
+          <b>The sleep score lives on a different endpoint from the sleep.</b> Oura's
+          <code>sleep</code> endpoint returns the session detail; the 0–100 score comes
+          from <code>daily_sleep</code>. They are fetched separately and merged.
+        </p>
+        <p>
+          <b>The watermark is per-collection.</b> An earlier version tracked one "latest
+          day" across sleep, readiness and activity only — so if SpO2 failed for a
+          fortnight while sleep kept succeeding, the next window started from sleep's
+          date and those SpO2 days were never fetched again.
+          <code>GetLatestDaysAsync()</code> now returns one watermark per collection.
+        </p>
+      </div>
+
+      <div class="why trap">
+        <span class="tag">The nap trap</span>
+        <p>
+          Oura's <code>sleep</code> endpoint returns <em>every</em> sleep period it
+          detects — naps, "rest" periods, and sensor noise — and the record carries no
+          type field to tell them apart. In the real database, single days held several sessions of only a few minutes alongside the actual night, and some held a zero-minute session beside it.
+        </p>
+        <p>
+          Projecting each session separately counted every one of those as a night. Each
+          contributed a full night's deficit against a ~7-hour need, and the system
+          reported <b>51 hours of sleep debt</b>. Worse and quieter: the
+          <code>total_sleep_minutes</code> baseline pooled 5-minute values with
+          400-minute ones, so its mean collapsed and its spread exploded, making every
+          sleep z-score meaningless. The projector now aggregates per day — see §07.
+        </p>
+      </div>
+    </section>
+
+    <!-- 04 ───────────────────────────────────────────── -->
+    <section id="other">
+      <span class="sect-num">04</span>
+      <h2>The other sources</h2>
+
+      <h3>Apple Health — spreadsheet</h3>
+      <p>
+        For CSV, TSV and XLSX files produced by third-party export apps. Detects two
+        layouts automatically: <b>wide</b> (one row per day, one column per metric) and
+        <b>long</b> (one row per sample). Header text is normalised rather than
+        enumerated, so <code>Resting Heart Rate</code>,
+        <code>resting_heart_rate</code> and
+        <code>HKQuantityTypeIdentifierRestingHeartRate</code> all resolve to one key.
+      </p>
+
+      <h3>Apple Health — the native export</h3>
+      <p>
+        Apple's own <code>export.xml</code>. A real one measured <b>810MB</b> with
+        <b>1,788,396 records</b> from nineteen apps spanning 2016 to 2026. Parsed with
+        <code>XmlReader</code> in 6.7 seconds using 46MB of RAM — nothing accumulates
+        except one number per (day, metric, app).
+      </p>
+      <p>
+        Uploaded once and parsed once. The obvious preview-then-commit shape would send
+        810MB over the network twice, so the upload parses straight to daily aggregates
+        and stages those under a token; the commit works from them.
+      </p>
+
+      <div class="why trap">
+        <span class="tag">Four traps in a real Apple export</span>
+        <p>
+          <b>Oura writes into Apple Health.</b> It was the largest single writer at
+          714,384 records. Since Oura also reaches Vitara through its own API — with
+          sleep stages, RMSSD and a temperature deviation Apple never receives —
+          importing it would overwrite the better record with a coarser copy of itself.
+          The importer lists every source with its real counts and leaves Oura
+          <em>unticked</em>, because which copy to keep is a decision, not a rule.
+        </p>
+        <p>
+          <b>Units are imperial.</b> lb, in, mi, degF throughout. A body mass of 176
+          stored as kilograms is a number that looks entirely reasonable.
+        </p>
+        <p>
+          <b>SDNN is not RMSSD.</b> Apple records heart-rate variability as SDNN; Oura
+          records RMSSD. They are different statistics over the same intervals. Apple's
+          gets its own metric key, <code>hrv_sdnn</code>, and never touches the field
+          holding Oura's.
+        </p>
+        <p>
+          <b>Sleep is spans, not values.</b> A <code>SleepAnalysis</code> record carries
+          no number — it is a start, an end and a stage name. A night is the summed
+          duration of the <em>asleep</em> spans (never "InBed"), filed under the day the
+          person <em>woke</em>.
+        </p>
+      </div>
+
+      <h4>Plausibility bounds</h4>
+      <p>
+        Found only by running the real file. It contained a "resting heart rate" far above any possible resting value,
+        a night of well under a minute, another over fifteen hours, and days with a single step —
+        the nap trap's whole family at ten-year scale. Values are bounded
+        <em>after</em> daily aggregation, and anything dropped is counted and reported.
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Metric</th><th class="num">Min</th><th class="num">Max</th><th>Reasoning</th></tr></thead>
+          <tbody>
+            <tr><td class="m">resting_hr</td><td class="num">30</td><td class="num">110</td><td>Above 110 is not resting</td></tr>
+            <tr><td class="m">total_sleep_minutes</td><td class="num">60</td><td class="num">840</td><td>Under an hour is fragments; over 14h is a stuck span</td></tr>
+            <tr><td class="m">steps</td><td class="num">100</td><td class="num">100,000</td><td>Under 100 is a phone on a table</td></tr>
+            <tr><td class="m">active_calories</td><td class="num">1</td><td class="num">10,000</td><td></td></tr>
+            <tr><td class="m">hrv_sdnn</td><td class="num">3</td><td class="num">300</td><td></td></tr>
+            <tr><td class="m">breathing_rate</td><td class="num">4</td><td class="num">40</td><td></td></tr>
+            <tr><td class="m">spo2_average</td><td class="num">70</td><td class="num">100</td><td></td></tr>
+            <tr><td class="m">weight_kg</td><td class="num">25</td><td class="num">300</td><td></td></tr>
+            <tr><td class="m">vo2_max</td><td class="num">10</td><td class="num">90</td><td></td></tr>
+            <tr><td class="m">systolic_bp</td><td class="num">60</td><td class="num">260</td><td></td></tr>
+            <tr><td class="m">diastolic_bp</td><td class="num">30</td><td class="num">160</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted" style="font-size:13.5px">
+        These exclude values that <em>cannot be a measurement of that thing at all</em> —
+        never merely unusual ones, which are the interesting readings.
+      </p>
+
+      <h3>Manual entry</h3>
+      <p>
+        Blood pressure, glucose, waist, pulse, VO₂ max, and the lab analytes. A closed
+        metric list on purpose: free text would let "bp", "BP" and "blood pressure"
+        become three metrics that never share a baseline, leaving all three permanently
+        invalid.
+      </p>
+    </section>
+
+    <!-- 05 ───────────────────────────────────────────── -->
+    <section id="tiers">
+      <span class="sect-num">05</span>
+      <h2>Metrics and tiers</h2>
+
+      <p>
+        Every reading is tagged with a <b>tier</b>, which decides what statistics are
+        legitimate on it.
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Tier</th><th>Cadence</th><th>What is valid</th></tr></thead>
+          <tbody>
+            <tr><td class="m">dense</td><td>Daily, from a device</td><td>Baselines, z-scores and trends are all valid</td></tr>
+            <tr><td class="m">medium</td><td>By hand, every few days</td><td>Baselines work; trends need wider windows</td></tr>
+            <tr><td class="m">sparse</td><td>Labs, ~twice a year</td><td>Compared to the previous draw and to a reference range. <b>Never fitted, never projected</b> — four points over two years is a sequence to annotate, not a trend</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>The canonical metric keys</h4>
+      <pre><code>DENSE    resting_hr · hrv_rmssd · skin_temp_deviation · sleep_score
+         total_sleep_minutes · deep_sleep_minutes · rem_sleep_minutes
+         sleep_efficiency · breathing_rate · spo2_average
+         readiness_score · activity_score · steps · active_calories
+         stress_high_seconds · vo2_max · cardiovascular_age
+         hrv_sdnn                       (Apple Health only — see §04)
+
+MEDIUM   systolic_bp · diastolic_bp · pulse · weight_kg
+         glucose · waist_circumference_cm
+
+SPARSE   hba1c · total_cholesterol · ldl · hdl · triglycerides
+         crp · tsh · vitamin_d</code></pre>
+
+      <p>
+        Keys are strings rather than an enum. Lab analytes arrive with names nobody
+        enumerated in advance, and a metric that cannot be stored because the enum lacks
+        a member is a metric that is lost. Unknown ones are stored under their own name
+        and can be promoted to a constant later without touching stored rows.
+      </p>
+
+      <h3>Context signatures — the important design decision</h3>
+      <p>
+        Baselines are computed per <code>(metric, context signature)</code>. The obvious
+        reading is to key on every context field, and that is unusable arithmetic:
+      </p>
+
+      <div class="why trap">
+        <span class="tag">Why not every field</span>
+        <p>
+          Blood pressure keyed on position, arm, fasting, time of day, caffeine and
+          alcohol is dozens of signatures, each needing ~30 readings before it says
+          anything. Nobody accumulates thirty
+          morning-seated-left-arm-no-caffeine-no-alcohol-fasted readings. Every bucket
+          stays permanently invalid and the feature silently never works.
+        </p>
+      </div>
+
+      <p>So each metric declares only the context that genuinely changes the number:</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Metric</th><th>Splits on</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td class="m">systolic_bp<br>diastolic_bp<br>pulse</td><td class="m">position, timeOfDay</td><td>Posture and time of day move blood pressure enough to matter. Arm and cuff size are recorded but do not split — the difference between arms is smaller than the cost of halving the sample.</td></tr>
+            <tr><td class="m">glucose</td><td class="m">fasting</td><td>Fasting or not is the whole interpretation of a glucose reading. Nothing else comes close.</td></tr>
+            <tr><td class="m">weight_kg</td><td class="m">timeOfDay</td><td>Varies through the day more than people expect, but a habitual weighing time means one bucket in practice.</td></tr>
+            <tr><td class="m">everything from Oura</td><td class="m">nothing</td><td>Machine-measured overnight under conditions the user does not vary.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        Every other context field — arm, cuff size, caffeine, alcohol, pre/post exercise
+        — is still <em>recorded on the observation</em>. It is there to explain an
+        outlier six months later; it just does not fragment the baseline.
+      </p>
+    </section>
+
+    <!-- 06 ───────────────────────────────────────────── -->
+    <section id="schema">
+      <span class="sect-num">06</span>
+      <h2>The database</h2>
+
+      <p>
+        One SQLite file, <code>vitara.db</code>, 28 tables. Ownership is split by
+        process: the tables below are marked with which one writes them.
+      </p>
+
+      <h3>Ingestion tables (written by vitara / vitara-worker)</h3>
+
+      <div class="schema">
+        <div class="schema-head"><span>Sleep</span><span class="owner">vitara</span></div>
+        <div class="schema-body">
+          <p>One row per Oura sleep session — <em>including naps</em>, which is why the projector aggregates per day.</p>
+          <pre><code>Id                  TEXT PK    Oura session id
+Day                 TEXT       yyyy-MM-dd, local
+BedtimeStart        TEXT
+BedtimeEnd          TEXT
+TotalSleepMinutes   INTEGER
+RemMinutes          INTEGER
+DeepMinutes         INTEGER
+LightMinutes        INTEGER
+AwakeMinutes        INTEGER
+Score               INTEGER    0-100, from daily_sleep
+AvgHrv              REAL       ms, RMSSD
+LowestHr            REAL       bpm
+AvgBreathingRate    REAL       breaths/min
+AvgSpo2             REAL       %
+SkinTempDeviation   REAL       °C from the ring's own baseline</code></pre>
+        </div>
+      </div>
+
+      <div class="schema">
+        <div class="schema-head"><span>Readiness · Activity · Stress · Resilience · Spo2 · CardiovascularAge</span><span class="owner">vitara</span></div>
+        <div class="schema-body">
+          <p>One row per day each, keyed on the ISO date. Fields are listed in §03.</p>
+        </div>
+      </div>
+
+      <div class="schema">
+        <div class="schema-head"><span>Measurements</span><span class="owner">vitara</span></div>
+        <div class="schema-body">
+          <p>
+            Readings nothing automatic produced — the medium and sparse tiers. One table
+            for all of them rather than a typed table per metric: Oura's shape is fixed
+            by Oura, but what a person measures by hand is open-ended, and needing a
+            migration each time they track something new is how manual entry stops being
+            extended.
+          </p>
+          <pre><code>Id                TEXT PK    GUID
+Metric            TEXT       MetricKeys, or free text
+Value             REAL
+Unit              TEXT
+ObservedAtLocal   TEXT       the instant, local
+Day               TEXT       yyyy-MM-dd
+Tier              TEXT       medium | sparse
+Source            TEXT       manual | apple_health | lab
+ContextJson       TEXT       serialised MeasurementContext
+Note              TEXT       free text, never parsed
+CreatedAt         TEXT
+
+UNIQUE (Metric, ObservedAtLocal, Source)</code></pre>
+          <p>
+            Deliberately <em>not</em> unique on (Metric, Day): several blood pressure
+            readings in a day is normal and each is real. Re-importing the same file
+            dedupes on the instant instead.
+          </p>
+        </div>
+      </div>
+
+      <h3>Analysis tables (written by vitara-insight)</h3>
+
+      <div class="schema">
+        <div class="schema-head"><span>Observations</span><span class="owner">insight</span></div>
+        <div class="schema-body">
+          <p>
+            The flat view every statistic reads. <b>Additive, not a replacement</b> — the
+            typed tables stay the source of truth and keep serving the dashboard and San.
+            Collapsing fifteen tables into this one is the tidier design and the wrong
+            trade: it rewrites every existing query and breaks the dashboard on the way
+            through.
+          </p>
+          <pre><code>Id                   INTEGER PK
+Metric               TEXT
+Value                REAL
+Unit                 TEXT
+ObservedAtLocal      TEXT      local instant
+ObservedDateLocal    TEXT      local day — the day boundary is the USER'S
+Tier                 TEXT      dense | medium | sparse
+Source               TEXT      oura | manual | lab | apple_health
+SourceRecordId       TEXT      makes re-ingest idempotent
+DeviceId             INTEGER
+LabPanelId           TEXT
+ContextJson          TEXT
+BaselineSignature    TEXT      which baseline bucket this joins
+EligibleForBaseline  INTEGER
+ValueOriginal        REAL      pre-conversion, kept for audit
+UnitOriginal         TEXT
+CreatedAt            TEXT
+
+UNIQUE (Metric, ObservedAtLocal, Source)</code></pre>
+          <p>
+            <b>Heart rate is deliberately not projected here.</b> Oura samples it
+            continuously — thousands of rows a day — and it is the one table that would
+            fill the disk on a box also hosting the language model. It stays in
+            <code>HeartRate</code>, pruned at 90 days, and the analysis reads daily
+            aggregates instead.
+          </p>
+        </div>
+      </div>
+
+      <div class="schema">
+        <div class="schema-head"><span>Baselines</span><span class="owner">insight</span></div>
+        <div class="schema-body">
+          <p>What normal looks like, per metric per signature, recomputed each pass.</p>
+          <pre><code>Id                  INTEGER PK
+Metric              TEXT
+BaselineSignature   TEXT
+ComputedOnLocal     TEXT
+WindowDays          INTEGER   60 by default
+Mean                REAL
+StdDev              REAL
+Median              REAL      robust — see §09
+P25                 REAL
+P75                 REAL
+N                   INTEGER   readings that survived exclusion
+IsValid             INTEGER   N >= 21
+ExclusionsJson      TEXT      what was dropped and why
+RegimeStartLocal    TEXT      null unless a step change was detected
+CreatedAt           TEXT</code></pre>
+        </div>
+      </div>
+
+      <div class="schema">
+        <div class="schema-head"><span>DerivedMetrics</span><span class="owner">insight</span></div>
+        <div class="schema-body">
+          <p>Anything computed rather than measured: z-scores, ratios, slopes.</p>
+          <pre><code>Id                  INTEGER PK
+Metric              TEXT      e.g. resting_hr_z, acwr_active_calories,
+                              sleep_debt_minutes, bmi, waist_to_height,
+                              hrv_rmssd_slope_30d
+ObservedDateLocal   TEXT
+Value               REAL
+InputsJson          TEXT      what fed it
+CreatedAt           TEXT
+
+UNIQUE (Metric, ObservedDateLocal)</code></pre>
+          <p>
+            <code>InputsJson</code> is not optional decoration. A derived number nobody
+            can trace back to its inputs is indistinguishable from one the system made
+            up.
+          </p>
+        </div>
+      </div>
+
+      <div class="schema">
+        <div class="schema-head"><span>Findings</span><span class="owner">insight</span></div>
+        <div class="schema-body">
+          <p>Something Vitara concluded. Lifecycle in §12.</p>
+          <pre><code>Id                   INTEGER PK
+Key                  TEXT    type:metric:direction — STABLE across runs
+Type                 TEXT    deviation | early_illness | regime_change
+                             | strain_risk | drift | lab_anchor | staleness
+Metric               TEXT
+Direction            TEXT    high | low | rising | falling | missing
+Severity             TEXT    info | notable | high
+Confidence           REAL    0-1, where the detector supports it
+Summary              TEXT    deterministic text, not model output
+EvidenceJson         TEXT    the numbers behind it
+FirstDetectedLocal   TEXT    NEVER moves while the finding continues
+LastDetectedLocal    TEXT
+ResolvedLocal        TEXT    null while active
+CreatedAt            TEXT</code></pre>
+        </div>
+      </div>
+
+      <div class="schema">
+        <div class="schema-head"><span>Correlations</span><span class="owner">insight</span></div>
+        <div class="schema-body">
+          <pre><code>Id                INTEGER PK
+Driver            TEXT     what the user does
+Outcome           TEXT     what responds
+LagDays           INTEGER  0 = same day, 1 = next day
+Rho               REAL     Spearman
+N                 INTEGER  paired days
+PValue            REAL
+WindowDays        INTEGER  90
+ComputedOnLocal   TEXT
+CreatedAt         TEXT
+
+UNIQUE (Driver, Outcome, LagDays, ComputedOnLocal)</code></pre>
+          <p>
+            The columns say Driver and Outcome because the pairs are lagged in one
+            direction only — <b>not</b> because causation was established. No column here
+            ever stores a word like "cause".
+          </p>
+        </div>
+      </div>
+
+      <h3>Context tables</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Table</th><th>Holds</th><th>Effect on baselines</th></tr></thead>
+          <tbody>
+            <tr><td class="m">ExcludedPeriods</td><td>Illness, injury, anything that should not count as normal</td><td>Readings inside are dropped from the baseline</td></tr>
+            <tr><td class="m">TravelPeriods</td><td>Cross-timezone travel, with home and away zones</td><td>Circadian metrics only are dropped — see §08</td></tr>
+            <tr><td class="m">Devices</td><td>Device model and firmware, with active-from dates</td><td>A device change is a candidate explanation for a regime shift</td></tr>
+            <tr><td class="m">Interventions</td><td>A supplement, a protocol, a medication, with start and end</td><td>Annotation only; nothing is inferred from these</td></tr>
+            <tr><td class="m">LabPanels<br>ReferenceRanges</td><td>Lab draws and their normal ranges, optionally by sex and age</td><td>Reserved for <code>lab_anchor</code> findings — not yet implemented</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 07 ───────────────────────────────────────────── -->
+    <section id="projection">
+      <span class="sect-num">07</span>
+      <h2>Projection</h2>
+
+      <p>
+        <code>ObservationProjector</code> turns typed rows into flat observations. It is
+        pure and synchronous — no database, no clock — so the same rows always produce
+        the same observations, which is what makes re-running a backfill safe.
+      </p>
+
+      <h4>Rules</h4>
+      <ul>
+        <li><b>One row per day per metric.</b> Oura returns naps and noise alongside the night; each session projected separately is the 51-hour bug.</li>
+        <li><b>Additive fields sum</b> — total, deep and REM sleep minutes.</li>
+        <li><b>Point-in-time fields come from the longest session</b> — score, HRV, breathing rate, SpO₂, skin temperature. A five-minute mis-detection's HRV is not the night's HRV, and averaging them corrupts a real reading with a fake one.</li>
+        <li><b>Missing readings are omitted, never written as zero.</b> A missing HRV is not an HRV of zero, and a baseline that averages in the nights the ring was not worn describes someone else.</li>
+        <li><b>Oura's <code>day</code> field is used as-is</b>, never re-derived from a UTC instant — that is how sleep starting at 11pm ends up filed under tomorrow.</li>
+        <li><b>The observation instant comes from the main session</b>, so the unique index stays stable. A moving instant would leave the old row beside the new one and double-count the day.</li>
+      </ul>
+
+      <p>
+        The projection window is 120 days by default
+        (<code>VITARA_PROJECT_WINDOW_DAYS</code>), wide because Oura revises recent days
+        and a backfill can land months at once. Re-projecting is free — the upsert
+        ignores rows that already exist.
+      </p>
+    </section>
+
+    <!-- 08 ───────────────────────────────────────────── -->
+    <section id="baselines">
+      <span class="sect-num">08</span>
+      <h2>Baselines</h2>
+
+      <p>
+        A baseline is what "normal" means for one metric, for this person, right now. It
+        is computed over a rolling <b>60-day</b> window and requires at least
+        <b>21 readings</b> to be marked valid.
+      </p>
+
+      <div class="why">
+        <span class="tag">Why exclusions are the point</span>
+        <p>
+          A mean is not enough. Two weeks of illness inside a rolling window <em>raises</em>
+          the baseline — and the system then stops flagging exactly what it exists to
+          flag, while every number it reports still looks perfectly reasonable.
+        </p>
+      </div>
+
+      <h4>What is excluded</h4>
+      <ol>
+        <li><b>Excluded periods</b> — illness, injury, anything the user marked. Dropped entirely.</li>
+        <li><b>Travel, for circadian metrics only.</b> Cross-timezone travel <em>corrupts</em> sleep timing rather than merely influencing it: sleep in a different timezone is not a worse night, it is a different question, and pooling the two produces a baseline describing neither. The circadian set is <code>total_sleep_minutes</code>, <code>deep_sleep_minutes</code>, <code>rem_sleep_minutes</code>, <code>sleep_score</code>, <code>sleep_efficiency</code>, <code>hrv_rmssd</code>, <code>resting_hr</code>, <code>readiness_score</code>. Steps and weight are unaffected by which timezone you are in, so they stay.</li>
+        <li><b>Statistical outliers</b>, by median absolute deviation — see §09.</li>
+      </ol>
+
+      <p>
+        Everything dropped is recorded in <code>ExclusionsJson</code>, so a baseline can
+        explain itself when someone asks why a number looks different from what they
+        expected.
+      </p>
+
+      <h4>Validity</h4>
+      <p>
+        Below 21 readings the baseline is marked <code>IsValid = false</code> and
+        <b>exposed rather than hidden</b>. "Not enough data yet" is a real answer;
+        silently omitting the metric looks identical to the metric not existing. No
+        z-score is ever computed against an invalid baseline — a confident number built
+        on four readings is the one that gets acted on.
+      </p>
+    </section>
+
+    <!-- 09 ───────────────────────────────────────────── -->
+    <section id="stats">
+      <span class="sect-num">09</span>
+      <h2>The algorithms, by name</h2>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Used</th><th>Instead of</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>Median absolute deviation</b><br><span class="muted">MAD × 1.4826, threshold 3.0</span></td>
+              <td>3σ from the mean</td>
+              <td>The spec said: compute the spread, then discard anything more than three deviations from the spread you just computed. That is <b>circular</b> — outliers inflate σ enough to hide themselves — and unstable at n≈60 on data that is rarely symmetric. The 1.4826 factor makes MAD a consistent estimator of σ for normal data, so the threshold means what a reader expects.</td>
+            </tr>
+            <tr>
+              <td><b>Theil–Sen estimator</b><br><span class="muted">median of all pairwise slopes</span></td>
+              <td>Ordinary least squares</td>
+              <td>~29% breakdown point: more than a quarter of the data can be garbage before the slope is affected. Least squares is moved by a single bad night.</td>
+            </tr>
+            <tr>
+              <td><b>Mann–Kendall test</b><br><span class="muted">tie-corrected variance, |z| ≥ 2.576 (p &lt; 0.01)</span></td>
+              <td>Reporting the slope alone</td>
+              <td>A slope always exists. Fit a line to noise and a line comes back — without a significance gate this would announce a discovery most days. The tie correction matters because health data ties constantly: integer scores, rounded step counts.</td>
+            </tr>
+            <tr>
+              <td><b>Spearman rank correlation</b></td>
+              <td>Pearson</td>
+              <td>Health data is not normal and single bad nights are real and common. A rank correlation is not dragged around by one of them. Ties take the average rank.</td>
+            </tr>
+            <tr>
+              <td><b>Fisher z-transformation</b><br><span class="muted">atanh(ρ)·√(n−3), normal CDF</span></td>
+              <td>Exact t-distribution</td>
+              <td>Asymptotically exact, and nothing below 30 paired days is tested anyway. An exact CDF would move the answer in the fourth decimal and needs a library this project does not have.</td>
+            </tr>
+            <tr>
+              <td><b>Benjamini–Hochberg</b><br><span class="muted">FDR 0.10, across the whole run</span></td>
+              <td>p &lt; 0.05 per test</td>
+              <td>See §11. This is the single most important statistical decision in the module.</td>
+            </tr>
+            <tr>
+              <td><b>Two-window mean-shift</b><br><span class="muted">pooled MAD, separation test, 14-day dwell</span></td>
+              <td>CUSUM, Bayesian change point</td>
+              <td>The signal is a step in a short noisy series. A method nobody can check by hand produces conclusions nobody can argue with.</td>
+            </tr>
+            <tr>
+              <td><b>Acute:chronic workload ratio</b><br><span class="muted">7-day mean ÷ 28-day mean</span></td>
+              <td>—</td>
+              <td>Used, but capped at <code>info</code> severity. Its evidence base is weaker than its popularity suggests: numerator and denominator share data, and the threshold bands have not held up to scrutiny.</td>
+            </tr>
+            <tr>
+              <td><b>75th percentile</b><br><span class="muted">for sleep need</span></td>
+              <td>Mean or median of sleep duration</td>
+              <td>See below. This one is a refusal of the spec.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Sleep need: where the spec was wrong</h3>
+
+      <div class="why trap">
+        <span class="tag">The circularity</span>
+        <p>
+          The spec said to derive habitual sleep need "from their long-run distribution,
+          not a fixed 8 hours". That sounds right and is not.
+        </p>
+        <p>
+          If someone is chronically short, taking the <em>centre</em> of what they
+          actually sleep computes <b>their deficit as their requirement</b> — and then
+          reports, forever, that they are not in debt. The system would be most confident
+          exactly when it was most wrong.
+        </p>
+      </div>
+
+      <p>There is no way to recover sleep need from sleep duration. What is available:</p>
+      <ol>
+        <li><b>Let the user say.</b> <code>VITARA_SLEEP_NEED_MINUTES</code>. The only input here that is a fact rather than an inference.</li>
+        <li>Failing that, the <b>upper quartile</b> of the last 90 nights — the longest quarter are the nights closest to unconstrained (weekends, no alarm), so p75 is a <em>floor</em> on need rather than a description of habit. Clamped to 7–9.5 hours. Below 30 nights it falls back to 8 hours and says so.</li>
+      </ol>
+
+      <p>
+        The basis travels with the number wherever it goes. "You are four hours short"
+        means something different when the need behind it was inferred rather than
+        stated.
+      </p>
+
+      <h4>Debt accumulation</h4>
+      <pre><code>for each night, oldest first:
+    delta = need − actual
+    if delta > 0:  debt += delta              a short night adds fully
+    else:          debt += delta × 0.5        a long night pays back at half
+    debt = max(0, debt)                       debt never goes negative</code></pre>
+      <p>
+        Surplus repays at half rate because an extra hour on Saturday does not undo an
+        hour lost on each of five weeknights. Debt is floored at zero because banking
+        sleep is not a thing, and a negative running total would silently offset a future
+        genuine deficit.
+      </p>
+    </section>
+
+    <!-- 10 ───────────────────────────────────────────── -->
+    <section id="detectors">
+      <span class="sect-num">10</span>
+      <h2>Detectors</h2>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Type</th><th>Fires when</th><th>Severity</th></tr></thead>
+          <tbody>
+            <tr><td class="m">deviation</td><td>|z| ≥ 2.0 for 2 consecutive days <b>in the same direction</b></td><td>info, or notable above 3.5σ</td></tr>
+            <tr><td class="m">early_illness</td><td>Two of three sustained 2 days: resting HR z ≥ 1.5, HRV z ≤ −1.5, skin temp z ≥ 1.5</td><td><b>high</b> if all three every day (confidence 0.8), else <b>notable</b> (0.55)</td></tr>
+            <tr><td class="m">regime_change</td><td>Step ≥ 1.5σ that then holds for 14 days</td><td><b>notable</b> if unexplained, <b>info</b> if a candidate cause exists</td></tr>
+            <tr><td class="m">strain_risk</td><td>ACWR outside 0.8–1.3, or sleep debt ≥ 300 minutes</td><td><b>info only</b></td></tr>
+            <tr><td class="m">drift</td><td>A 90-day trend that passed Mann–Kendall at p &lt; 0.01</td><td>info</td></tr>
+            <tr><td class="m">staleness</td><td>An expected daily metric missing for &gt; 3 days</td><td>info</td></tr>
+            <tr><td class="m">lab_anchor</td><td><span class="muted">Defined, not implemented</span></td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The rules that keep it quiet</h3>
+
+      <p>
+        <b>Sustained is the cheapest and most effective noise filter available.</b> A
+        single odd night is a single odd night, and a system that says so every time is
+        one that gets muted. Deviation requires the breach on consecutive days
+        <em>in the same direction</em> — a metric bouncing above and below is unsettled,
+        not deviating, and calling that a finding describes the noise rather than the
+        person.
+      </p>
+
+      <p>
+        <b>Deviation fires for ten curated metrics, not everything with a baseline.</b>
+        Two sigma sustained over two days is roughly one day in a thousand per metric,
+        which sounds negligible until it is multiplied by thirty metrics and 365 days.
+        Worse, these metrics are heavily correlated — deep, REM and total sleep move
+        together, so one poor week arrives as four findings saying the same thing. The
+        list: resting HR, HRV, skin temperature, total sleep, readiness, breathing rate,
+        SpO₂, systolic BP, weight, glucose.
+      </p>
+
+      <p>
+        <b>The illness detector suppresses its own components.</b> "Resting HR is high,
+        HRV is low, temperature is up, and you may be getting ill" is four notifications
+        about one thing.
+      </p>
+
+      <div class="why">
+        <span class="tag">Why two of three, and why it matters most</span>
+        <p>
+          The illness detector is the most valuable thing here and the one most able to
+          destroy trust in everything around it: fire it spuriously twice and it stops
+          being read, <em>including on the morning it is right</em>.
+        </p>
+        <p>
+          Each day must independently show at least two of the three signals. Not one of
+          three — any single one moves for a late meal, a hard session, a warm room. And
+          not "resting HR up on Tuesday, HRV down on Thursday", which is two unrelated
+          days rather than a signal.
+        </p>
+      </div>
+
+      <p>
+        <b>Staleness applies to the dense tier only.</b> A weight entered by hand every
+        few days, or a lab drawn twice a year, is not missing — it is scheduled. And a
+        metric <em>never</em> recorded is not stale either; that would be the system
+        complaining about its own emptiness on day one.
+      </p>
+
+      <p>
+        <b>Missing data is a finding, not a gap to paper over.</b> A ring left in a
+        drawer produces exactly the same silence as a week of perfect health, and only
+        one of those is worth saying nothing about.
+      </p>
+
+      <h3>Regime change, and why the dwell is load-bearing</h3>
+      <p>
+        A sustained step change is not a deviation to be averaged away — it is a new
+        normal. A rolling baseline that absorbs it over sixty days ends up describing
+        neither the old level nor the new one, while never mentioning that anything
+        happened.
+      </p>
+
+      <div class="why trap">
+        <span class="tag">The failure mode without a dwell requirement</span>
+        <p>
+          Without requiring the new level to persist, a twitchy detector resets on every
+          wobble. Once "normal" is redefined every few days,
+          <b>nothing is ever abnormal again</b> — the detector quietly disables the
+          entire system it feeds, and it looks like it is working the whole time.
+        </p>
+      </div>
+
+      <p>
+        Two bugs found while building it: it fired on pure noise, because MAD goes to
+        zero on a steady metric and any step then looks infinite; then it could not
+        detect anything on zero-variance data. Fixed with a pooled MAD across both
+        windows, an explicit distribution-separation test, and degenerate-case handling.
+      </p>
+
+      <p>
+        Severity runs the opposite way to what you might expect: a step with
+        <b>no</b> candidate explanation is <code>notable</code>, one with an explanation is
+        only <code>info</code>. A resting heart rate that stepped up the week a new ring
+        arrived is probably the ring. One that stepped up for no visible reason is the one
+        worth a look.
+      </p>
+
+      <p>
+        Attribution is attempted and phrased as a <em>possible explanation</em>, never a
+        cause. A device change on the day a metric steps is worth knowing; asserting it
+        did it is a claim the data cannot support.
+      </p>
+    </section>
+
+    <!-- 11 ───────────────────────────────────────────── -->
+    <section id="correlations">
+      <span class="sect-num">11</span>
+      <h2>Correlations</h2>
+
+      <p>
+        Looking for relationships between what the person does and how they recover.
+        Does a hard session cost HRV tomorrow? Does a short night raise resting heart
+        rate?
+      </p>
+
+      <div class="why trap">
+        <span class="tag">The hard part is not the correlation, it is not lying about it</span>
+        <p>
+          Thirty metrics is 435 pairs before lags. At p &lt; 0.05 that is
+          <b>twenty-two "findings" per run from pure noise</b>. Three confident wrong
+          statements a week is how a feature stops being read.
+        </p>
+      </div>
+
+      <p>Four decisions carry the honesty here, and removing any one breaks it:</p>
+
+      <ol>
+        <li>
+          <b>A curated pair list.</b> Four drivers (active calories, steps, total sleep,
+          high-stress seconds) against six outcomes (HRV, resting HR, readiness, sleep
+          score, total sleep, skin temperature). Pairs where a mechanism is at least
+          plausible — which also means a result has something to be checked against.
+        </li>
+        <li>
+          <b>Lagged one direction only.</b> Today's training can affect tomorrow's HRV;
+          tomorrow's HRV cannot affect today's training. Lags of 0 and 1 day only —
+          further out means more tests and a weaker mechanism, and a seven-day lag on
+          daily data is mostly a test of whether the week was busy.
+        </li>
+        <li>
+          <b>Benjamini–Hochberg FDR control at 0.10, across the whole run.</b> Even sixty
+          tests at p &lt; 0.05 expect three spurious hits every time. BH controls the
+          expected <em>proportion</em> of false discoveries rather than the chance of
+          any — the right trade here, where missing a real relationship costs far less
+          than asserting one that is not there. Applied across the run, so adding a pair
+          raises the bar for every other pair rather than quietly lowering it.
+        </li>
+        <li>
+          <b>An effect-size floor of |ρ| ≥ 0.3.</b> Over enough days almost anything
+          reaches significance. A significant 0.12 explains one percent of the variance
+          and is not worth a sentence.
+        </li>
+      </ol>
+
+      <p>
+        Minimum 30 paired days before a pair is tested at all. Below that the confidence
+        interval on a correlation is so wide that a reported 0.4 is compatible with zero
+        — and a number with that much uncertainty, shown without it, gets acted on as
+        though it were solid.
+      </p>
+
+      <p>
+        The caveat that these are <b>not causes</b> is returned by the API rather than
+        written into the UI, so every surface showing the numbers carries identical
+        words.
+      </p>
+    </section>
+
+    <!-- 12 ───────────────────────────────────────────── -->
+    <section id="lifecycle">
+      <span class="sect-num">12</span>
+      <h2>Finding lifecycle</h2>
+
+      <p>
+        <code>SyncFindingsAsync</code> is a <b>reconcile, not an insert</b>. Each pass
+        compares what was detected against what is already open.
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Outcome</th><th>Condition</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td><b>Opened</b></td><td>Key matches nothing open</td><td>New row inserted</td></tr>
+            <tr><td><b>Continued</b></td><td>Key matches an open finding</td><td>Severity, summary and evidence updated. <code>FirstDetectedLocal</code> is <b>left alone</b>.</td></tr>
+            <tr><td><b>Resolved</b></td><td>Open, but not detected this pass</td><td><code>ResolvedLocal</code> set. Never deleted.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        Keeping the original detection date is what lets a finding be reported as
+        <b>"day 5"</b> rather than as something new every morning — the difference
+        between a system tracking a condition and one repeating itself.
+      </p>
+
+      <p>
+        Resolution is recorded rather than deleted because the condition ending is
+        information too. "Your resting heart rate is back to normal" is worth as much as
+        the original finding, and a deleted row can never say it. An empty detection set
+        is meaningful: it means everything open has resolved.
+      </p>
+
+      <h3>How findings reach the user</h3>
+      <p>
+        <code>HealthFindingsWorker</code> in San polls every 3 hours and hands findings
+        to San's existing <code>FindingDispatcher</code> — the same path email triage and
+        system audits use. That gives keyed deduplication, cooldowns that lengthen when
+        something is ignored, and a separation between "message the user" and "tell
+        NorthStar". A second notification path would mean a second cooldown to tune and a
+        second place for the same finding to arrive twice.
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Vitara severity</th><th>Ledger severity</th><th>Base cooldown</th></tr></thead>
+          <tbody>
+            <tr><td class="m">high</td><td class="m">high</td><td class="num">12h</td></tr>
+            <tr><td class="m">notable</td><td class="m">medium</td><td class="num">24h</td></tr>
+            <tr><td class="m">info</td><td class="m">low</td><td class="num">72h</td></tr>
+            <tr><td class="muted">—</td><td class="m">critical</td><td class="num">6h</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        <b>Nothing maps to critical.</b> A system inferring from a ring is not equipped
+        to declare an emergency; the most it should do is say something is worth a look.
+      </p>
+    </section>
+
+    <!-- 13 ───────────────────────────────────────────── -->
+    <section id="thresholds">
+      <span class="sect-num">13</span>
+      <h2>Every threshold</h2>
+
+      <p>
+        All environment-overridable, set in <code>deploy/env/vitara.env</code>. The spec
+        left every one of these unspecified, and they are the difference between a useful
+        system and one that is muted within a fortnight.
+      </p>
+
+      <div class="why">
+        <span class="tag">Why they are tunable at all</span>
+        <p>
+          This project has already watched a notification channel become something to
+          ignore. The lesson was not "send fewer" — it was that
+          <b>a detector nobody can tune eventually gets muted wholesale</b>, taking the
+          true positives with it.
+        </p>
+      </div>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Variable</th><th class="num">Default</th><th>Controls</th></tr></thead>
+          <tbody>
+            <tr><td class="m">VITARA_BASELINE_WINDOW_DAYS</td><td class="num">60</td><td>Rolling window for every baseline</td></tr>
+            <tr><td class="m">VITARA_MIN_BASELINE_N</td><td class="num">21</td><td>Readings before a baseline is valid</td></tr>
+            <tr><td class="m">VITARA_DEVIATION_Z</td><td class="num">2.0</td><td>How far off normal counts</td></tr>
+            <tr><td class="m">VITARA_DEVIATION_DAYS</td><td class="num">2</td><td>Consecutive days required</td></tr>
+            <tr><td class="m">VITARA_ILLNESS_RHR_Z</td><td class="num">1.5</td><td>Resting HR component</td></tr>
+            <tr><td class="m">VITARA_ILLNESS_HRV_Z</td><td class="num">−1.5</td><td>HRV component</td></tr>
+            <tr><td class="m">VITARA_ILLNESS_TEMP_Z</td><td class="num">1.5</td><td>Skin temperature component</td></tr>
+            <tr><td class="m">VITARA_ILLNESS_DAYS</td><td class="num">2</td><td>Consecutive days required</td></tr>
+            <tr><td class="m">VITARA_REGIME_SHIFT_Z</td><td class="num">1.5</td><td>Step size to qualify</td></tr>
+            <tr><td class="m">VITARA_REGIME_DWELL_DAYS</td><td class="num">14</td><td>How long the new level must hold</td></tr>
+            <tr><td class="m">VITARA_DRIFT_MIN_DAYS</td><td class="num">14</td><td>Points before a trend is reportable</td></tr>
+            <tr><td class="m">VITARA_ACWR_LOW</td><td class="num">0.8</td><td>Lower strain band</td></tr>
+            <tr><td class="m">VITARA_ACWR_HIGH</td><td class="num">1.3</td><td>Upper strain band</td></tr>
+            <tr><td class="m">VITARA_SLEEP_DEBT_MINUTES</td><td class="num">300</td><td>Debt worth raising (5 hours)</td></tr>
+            <tr><td class="m">VITARA_SLEEP_NEED_MINUTES</td><td class="muted">unset</td><td>Overrides the p75 estimate entirely</td></tr>
+            <tr><td class="m">VITARA_STALENESS_DAYS</td><td class="num">3</td><td>Days missing before absence is a finding</td></tr>
+            <tr><td class="m">VITARA_PROJECT_WINDOW_DAYS</td><td class="num">120</td><td>How far back projection reaches</td></tr>
+            <tr><td class="m">VITARA_DERIVED_CHECK_HOURS</td><td class="num">1</td><td>How often the worker wakes</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 14 ───────────────────────────────────────────── -->
+    <section id="api">
+      <span class="sect-num">14</span>
+      <h2>API surface</h2>
+
+      <h4>vitara :5100 — ingestion and raw reads</h4>
+      <pre><code>GET    /api/dashboard              everything for the Vitara tab
+GET    /api/sleep | /readiness | /activity | /stress
+GET    /api/spo2 | /heartrate | /vo2max | /resilience
+GET    /api/workouts | /weighins | /nutrition | /meals
+GET    /api/bioage                 see §17 — unvalidated
+GET    /api/profile                age, sex, height, weight
+GET    /api/oura/status            linked? expired?
+GET    /api/oura/auth              start OAuth
+POST   /api/oura/sync              force a sync
+
+GET    /api/measurements           manual readings
+GET    /api/measurements/metrics   what the form offers + context per metric
+POST   /api/measurements           record one
+DELETE /api/measurements/{id}
+
+POST   /api/healthkit/ingest       iOS companion app, X-Device-Key auth
+POST   /api/healthimport/preview   spreadsheet: read, write nothing
+POST   /api/healthimport/commit    spreadsheet: write
+POST   /api/healthimport/xml       Apple export: upload + parse, returns token
+POST   /api/healthimport/xml/commit  {token, sources[], setHeight}
+DELETE /api/healthimport/xml/{token}</code></pre>
+
+      <h4>vitara-insight :5110 — the derived layer</h4>
+      <pre><code>GET /api/health/summary        status sentence + ranked findings
+GET /api/health/findings       full detail, optionally including resolved
+GET /api/health/baselines      what is normal, invalid ones included
+GET /api/health/derived        z-scores, ratios, slopes, with inputs
+GET /api/health/correlations   with the caveat and the method</code></pre>
+
+      <div class="why">
+        <span class="tag">The status sentence</span>
+        <p>
+          <code>/api/health/summary</code> leads with a plain-English
+          <code>status</code> field, not just dates. Asked "is anything wrong with my
+          health", San once answered "nothing is flagged as being outside your normal
+          range" — from an empty findings list, on a box where the analysis had never
+          run. <b>Zero findings and no analysis are the same JSON shape</b>, and the
+          model read the reassuring one.
+        </p>
+        <p>
+          <code>computedThrough</code> and <code>daysBehind</code> were both in the
+          payload and it went straight past them. A number a model may or may not
+          interpret is not a safeguard; a sentence that says "this has never been
+          computed, do not tell the user they are fine" is.
+        </p>
+      </div>
+
+      <h4>Tools exposed to San via the MCP gateway</h4>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Tool</th><th>Returns</th></tr></thead>
+          <tbody>
+            <tr><td class="m">vitara_health</td><td>Raw last-night numbers — sleep, readiness, workouts</td></tr>
+            <tr><td class="m">health_findings</td><td>What Vitara has concluded, with the status sentence</td></tr>
+            <tr><td class="m">health_baselines</td><td>What is normal for this user, so "high" means high for them</td></tr>
+            <tr><td class="m">food_log · weight_log · workout_log</td><td>Write paths</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 15 ───────────────────────────────────────────── -->
+    <section id="schedule">
+      <span class="sect-num">15</span>
+      <h2>Scheduling</h2>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Worker</th><th>Process</th><th>Every</th><th>First run</th></tr></thead>
+          <tbody>
+            <tr><td class="m">OuraSyncWorker</td><td class="m">vitara-worker</td><td class="num">1h</td><td class="num">2h</td></tr>
+            <tr><td class="m">NutritionSyncWorker</td><td class="m">vitara-worker</td><td class="num">6h</td><td class="num">4m</td></tr>
+            <tr><td class="m">DerivedMetricsWorker</td><td class="m">vitara-insight</td><td class="num">1h</td><td class="num">6m</td></tr>
+            <tr><td class="m">HealthFindingsWorker</td><td class="m">san-worker</td><td class="num">3h</td><td class="num">9m</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="why">
+        <span class="tag">Why it is not a nightly job</span>
+        <p>
+          The spec called for a midnight run. That is wrong for how this is used: the
+          user syncs Oura in the morning, so at midnight the night that just finished
+          has not arrived yet. A job running then computes on absence, writes a baseline
+          missing its most recent day, and reports staleness for data that is merely not
+          downloaded.
+        </p>
+        <p>
+          So it is <b>driven by the data, not the clock</b>. It wakes hourly, compares
+          the newest observation against the newest baseline, and does nothing unless
+          there is something new. Correct whenever the sync happens, and self-healing
+          when the sync is late or fails.
+        </p>
+      </div>
+
+      <p>
+        The staggered first-run delays are deliberate: every worker hitting the modules
+        in the same second after a restart is a self-inflicted thundering herd.
+      </p>
+    </section>
+
+    <!-- 16 ───────────────────────────────────────────── -->
+    <section id="failures">
+      <span class="sect-num">16</span>
+      <h2>Failures that shaped this</h2>
+
+      <p>
+        Every one of these is in the code as a comment next to the thing it caused. They
+        are collected here because the reasoning is not obvious from the result.
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>What happened</th><th>What changed</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>51 hours of sleep debt.</b> Oura naps counted as nights — several few-minute sessions alongside the real one on a single day.</td>
+              <td>Projector aggregates per day. Additive fields sum, point-in-time fields come from the longest session.</td>
+            </tr>
+            <tr>
+              <td><b>"Nothing is flagged as outside your normal range"</b> — from an empty table, on a box where the analysis had never run.</td>
+              <td><code>status</code> sentence in the summary payload, said in words a model cannot skip.</td>
+            </tr>
+            <tr>
+              <td><b>Regime detector fired on pure noise</b>, then could not detect anything on zero-variance data.</td>
+              <td>Pooled MAD, separation test, explicit degenerate-case handling.</td>
+            </tr>
+            <tr>
+              <td><b>SpO2 stopped syncing for a fortnight</b> and was never re-fetched, because one watermark covered all collections.</td>
+              <td>Per-collection watermarks.</td>
+            </tr>
+            <tr>
+              <td><b>Date range filters silently dropped rows.</b> <code>Day</code> was stored via <code>ToString()</code> in a culture short-date format; SQLite compares TEXT lexicographically.</td>
+              <td>Normalised to <code>yyyy-MM-dd</code> at startup, idempotently.</td>
+            </tr>
+            <tr>
+              <td><b>The dashboard showed four-day-old vitals as today's.</b></td>
+              <td><code>daysAgo</code> on every metric block, and in every summary San reads.</td>
+            </tr>
+            <tr>
+              <td><b>An Apple export contained a "resting heart rate" far above any possible resting value</b> and a night of well under a minute.</td>
+              <td>Plausibility bounds after aggregation, with every drop counted and reported.</td>
+            </tr>
+            <tr>
+              <td><b>nginx would have rejected the 810MB upload</b> with a 413 at a 100m site-wide cap.</td>
+              <td>Dedicated location block, 2g limit, request buffering off, 30-minute timeouts.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 17 ───────────────────────────────────────────── -->
+    <section id="gaps">
+      <span class="sect-num">17</span>
+      <h2>What is not built</h2>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Gap</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td><b>Lab reference ranges</b></td><td><code>LabPanels</code> and <code>ReferenceRanges</code> exist, <code>lab_anchor</code> is a defined finding type, nothing populates or reads them. Lab values can be entered manually; they are stored but not interpreted.</td></tr>
+            <tr><td><b>Validated clinical models</b></td><td>None implemented. No PREVENT, ASCVD, FINDRISC, PhenoAge, eGFR/CKD-EPI or metabolic syndrome. All need lab data that has not been ingested.</td></tr>
+            <tr><td><b>Regime attribution</b></td><td>Reports only that another metric shifted nearby. Real attribution — a device change, a travel period, a season — is designed for and not implemented.</td></tr>
+            <tr><td><b>Model summarisation</b></td><td>Findings are shown to the model as evidence; there is no prompt that turns a set of findings into prose.</td></tr>
+            <tr><td><b>Nutrition analysis</b></td><td>Meals and daily totals are stored. No adequacy, balance or exposure algorithms.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="why trap">
+        <span class="tag">One thing to decide about</span>
+        <p>
+          <code>/api/bioage</code> reports a <b>biological age</b>, and it is not
+          PhenoAge or any validated model — it is a homegrown weighted average of Oura's
+          own HRV, resting HR, sleep and readiness scores with hand-picked weights.
+        </p>
+        <p>
+          Under the evidence scale this system otherwise uses it would grade
+          <b>D or lower</b>. PhenoAge at least has published coefficients and a
+          mortality-validated derivation; it needs nine lab markers that are not
+          available. The number should be labelled, gated, or dropped.
+        </p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <span>docs · Vitara + Insight</span>
+    <span>read from f0c22b4 · 2026-09-12</span>
+    <span>283 Vitara tests</span>
+  </footer>
+
+</div>

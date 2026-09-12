@@ -27,14 +27,12 @@ public static class ObservationProjector
     // Oura's `sleep` endpoint returns every sleep period it detected, not just the
     // night -- naps, "rest" periods, and a good deal of noise. SleepSession has no type
     // field, so all of it was stored indistinguishably and each row became its own
-    // observation. Real data from one database:
-    //
-    //     2026-09-04   13, 9, 5, 382 minutes
-    //     2026-08-10   0, 504 minutes
+    // observation. In a real database, single days held several few-minute sessions
+    // beside the actual night, and some held a zero-minute session.
     //
     // Those 2-to-30 minute rows are not naps, they are the ring mis-detecting. Every
     // one of them was counted as a night: against a need of roughly seven hours, each
-    // contributed a full night's deficit, and 2026-09-04 alone manufactured about
+    // contributed a full night's deficit, and a single such day manufactured about
     // twenty-one hours of sleep debt. San reported fifty-one hours. It was also
     // wrecking the total_sleep_minutes baseline, which pooled 5-minute values with
     // 400-minute ones -- so the mean collapsed, the spread exploded, and every sleep

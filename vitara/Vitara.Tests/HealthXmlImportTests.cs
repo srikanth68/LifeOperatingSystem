@@ -269,7 +269,7 @@ public class HealthXmlImportTests
     [Fact]
     public void AHeartRateOf176IsNotARestingHeartRate()
     {
-        // Straight out of the 810MB export. Some app wrote a sprint into the resting
+        // Seen in a real export. Some app wrote a sprint into the resting
         // field, and one such value in a baseline is enough to move it.
         var r = Scan("""
         <Record type="HKQuantityTypeIdentifierRestingHeartRate" sourceName="Kanth" unit="count/min" startDate="2026-09-01 07:00:00 -0400" endDate="2026-09-01 07:00:00 -0400" value="176"/>
@@ -282,7 +282,7 @@ public class HealthXmlImportTests
     [Fact]
     public void AHalfMinuteNightIsNotANight()
     {
-        // Also real: a day whose summed sleep came to 0.5 minutes. Exactly the shape of
+        // Also seen in a real export: a day whose summed sleep came to under a minute. Exactly the shape of
         // the Oura nap bug -- a fragment counted as a night, wrecking the baseline it
         // joins and manufacturing a night's sleep debt.
         var r = Scan("""
