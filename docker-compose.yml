@@ -91,6 +91,13 @@ services:
     command: ["dotnet", "/app/vitara-insight/Vitara.Insight.dll"]
     working_dir: /data/vitara/run
     env_file: ./deploy/env/vitara.env
+    # vitara.env is shared with vitara itself and sets BIND_URL to 5100. Without this
+    # override insight listened on 5100 inside its own container while nginx, San and
+    # the MCP gateway all called 5110 -- every request came back 502, and the health
+    # findings worker silently read nothing. `environment` wins over `env_file`, which
+    # is exactly the split wanted: one shared secrets file, one port per process.
+    environment:
+      BIND_URL: http://0.0.0.0:5110
     ports: ["5110:5110"]
     depends_on: [vitara]
 
