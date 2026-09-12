@@ -18,10 +18,22 @@ fi
 # A build needs several GB for intermediate layers. Checking first turns a ten-minute
 # failure that ends in "no space left on device" into a one-second answer -- which is
 # exactly how a full disk cost an evening once already.
-FREE_GB=$(df -g "$REPO" 2>/dev/null | awk 'NR==2 {print $4}')
+#
+# The space that matters is Docker's, not the Mac's. On Everest Docker runs inside
+# Colima's VM, which has its own fixed disk. This check used to read the host
+# filesystem, found plenty free, passed -- and the build then died inside the VM with
+# "no space left on device" while writing a NuGet package into an image layer. Ask the
+# VM when there is one.
+if command -v colima >/dev/null 2>&1 && colima status >/dev/null 2>&1; then
+  FREE_GB=$(colima ssh -- df -BG /var/lib/containerd 2>/dev/null | awk 'NR==2 {gsub("G","",$4); print $4}')
+  WHERE="Colima VM"
+else
+  FREE_GB=$(df -g "$REPO" 2>/dev/null | awk 'NR==2 {print $4}')
+  WHERE="host"
+fi
 if [ -n "${FREE_GB:-}" ] && [ "$FREE_GB" -lt 8 ]; then
-  echo "only ${FREE_GB}GB free — reclaim first, then re-run:"
-  echo "    docker builder prune -af && docker container prune -f"
+  echo "only ${FREE_GB}GB free on the ${WHERE} — reclaim first, then re-run:"
+  echo "    docker builder prune -af && docker image prune -f && docker container prune -f"
   exit 1
 fi
 
