@@ -22,35 +22,70 @@ public static class ObservationProjector
 {
     private const string Oura = "oura";
 
-    public static List<Observation> FromSleep(SleepSession s)
+    // ONE ROW PER NIGHT, not one per session.
+    //
+    // Oura's `sleep` endpoint returns every sleep period it detected, not just the
+    // night -- naps, "rest" periods, and a good deal of noise. SleepSession has no type
+    // field, so all of it was stored indistinguishably and each row became its own
+    // observation. Real data from one database:
+    //
+    //     2026-09-04   13, 9, 5, 382 minutes
+    //     2026-08-10   0, 504 minutes
+    //
+    // Those 2-to-30 minute rows are not naps, they are the ring mis-detecting. Every
+    // one of them was counted as a night: against a need of roughly seven hours, each
+    // contributed a full night's deficit, and 2026-09-04 alone manufactured about
+    // twenty-one hours of sleep debt. San reported fifty-one hours. It was also
+    // wrecking the total_sleep_minutes baseline, which pooled 5-minute values with
+    // 400-minute ones -- so the mean collapsed, the spread exploded, and every sleep
+    // z-score computed against it was meaningless.
+    //
+    // Summing needs no threshold, which is why it beats trying to decide what counts as
+    // a real nap. A handful of junk minutes added to a 400-minute night changes nothing;
+    // a genuine 40-minute nap counts, which is correct for a total.
+    //
+    // The point-in-time metrics do NOT sum and are taken from the longest session. A
+    // 5-minute nap's HRV averaged into the night's is a corrupted reading, and its skin
+    // temperature is the number the illness detector reads.
+    public static List<Observation> FromSleep(IReadOnlyList<SleepSession> sessionsOnOneDay)
     {
-        // Bedtime end is when the night is finished being measured, and is inside the
-        // local day Oura assigned it. Using it keeps the observation's instant and its
-        // day consistent with each other.
-        var at = s.BedtimeEnd == default ? s.Day.ToDateTime(new TimeOnly(7, 0)) : s.BedtimeEnd;
+        if (sessionsOnOneDay.Count == 0) return [];
+
+        var day = sessionsOnOneDay[0].Day;
+
+        // The night, by duration. Ties do not matter -- any of them is as good a source
+        // for a point-in-time reading as the other.
+        var main = sessionsOnOneDay.OrderByDescending(s => s.TotalSleepMinutes).First();
+
+        var at = main.BedtimeEnd == default ? day.ToDateTime(new TimeOnly(7, 0)) : main.BedtimeEnd;
+
+        // Stable across a re-projection even if Oura adds or revises a session later:
+        // the instant is what the unique index keys on, and a moving instant would leave
+        // the old row behind next to the new one.
+        var id = main.Id;
 
         var observations = new List<Observation>
         {
-            Make(MetricKeys.TotalSleepMinutes, s.TotalSleepMinutes, "min", s.Day, at, s.Id),
-            Make(MetricKeys.DeepSleepMinutes, s.DeepMinutes, "min", s.Day, at, s.Id),
-            Make(MetricKeys.RemSleepMinutes, s.RemMinutes, "min", s.Day, at, s.Id),
+            Make(MetricKeys.TotalSleepMinutes, sessionsOnOneDay.Sum(s => s.TotalSleepMinutes), "min", day, at, id),
+            Make(MetricKeys.DeepSleepMinutes, sessionsOnOneDay.Sum(s => s.DeepMinutes), "min", day, at, id),
+            Make(MetricKeys.RemSleepMinutes, sessionsOnOneDay.Sum(s => s.RemMinutes), "min", day, at, id),
         };
 
         // Optional metrics are omitted when absent rather than written as zero. A
         // missing HRV reading is not an HRV of zero, and a baseline that averages in
         // the nights the ring was not worn is describing something other than the user.
-        if (s.Score is { } score) observations.Add(Make(MetricKeys.SleepScore, score, "score", s.Day, at, s.Id));
-        if (s.AvgHrv is { } hrv) observations.Add(Make(MetricKeys.HrvRmssd, hrv, "ms", s.Day, at, s.Id));
-        if (s.LowestHr is { } hr) observations.Add(Make(MetricKeys.RestingHeartRate, hr, "bpm", s.Day, at, s.Id));
-        if (s.AvgBreathingRate is { } br) observations.Add(Make(MetricKeys.BreathingRate, br, "brpm", s.Day, at, s.Id));
-        if (s.AvgSpo2 is { } spo2) observations.Add(Make(MetricKeys.Spo2Average, spo2, "%", s.Day, at, s.Id));
+        if (main.Score is { } score) observations.Add(Make(MetricKeys.SleepScore, score, "score", day, at, id));
+        if (main.AvgHrv is { } hrv) observations.Add(Make(MetricKeys.HrvRmssd, hrv, "ms", day, at, id));
+        if (main.LowestHr is { } hr) observations.Add(Make(MetricKeys.RestingHeartRate, hr, "bpm", day, at, id));
+        if (main.AvgBreathingRate is { } br) observations.Add(Make(MetricKeys.BreathingRate, br, "brpm", day, at, id));
+        if (main.AvgSpo2 is { } spo2) observations.Add(Make(MetricKeys.Spo2Average, spo2, "%", day, at, id));
 
         // The single most valuable metric here, and the reason the spec calls it out.
         // Combined with resting HR and HRV it is the earliest pre-symptomatic illness
         // signal available from this data, and it is easy to leave behind as an
         // incidental field on a sleep row.
-        if (s.SkinTempDeviation is { } temp)
-            observations.Add(Make(MetricKeys.SkinTempDeviation, temp, "C", s.Day, at, s.Id));
+        if (main.SkinTempDeviation is { } temp)
+            observations.Add(Make(MetricKeys.SkinTempDeviation, temp, "C", day, at, id));
 
         return observations;
     }

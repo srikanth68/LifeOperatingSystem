@@ -23,14 +23,14 @@ public class ObservationProjectorTests
     {
         // Combined with resting HR and HRV it is the earliest illness signal available
         // here, and it is easy to leave behind as an incidental field on a sleep row.
-        var metrics = ObservationProjector.FromSleep(Night()).Select(o => o.Metric).ToList();
+        var metrics = ObservationProjector.FromSleep([Night()]).Select(o => o.Metric).ToList();
         Assert.Contains(MetricKeys.SkinTempDeviation, metrics);
     }
 
     [Fact]
     public void MissingOptionalValuesAreOmittedNotZeroed()
     {
-        var metrics = ObservationProjector.FromSleep(Night(hrv: null, temp: null, score: null))
+        var metrics = ObservationProjector.FromSleep([Night(hrv: null, temp: null, score: null)])
             .Select(o => o.Metric).ToList();
 
         Assert.DoesNotContain(MetricKeys.HrvRmssd, metrics);
@@ -45,7 +45,7 @@ public class ObservationProjectorTests
     {
         // Oura reports it on both sleep and readiness. Two sources of one truth either
         // collide on the unique index or silently double-count in a baseline.
-        var fromSleep = ObservationProjector.FromSleep(Night()).Count(o => o.Metric == MetricKeys.RestingHeartRate);
+        var fromSleep = ObservationProjector.FromSleep([Night()]).Count(o => o.Metric == MetricKeys.RestingHeartRate);
         var fromReadiness = ObservationProjector
             .FromReadiness(new DailyReadiness { Id = "r1", Day = new DateOnly(2026, 9, 1), Score = 74, RestingHeartRate = 51 })
             .Count(o => o.Metric == MetricKeys.RestingHeartRate);
@@ -59,13 +59,13 @@ public class ObservationProjectorTests
     {
         // Re-deriving the day from a timestamp is how sleep beginning at 11pm ends up
         // filed under tomorrow. Oura already reports it in the user's terms.
-        Assert.All(ObservationProjector.FromSleep(Night()),
+        Assert.All(ObservationProjector.FromSleep([Night()]),
             o => Assert.Equal(new DateOnly(2026, 9, 1), o.ObservedDateLocal));
     }
 
     [Fact]
     public void OuraMetricsCarryNoContextSignature()
-        => Assert.All(ObservationProjector.FromSleep(Night()), o => Assert.Equal("", o.BaselineSignature));
+        => Assert.All(ObservationProjector.FromSleep([Night()]), o => Assert.Equal("", o.BaselineSignature));
 
     [Fact]
     public void AWeighInIsMediumTierAndBucketedByTimeOfDay()

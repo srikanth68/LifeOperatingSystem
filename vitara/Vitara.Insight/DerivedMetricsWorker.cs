@@ -85,11 +85,23 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
         // backfill can land months at once. Re-projecting is free because the upsert
         // ignores what already exists.
         var to = LocalTime.Today;
-        var from = to.AddDays(-120);
+
+        // 120 days by default: Oura revises recent days and a backfill can land months
+        // at once. Overridable because a correctness fix to the projector needs a way to
+        // rebuild history that the default window would never reach.
+        var window = int.TryParse(Environment.GetEnvironmentVariable("VITARA_PROJECT_WINDOW_DAYS"), out var windowDays) && windowDays > 0
+            ? windowDays
+            : 120;
+
+        var from = to.AddDays(-window);
 
         var observations = new List<Observation>();
 
-        foreach (var s in await repo.GetSleepAsync(from, to)) observations.AddRange(ObservationProjector.FromSleep(s));
+        // Grouped by day before projecting. Oura returns naps and noise alongside the
+        // night, and projecting each session separately is what let a 5-minute
+        // mis-detection be counted as a night's sleep.
+        foreach (var night in (await repo.GetSleepAsync(from, to)).GroupBy(s => s.Day))
+            observations.AddRange(ObservationProjector.FromSleep(night.ToList()));
         foreach (var r in await repo.GetReadinessAsync(from, to)) observations.AddRange(ObservationProjector.FromReadiness(r));
         foreach (var a in await repo.GetActivityAsync(from, to)) observations.AddRange(ObservationProjector.FromActivity(a));
         foreach (var s in await repo.GetStressAsync(from, to)) observations.AddRange(ObservationProjector.FromStress(s));
