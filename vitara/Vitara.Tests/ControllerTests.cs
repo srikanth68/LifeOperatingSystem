@@ -173,6 +173,57 @@ public class FakeRepo : IVitaraRepository
             .Take(limit)
             .ToList());
 
+    public List<Measurement> MeasurementData { get; } = [];
+
+    // Same identity triple the real index uses, so a test that re-imports an
+    // overlapping export sees the same deduplication the database would do.
+    public Task<int> UpsertMeasurementsAsync(IEnumerable<Measurement> measurements)
+    {
+        var added = 0;
+        foreach (var m in measurements)
+        {
+            if (MeasurementData.Any(e => e.Metric == m.Metric
+                                      && e.ObservedAtLocal == m.ObservedAtLocal
+                                      && e.Source == m.Source)) continue;
+            MeasurementData.Add(m);
+            added++;
+        }
+        return Task.FromResult(added);
+    }
+
+    public Task<List<Measurement>> GetMeasurementsAsync(DateOnly from, DateOnly to, string? metric = null) =>
+        Task.FromResult(MeasurementData
+            .Where(m => m.Day >= from && m.Day <= to && (metric == null || m.Metric == metric))
+            .OrderByDescending(m => m.ObservedAtLocal)
+            .ToList());
+
+    public Task<bool> DeleteMeasurementAsync(Guid id)
+    {
+        var row = MeasurementData.FirstOrDefault(m => m.Id == id);
+        if (row is null) return Task.FromResult(false);
+        MeasurementData.Remove(row);
+        return Task.FromResult(true);
+    }
+
+    public List<MetricCorrelation> CorrelationData { get; } = [];
+
+    public Task SaveCorrelationsAsync(IEnumerable<MetricCorrelation> correlations, DateOnly computedOn)
+    {
+        CorrelationData.RemoveAll(c => c.ComputedOnLocal == computedOn);
+        CorrelationData.AddRange(correlations);
+        return Task.CompletedTask;
+    }
+
+    public Task<List<MetricCorrelation>> GetLatestCorrelationsAsync()
+    {
+        if (CorrelationData.Count == 0) return Task.FromResult(new List<MetricCorrelation>());
+        var day = CorrelationData.Max(c => c.ComputedOnLocal);
+        return Task.FromResult(CorrelationData
+            .Where(c => c.ComputedOnLocal == day)
+            .OrderByDescending(c => Math.Abs(c.Rho))
+            .ToList());
+    }
+
     public Task<List<ExcludedPeriod>> GetExcludedPeriodsAsync() => Task.FromResult(ExcludedData);
     public Task<List<TravelPeriod>> GetTravelPeriodsAsync() => Task.FromResult(TravelData);
     public Task<List<Device>> GetDevicesAsync() => Task.FromResult(DeviceData);

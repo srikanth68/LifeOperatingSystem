@@ -246,6 +246,73 @@ public class VitaraRepository(VitaraDbContext db) : IVitaraRepository
             .Take(Math.Clamp(limit, 1, 500))
             .ToListAsync();
 
+    public async Task<int> UpsertMeasurementsAsync(IEnumerable<Measurement> measurements)
+    {
+        var incoming = measurements.ToList();
+        if (incoming.Count == 0) return 0;
+
+        var from = incoming.Min(m => m.Day);
+        var to = incoming.Max(m => m.Day);
+
+        // Compared on the same triple the unique index uses. Reading the existing window
+        // once beats letting the index throw on the first duplicate, which would make a
+        // partial re-import unusable rather than merely redundant.
+        var existing = (await db.Measurements
+                .Where(m => m.Day >= from && m.Day <= to)
+                .Select(m => new { m.Metric, m.ObservedAtLocal, m.Source })
+                .ToListAsync())
+            .Select(m => (m.Metric, m.ObservedAtLocal, m.Source))
+            .ToHashSet();
+
+        var fresh = incoming
+            .Where(m => existing.Add((m.Metric, m.ObservedAtLocal, m.Source)))
+            .ToList();
+
+        if (fresh.Count == 0) return 0;
+
+        db.Measurements.AddRange(fresh);
+        await db.SaveChangesAsync();
+        return fresh.Count;
+    }
+
+    public Task<List<Measurement>> GetMeasurementsAsync(DateOnly from, DateOnly to, string? metric = null) =>
+        db.Measurements
+            .Where(m => m.Day >= from && m.Day <= to && (metric == null || m.Metric == metric))
+            .OrderByDescending(m => m.ObservedAtLocal)
+            .ToListAsync();
+
+    public async Task<bool> DeleteMeasurementAsync(Guid id)
+    {
+        var row = await db.Measurements.FirstOrDefaultAsync(m => m.Id == id);
+        if (row is null) return false;
+
+        db.Measurements.Remove(row);
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task SaveCorrelationsAsync(IEnumerable<MetricCorrelation> correlations, DateOnly computedOn)
+    {
+        var stale = await db.Correlations.Where(c => c.ComputedOnLocal == computedOn).ToListAsync();
+        if (stale.Count > 0) db.Correlations.RemoveRange(stale);
+
+        db.Correlations.AddRange(correlations);
+        await db.SaveChangesAsync();
+    }
+
+    public async Task<List<MetricCorrelation>> GetLatestCorrelationsAsync()
+    {
+        var day = await db.Correlations.OrderByDescending(c => c.ComputedOnLocal)
+            .Select(c => (DateOnly?)c.ComputedOnLocal).FirstOrDefaultAsync();
+
+        if (day is null) return [];
+
+        return await db.Correlations
+            .Where(c => c.ComputedOnLocal == day)
+            .OrderByDescending(c => Math.Abs(c.Rho))
+            .ToListAsync();
+    }
+
     public Task<List<ExcludedPeriod>> GetExcludedPeriodsAsync() => db.ExcludedPeriods.ToListAsync();
     public Task<List<TravelPeriod>> GetTravelPeriodsAsync() => db.TravelPeriods.ToListAsync();
     public Task<List<Device>> GetDevicesAsync() => db.Devices.OrderBy(d => d.ActiveFromLocal).ToListAsync();

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Vitara.Domain.Entities;
 using Vitara.Domain.Health;
 
@@ -122,6 +123,41 @@ public static class ObservationProjector
         observation.EligibleForBaseline = BaselineKeys.CanBaseline(MetricKeys.WeightKg, context);
 
         return [observation];
+    }
+
+    // A reading a person entered, or one imported from a phone.
+    //
+    // The one projection that carries a baseline signature. Everything Oura measures is
+    // taken overnight under conditions the user does not vary; a blood pressure reading
+    // is seated or standing, morning or evening, and those are different quantities
+    // sharing a name. BaselineKeys decides which parts of the context actually split
+    // the baseline -- the rest still travels, to explain an outlier later.
+    public static Observation FromMeasurement(Measurement m)
+    {
+        MeasurementContext? context = null;
+        if (!string.IsNullOrWhiteSpace(m.ContextJson))
+        {
+            // A malformed context must not lose the reading. The number is still good;
+            // only the bucket it belongs in is unknown, and the unsplit bucket is the
+            // right place for a reading whose conditions were not recorded.
+            try { context = JsonSerializer.Deserialize<MeasurementContext>(m.ContextJson); }
+            catch (JsonException) { }
+        }
+
+        return new Observation
+        {
+            Metric = m.Metric,
+            Value = m.Value,
+            Unit = m.Unit,
+            ObservedAtLocal = m.ObservedAtLocal,
+            ObservedDateLocal = m.Day,
+            Tier = m.Tier,
+            Source = m.Source,
+            SourceRecordId = m.Id.ToString(),
+            ContextJson = m.ContextJson,
+            BaselineSignature = BaselineKeys.Signature(m.Metric, context),
+            EligibleForBaseline = true,
+        };
     }
 
     private static Observation Make(string metric, double value, string unit, DateOnly day, DateTime at, string? sourceId) => new()

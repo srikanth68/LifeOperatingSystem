@@ -646,3 +646,36 @@ h1.module-title  { font-size: 1.35rem; margin-bottom: 0; }
   text-transform: uppercase;
   color: var(--text3);
 }
+
+/* ── Manual measurements ──────────────────────────────────────────────────── */
+
+.vitara-measure-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.vitara-measure-form input[type="number"] { width: 100px; }
+
+.vitara-measure-unit {
+  font-size: 0.76rem;
+  color: var(--text3);
+  min-width: 56px;
+}
+
+/* Which baseline bucket the reading landed in. Dim, because it is an explanation
+   rather than a value — but present, because nothing else answers "why isn't my
+   evening reading being compared with my morning ones". */
+.vitara-measure-sig {
+  font-size: 0.72rem;
+  color: var(--text3);
+}
+
+.vitara-measure-note {
+  display: block;
+  color: var(--text2);
+  font-style: italic;
+  margin-top: 2px;
+}

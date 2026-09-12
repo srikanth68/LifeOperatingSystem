@@ -183,3 +183,15 @@
   color: var(--text3);
   margin-top: 2px;
 }
+
+/* ── Correlations ─────────────────────────────────────────────────────────── */
+
+.insight-up   { color: var(--insight); }
+.insight-down { color: var(--insight-sev-notable); }
+
+.insight-method {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--text3);
+  font-variant-numeric: tabular-nums;
+}

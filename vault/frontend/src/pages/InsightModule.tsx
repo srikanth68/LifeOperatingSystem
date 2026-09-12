@@ -59,6 +59,24 @@ interface BaselineSet {
   baselines: Baseline[];
 }
 
+interface Correlation {
+  driver: string;
+  outcome: string;
+  lagDays: number;
+  rho: number;
+  direction: string;
+  n: number;
+  pValue: number;
+  windowDays: number;
+}
+
+interface CorrelationSet {
+  computedOn: string | null;
+  caveat: string;
+  method: { test: string; minPairedDays: number; minAbsRho: number; multipleComparisons: string };
+  correlations: Correlation[];
+}
+
 // ── Fetching ─────────────────────────────────────────────────────────────────
 
 async function get<T>(path: string): Promise<T> {
@@ -254,6 +272,70 @@ function Baselines() {
   );
 }
 
+// ── Correlations ─────────────────────────────────────────────────────────────
+
+function Correlations() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['insight-correlations'],
+    queryFn: () => get<CorrelationSet>('/api/health/correlations'),
+  });
+
+  if (isLoading || error || !data) return null;
+
+  return (
+    <section className="module-section">
+      <h2 className="module-h2">What moves with what</h2>
+
+      {/* The caveat comes from the API rather than being written here, so every
+          surface that shows these numbers carries the same words. */}
+      <p className="module-muted insight-sub">{data.caveat}</p>
+
+      {data.correlations.length === 0 ? (
+        <p className="module-muted">
+          Nothing survived the significance bar. That is the expected result most of the
+          time — with {data.method.minPairedDays}+ paired days required and correction
+          for testing many pairs at once, only a strong and consistent relationship
+          shows up here.
+        </p>
+      ) : (
+        <div className="insight-table-wrap">
+          <table className="insight-table">
+            <thead>
+              <tr>
+                <th>When this</th>
+                <th>…this</th>
+                <th>Lag</th>
+                <th className="num">rho</th>
+                <th className="num">Days</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.correlations.map(c => (
+                <tr key={`${c.driver}-${c.outcome}-${c.lagDays}`}>
+                  <td>{label(c.driver)} goes up</td>
+                  <td className={c.rho > 0 ? 'insight-up' : 'insight-down'}>
+                    {label(c.outcome)} {c.rho > 0 ? 'goes up' : 'goes down'}
+                  </td>
+                  <td>{c.lagDays === 0 ? 'same day' : `next day`}</td>
+                  {/* N sits beside rho always. A 0.45 over thirty days and a 0.45 over
+                      three hundred are different claims. */}
+                  <td className="num">{c.rho.toFixed(2)}</td>
+                  <td className="num">{c.n}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <p className="insight-method">
+        {data.method.test} · {data.method.multipleComparisons} · |rho| ≥ {data.method.minAbsRho}
+        {data.computedOn && ` · computed ${data.computedOn}`}
+      </p>
+    </section>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 function InsightPage() {
@@ -268,6 +350,7 @@ function InsightPage() {
       </header>
 
       <Findings />
+      <Correlations />
       <Baselines />
     </div>
   );

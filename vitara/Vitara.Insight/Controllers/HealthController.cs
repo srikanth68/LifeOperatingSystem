@@ -109,6 +109,45 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         }));
     }
 
+    // Standing relationships between what the user does and how they recover.
+    [HttpGet("correlations")]
+    public async Task<IActionResult> Correlations()
+    {
+        var found = await repo.GetLatestCorrelationsAsync();
+
+        return Ok(new
+        {
+            computedOn = found.Count == 0 ? null : found[0].ComputedOnLocal.ToString("yyyy-MM-dd"),
+
+            // Said in the payload, not just in the UI. Anything reading this -- the tab,
+            // San, a future export -- has to carry the caveat with the number, and the
+            // one place that guarantees it is next to the number.
+            caveat = "These are correlations over the window, not causes. A relationship here " +
+                     "means the two moved together, which can happen because one drives the " +
+                     "other, because something else drives both, or by chance.",
+
+            method = new
+            {
+                test = "Spearman rank correlation",
+                minPairedDays = Vitara.Insight.Health.Correlations.MinPairedDays,
+                minAbsRho = Vitara.Insight.Health.Correlations.MinAbsRho,
+                multipleComparisons = "Benjamini-Hochberg, FDR 0.10, across every pair tested in the run",
+            },
+
+            correlations = found.Select(c => new
+            {
+                c.Driver,
+                c.Outcome,
+                c.LagDays,
+                c.Rho,
+                direction = c.Rho > 0 ? "positive" : "negative",
+                c.N,
+                pValue = Math.Round(c.PValue, 5),
+                c.WindowDays,
+            }),
+        });
+    }
+
     // One call for "how am I doing", shaped for a model rather than a chart.
     [HttpGet("summary")]
     public async Task<IActionResult> Summary()

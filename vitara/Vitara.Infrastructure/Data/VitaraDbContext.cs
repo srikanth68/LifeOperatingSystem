@@ -69,6 +69,8 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
     public DbSet<Baseline>               Baselines       => Set<Baseline>();
     public DbSet<DerivedMetric>          DerivedMetrics  => Set<DerivedMetric>();
     public DbSet<Finding>                Findings        => Set<Finding>();
+    public DbSet<Measurement>            Measurements    => Set<Measurement>();
+    public DbSet<MetricCorrelation>      Correlations    => Set<MetricCorrelation>();
     public DbSet<WeighIn>                WeighIns        => Set<WeighIn>();
 
     protected override void OnModelCreating(ModelBuilder b)
@@ -415,6 +417,44 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
             );
             CREATE INDEX IF NOT EXISTS IX_Findings_Key ON Findings (Key);
             CREATE INDEX IF NOT EXISTS IX_Findings_Open ON Findings (ResolvedLocal);
+
+            CREATE TABLE IF NOT EXISTS Measurements (
+                Id TEXT PRIMARY KEY,
+                Metric TEXT NOT NULL DEFAULT '',
+                Value REAL NOT NULL DEFAULT 0,
+                Unit TEXT NOT NULL DEFAULT '',
+                ObservedAtLocal TEXT NOT NULL,
+                Day TEXT NOT NULL,
+                Tier TEXT NOT NULL DEFAULT 'medium',
+                Source TEXT NOT NULL DEFAULT 'manual',
+                ContextJson TEXT,
+                Note TEXT,
+                CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
+            );
+            CREATE INDEX IF NOT EXISTS IX_Measurements_Window
+                ON Measurements (Metric, Day);
+
+            -- Deliberately NOT unique on (Metric, Day). Several blood pressure readings
+            -- in a day is normal and each is a real measurement; collapsing them would
+            -- throw away the morning-versus-evening split that BaselineKeys exists for.
+            -- Re-importing the same file is deduplicated on the instant instead.
+            CREATE UNIQUE INDEX IF NOT EXISTS IX_Measurements_Identity
+                ON Measurements (Metric, ObservedAtLocal, Source);
+
+            CREATE TABLE IF NOT EXISTS Correlations (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Driver TEXT NOT NULL DEFAULT '',
+                Outcome TEXT NOT NULL DEFAULT '',
+                LagDays INTEGER NOT NULL DEFAULT 0,
+                Rho REAL NOT NULL DEFAULT 0,
+                N INTEGER NOT NULL DEFAULT 0,
+                PValue REAL NOT NULL DEFAULT 1,
+                WindowDays INTEGER NOT NULL DEFAULT 90,
+                ComputedOnLocal TEXT NOT NULL,
+                CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS IX_Correlations_Identity
+                ON Correlations (Driver, Outcome, LagDays, ComputedOnLocal);
             """);
 
         // Sync health for sources that have no token to hang it on.

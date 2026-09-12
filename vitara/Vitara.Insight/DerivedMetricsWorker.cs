@@ -98,6 +98,11 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
         foreach (var c in await repo.GetCardiovascularAgeAsync(from, to)) observations.AddRange(ObservationProjector.FromCardiovascularAge(c));
         foreach (var w in await repo.GetWeighInsAsync(from, to)) observations.AddRange(ObservationProjector.FromWeighIn(w));
 
+        // Manual and imported readings -- the medium tier. Unlike the Oura tables these
+        // carry a context, and it is what keeps a standing evening reading out of the
+        // seated morning baseline.
+        foreach (var m in await repo.GetMeasurementsAsync(from, to)) observations.Add(ObservationProjector.FromMeasurement(m));
+
         return await repo.UpsertObservationsAsync(observations);
     }
 
@@ -153,6 +158,7 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
         }
 
         derived.AddRange(ComputeLoadAndSleep(observations, asOf));
+        derived.AddRange(ComputeBody(observations, await repo.GetProfileAsync(), asOf));
         derived.AddRange(ComputeDrift(observations, asOf));
 
         await repo.SaveBaselinesAsync(baselines);
@@ -162,6 +168,37 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
             baselines.Count, baselines.Count(b => b.IsValid), derived.Count);
 
         await DetectAsync(repo, observations, baselines, asOf);
+        await CorrelateAsync(repo, observations, asOf);
+    }
+
+    // Relationships between what the user does and how they recover.
+    //
+    // Kept apart from findings on purpose. A finding is a statement about right now --
+    // this is off, for the fourth morning. A correlation is a standing property of the
+    // person over months, it does not resolve, and nobody should be notified about it.
+    // Running them through the ledger would put "your training load tracks your HRV" in
+    // the same queue as "you may be getting ill".
+    private async Task CorrelateAsync(
+        IVitaraRepository repo, IReadOnlyList<Observation> observations, DateOnly asOf)
+    {
+        var found = Correlations.Run(observations, asOf);
+        await repo.SaveCorrelationsAsync(found.Select(c => new MetricCorrelation
+        {
+            Driver = c.Driver,
+            Outcome = c.Outcome,
+            LagDays = c.LagDays,
+            Rho = Math.Round(c.Rho, 3),
+            N = c.N,
+            PValue = c.PValue,
+            WindowDays = 90,
+            ComputedOnLocal = asOf,
+        }), asOf);
+
+        // Logged even at zero. An empty result is the expected outcome for most people
+        // most of the time, and a silent pass would be indistinguishable from one that
+        // never ran.
+        logger.LogInformation("Correlations: {Count} survived FDR control at |rho| >= {Min}.",
+            found.Count, Correlations.MinAbsRho);
     }
 
     // The step that makes the statistics speak.
@@ -189,6 +226,69 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
                 findings.Count == 0 ? "none" : string.Join(", ", findings.Select(f => f.Key)));
         else
             logger.LogDebug("Findings: {Continued} continuing, nothing new.", sync.Continued);
+    }
+
+    // Body composition, from a height that lives on the profile and a weight that
+    // arrives from the scale.
+    //
+    // Both were sitting there unused: UserProfile has carried height and weight since
+    // the module was written, and nothing ever combined them. BMI is one division.
+    //
+    // WAIST-TO-HEIGHT IS THE ONE WORTH HAVING. BMI cannot tell muscle from fat and is
+    // wrong in opposite directions at both ends of the range; waist-to-height predicts
+    // metabolic risk better and needs a tape measure, which is why it had no automatic
+    // source and no home until manual entry existed. It is computed only when a waist
+    // reading is actually present -- no estimate, no substitute.
+    private static List<DerivedMetric> ComputeBody(
+        IReadOnlyList<Observation> observations, UserProfile? profile, DateOnly asOf)
+    {
+        var derived = new List<DerivedMetric>();
+
+        // Height in metres on the profile. Zero or absent means BMI cannot be computed,
+        // and a divide by zero would write an infinity into a table everything reads.
+        if (profile?.Height is not { } heightM || heightM <= 0.5 || heightM > 2.5) return derived;
+
+        var weight = Latest(observations, MetricKeys.WeightKg, asOf);
+        if (weight is null) return derived;
+
+        var bmi = weight.Value / (heightM * heightM);
+        derived.Add(new DerivedMetric
+        {
+            Metric = "bmi",
+            ObservedDateLocal = asOf,
+            Value = Math.Round(bmi, 2),
+            InputsJson = $$"""{"weightKg":{{weight.Value:F1}},"heightM":{{heightM:F2}}}""",
+        });
+
+        var waist = Latest(observations, MetricKeys.WaistCircumferenceCm, asOf);
+        if (waist is not null)
+            derived.Add(new DerivedMetric
+            {
+                Metric = "waist_to_height",
+                ObservedDateLocal = asOf,
+                Value = Math.Round(waist.Value / (heightM * 100), 3),
+                InputsJson = $$"""{"waistCm":{{waist.Value:F1}},"heightCm":{{heightM * 100:F0}}}""",
+            });
+
+        return derived;
+    }
+
+    // The most recent reading on or before asOf, within a fortnight.
+    //
+    // Weight and waist are not daily. Carrying the last known value forward is right --
+    // a BMI computed from a weight taken four days ago is still this person's BMI --
+    // but carrying it forever is not: a figure from three months ago presented as
+    // today's is the stale-data failure this system keeps running into.
+    private static double? Latest(IReadOnlyList<Observation> observations, string metric, DateOnly asOf)
+    {
+        var reading = observations
+            .Where(o => o.Metric == metric
+                     && o.ObservedDateLocal <= asOf
+                     && o.ObservedDateLocal > asOf.AddDays(-14))
+            .OrderByDescending(o => o.ObservedDateLocal)
+            .FirstOrDefault();
+
+        return reading?.Value;
     }
 
     private static List<DerivedMetric> ComputeLoadAndSleep(IReadOnlyList<Observation> observations, DateOnly asOf)

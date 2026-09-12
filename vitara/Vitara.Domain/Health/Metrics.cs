@@ -34,6 +34,10 @@ public static class MetricKeys
     public const string WeightKg = "weight_kg";
     public const string Glucose = "glucose";
 
+    // Waist-to-height beats BMI for metabolic risk and needs a tape measure, so it has
+    // no automatic source and existed nowhere until manual entry did.
+    public const string WaistCircumferenceCm = "waist_circumference_cm";
+
     // Sparse tier — labs.
     public const string Hba1c = "hba1c";
     public const string TotalCholesterol = "total_cholesterol";

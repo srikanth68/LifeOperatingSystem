@@ -182,17 +182,39 @@ public class HealthImportController(IVitaraRepository repo, ILogger<HealthImport
             written["sleep"] = sleepChanged.Count;
         }
 
-        // Blood pressure and glucose have nowhere to land yet -- the medium tier has no
-        // typed table and no manual entry. Reported rather than dropped quietly, so an
-        // import that looked successful does not hide the columns it could not store.
-        var unstored = readings
-            .Select(r => r.Metric)
-            .Where(m => m is MetricKeys.SystolicBp or MetricKeys.DiastolicBp or MetricKeys.Glucose
-                          or MetricKeys.Pulse or MetricKeys.Vo2Max)
-            .Distinct()
+        // The medium tier -- blood pressure, glucose, pulse, VO2 max. These used to be
+        // parsed and then reported as unstorable; Measurements is where they land now.
+        //
+        // No context is attached, deliberately. A spreadsheet does not record whether a
+        // reading was seated or fasting, and inventing one would file every imported
+        // blood pressure into a bucket it may not belong in. They go into the unsplit
+        // baseline, which is the honest place for a reading whose conditions were not
+        // recorded.
+        string[] mediumTier =
+        [
+            MetricKeys.SystolicBp, MetricKeys.DiastolicBp, MetricKeys.Glucose,
+            MetricKeys.Pulse, MetricKeys.Vo2Max, MetricKeys.WaistCircumferenceCm,
+        ];
+
+        var measurements = readings
+            .Where(r => mediumTier.Contains(r.Metric))
+            .Select(r => new Measurement
+            {
+                Metric = r.Metric,
+                Value = r.Value,
+                Unit = "",
+                // Midday rather than midnight: the day is all the export gave, and a
+                // midnight instant sits on the boundary where any timezone nudge moves
+                // it to the day before.
+                ObservedAtLocal = r.Day.ToDateTime(new TimeOnly(12, 0)),
+                Day = r.Day,
+                Tier = Tiers.Medium,
+                Source = "apple_health",
+            })
             .ToList();
 
-        foreach (var m in unstored) written[$"{m} (no store yet — not saved)"] = 0;
+        if (measurements.Count > 0)
+            written["measurements"] = await repo.UpsertMeasurementsAsync(measurements);
 
         return written;
     }

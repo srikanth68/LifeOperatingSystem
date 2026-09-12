@@ -120,6 +120,22 @@ public interface IVitaraRepository
 
     Task<List<Finding>> GetFindingsAsync(bool activeOnly = true, int limit = 100);
 
+    // ── Manual / medium-tier readings ──
+    //
+    // Ignores rows that already exist rather than failing the batch, so re-importing an
+    // overlapping Apple Health export is safe. Identity is the instant, not the day:
+    // several blood pressure readings in a day are each real.
+    Task<int> UpsertMeasurementsAsync(IEnumerable<Measurement> measurements);
+
+    Task<List<Measurement>> GetMeasurementsAsync(DateOnly from, DateOnly to, string? metric = null);
+    Task<bool> DeleteMeasurementAsync(Guid id);
+
+    // Replaces the whole set for a day. A rerun must not leave two answers for the
+    // same pair, and which one a later read picked would be arbitrary.
+    Task SaveCorrelationsAsync(IEnumerable<MetricCorrelation> correlations, DateOnly computedOn);
+
+    Task<List<MetricCorrelation>> GetLatestCorrelationsAsync();
+
     Task<List<ExcludedPeriod>> GetExcludedPeriodsAsync();
     Task<List<TravelPeriod>> GetTravelPeriodsAsync();
     Task<List<Device>> GetDevicesAsync();

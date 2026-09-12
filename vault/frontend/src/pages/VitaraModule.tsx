@@ -1244,6 +1244,206 @@ function NutritionPage() {
 }
 
 
+
+// ── MANUAL MEASUREMENTS ───────────────────────────────────────────────────────
+
+// Readings a person takes themselves — the medium tier.
+//
+// Blood pressure, glucose, waist, and the lab values that arrive twice a year. These
+// had nowhere to go until now: the health import could parse them and then reported
+// them as unstorable, and six of the ten algorithm categories in the health spec are
+// blocked on having somewhere to put them.
+//
+// The context questions are SERVED, not hardcoded here. BaselineKeys decides which
+// fields actually split a baseline — position and time of day for blood pressure,
+// fasting for glucose — and a form that made that decision separately would eventually
+// disagree with the thing computing the baselines.
+
+interface MetricSpec { metric: string; unit: string; tier: string; label: string; context: string[] }
+
+interface Measurement {
+  id: string;
+  metric: string;
+  label: string;
+  value: number;
+  unit: string;
+  at: string;
+  source: string;
+  note: string | null;
+  signature: string;
+}
+
+function MeasurePanel() {
+  const queryClient = useQueryClient();
+
+  const { data: specs } = useQuery({
+    queryKey: ['measurement-metrics'],
+    queryFn: async () => {
+      const res = await fetch(`${API}/api/measurements/metrics`, { headers: authHeaders() });
+      return (await res.json()) as MetricSpec[];
+    },
+    staleTime: 60 * 60_000,
+  });
+
+  const { data: recent } = useQuery({
+    queryKey: ['measurements'],
+    queryFn: async () => {
+      const res = await fetch(`${API}/api/measurements?days=120`, { headers: authHeaders() });
+      return (await res.json()) as Measurement[];
+    },
+  });
+
+  const [metric, setMetric] = useState('systolic_bp');
+  const [value, setValue]   = useState('');
+  const [note, setNote]     = useState('');
+  const [position, setPosition]   = useState('seated');
+  const [timeOfDay, setTimeOfDay] = useState('morning');
+  const [fasting, setFasting]     = useState(true);
+  const [error, setError]   = useState<string | null>(null);
+
+  const spec = specs?.find(s => s.metric === metric);
+  const asks = (field: string) => spec?.context.includes(field) ?? false;
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const body: Record<string, unknown> = { metric, value: Number(value), note: note || null };
+      if (asks('position'))  body.position  = position;
+      if (asks('timeOfDay')) body.timeOfDay = timeOfDay;
+      if (asks('fasting'))   body.fasting   = fasting;
+
+      const res = await fetch(`${API}/api/measurements`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? 'Could not save that reading.');
+      return json;
+    },
+    onSuccess: () => {
+      setValue('');
+      setNote('');
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ['measurements'] });
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) =>
+      fetch(`${API}/api/measurements/${id}`, { method: 'DELETE', headers: authHeaders() }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['measurements'] }),
+  });
+
+  return (
+    <div className="module-section">
+      <h2 className="module-h2">Record a reading</h2>
+      <p className="module-muted vitara-import-sub">
+        Blood pressure, glucose, waist, lab results — anything nothing measures for you.
+        These feed the same baselines Oura's data does.
+      </p>
+
+      <div className="vitara-measure-form">
+        <select value={metric} onChange={e => setMetric(e.target.value)}>
+          {specs?.map(s => <option key={s.metric} value={s.metric}>{s.label}</option>)}
+        </select>
+
+        <input
+          type="number"
+          step="any"
+          placeholder="Value"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+        />
+        <span className="vitara-measure-unit">{spec?.unit}</span>
+
+        {/* Only the context that actually splits this metric's baseline is asked for.
+            Asking about arm position for a lab result would be noise, and asking about
+            nothing at all would put standing-evening readings in the seated-morning
+            baseline. */}
+        {asks('position') && (
+          <select value={position} onChange={e => setPosition(e.target.value)}>
+            <option value="seated">Seated</option>
+            <option value="standing">Standing</option>
+            <option value="supine">Lying down</option>
+          </select>
+        )}
+
+        {asks('timeOfDay') && (
+          <select value={timeOfDay} onChange={e => setTimeOfDay(e.target.value)}>
+            <option value="waking">On waking</option>
+            <option value="morning">Morning</option>
+            <option value="afternoon">Afternoon</option>
+            <option value="evening">Evening</option>
+            <option value="night">Night</option>
+          </select>
+        )}
+
+        {asks('fasting') && (
+          <label className="san-checkbox-label">
+            <input type="checkbox" checked={fasting} onChange={e => setFasting(e.target.checked)} />
+            Fasting
+          </label>
+        )}
+
+        <input
+          placeholder="Note (optional)"
+          value={note}
+          onChange={e => setNote(e.target.value)}
+          style={{ flex: 1, minWidth: '140px' }}
+        />
+
+        <button
+          className="btn-primary"
+          disabled={!value || save.isPending}
+          onClick={() => save.mutate()}
+        >
+          {save.isPending ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+
+      {error && <p className="module-error">{error}</p>}
+
+      {recent && recent.length > 0 && (
+        <div className="insight-table-wrap">
+          <table className="vitara-import-table">
+            <thead>
+              <tr>
+                <th>When</th><th>What</th><th className="num">Value</th><th>Conditions</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {recent.slice(0, 30).map(m => (
+                <tr key={m.id}>
+                  <td>{m.at}</td>
+                  <td>{m.label}</td>
+                  <td className="num">{m.value} {m.unit}</td>
+                  {/* The signature is shown because it is the answer to "why is my
+                      evening reading not being compared with my morning ones". */}
+                  <td className="vitara-measure-sig">
+                    {m.signature || (m.source === 'manual' ? '—' : m.source)}
+                    {m.note && <span className="vitara-measure-note">{m.note}</span>}
+                  </td>
+                  <td>
+                    <button
+                      className="btn-danger-ghost"
+                      style={{ fontSize: '0.7rem' }}
+                      onClick={() => remove.mutate(m.id)}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── APPLE HEALTH IMPORT ───────────────────────────────────────────────────────
 
 // Uploading an Apple Health export as a spreadsheet.
@@ -1406,7 +1606,7 @@ function ImportPanel() {
 
 // ── ROOT ──────────────────────────────────────────────────────────────────────
 
-type Page = 'today' | 'sleep' | 'body' | 'activity' | 'readiness' | 'protocols' | 'nutrition' | 'import';
+type Page = 'today' | 'sleep' | 'body' | 'activity' | 'readiness' | 'protocols' | 'nutrition' | 'import' | 'measure';
 
 const PAGES: { id: Page; label: string }[] = [
   { id: 'today',     label: 'Today' },
@@ -1416,6 +1616,7 @@ const PAGES: { id: Page; label: string }[] = [
   { id: 'readiness', label: 'Readiness' },
   { id: 'nutrition', label: 'Nutrition' },
   { id: 'protocols', label: 'Protocols' },
+  { id: 'measure',   label: 'Record' },
   { id: 'import',    label: 'Import' },
 ];
 
@@ -1446,6 +1647,7 @@ function VitaraInner() {
       {!isPending && !isError && status && !status.linked && (
         <>
           <NotLinked/>
+          <MeasurePanel/>
           <ImportPanel/>
         </>
       )}
@@ -1464,6 +1666,7 @@ function VitaraInner() {
           {page === 'readiness' && <ReadinessPage/>}
           {page === 'nutrition' && <NutritionPage/>}
           {page === 'protocols' && <ProtocolsPage/>}
+          {page === 'measure'   && <MeasurePanel/>}
           {page === 'import'    && <ImportPanel/>}
         </>
       )}
