@@ -1444,6 +1444,203 @@ function MeasurePanel() {
   );
 }
 
+
+// ── APPLE HEALTH XML IMPORT ───────────────────────────────────────────────────
+
+// Apple's own export.xml, as opposed to a spreadsheet from an export app.
+//
+// A real one measured 810MB with 1.7 million records from nineteen different apps, so
+// this cannot work like the CSV panel. The file is uploaded ONCE and parsed straight
+// to daily aggregates; the commit works from those. Sending 810MB over the mesh twice
+// to get a preview would be absurd.
+//
+// THE SOURCE PICKER IS THE WHOLE POINT. Oura writes into Apple Health, and Oura also
+// reaches Vitara through its own API with sleep stages, RMSSD and a skin-temperature
+// deviation Apple never receives. It is listed with its real counts and left unticked
+// rather than hidden, because which copy to keep is a decision, not a rule.
+
+interface XmlSource {
+  source: string;
+  records: number;
+  days: number;
+  metrics: string[];
+  recommendedOff: boolean;
+}
+
+interface XmlScan {
+  token: string | null;
+  megabytes: number;
+  recordsSeen: number;
+  recordsMapped: number;
+  firstDay: string | null;
+  lastDay: string | null;
+  days: number;
+  heightMetres: number | null;
+  sources: XmlSource[];
+  ignored: string[];
+  warnings: string[];
+}
+
+function XmlImportPanel() {
+  const [file, setFile]       = useState<File | null>(null);
+  const [scan, setScan]       = useState<XmlScan | null>(null);
+  const [chosen, setChosen]   = useState<Set<string>>(new Set());
+  const [setHeight, setSetHeight] = useState(true);
+  const [busy, setBusy]       = useState(false);
+  const [done, setDone]       = useState<string | null>(null);
+  const [error, setError]     = useState<string | null>(null);
+
+  const upload = async () => {
+    if (!file) return;
+    setBusy(true); setError(null); setDone(null);
+
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const res = await fetch(`${API}/api/healthimport/xml`, {
+        method: 'POST', headers: authHeaders(), body,
+      });
+      const json = await res.json();
+      if (!res.ok) { setError(json?.error ?? `${res.status}`); return; }
+
+      const s = json as XmlScan;
+      setScan(s);
+      // Everything except the sources we already have a better copy of.
+      setChosen(new Set(s.sources.filter(x => !x.recommendedOff).map(x => x.source)));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const commit = async () => {
+    if (!scan?.token) return;
+    setBusy(true); setError(null);
+
+    try {
+      const res = await fetch(`${API}/api/healthimport/xml/commit`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: scan.token, sources: [...chosen], setHeight }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setError(json?.error ?? `${res.status}`); return; }
+
+      const written = json.written as Record<string, number>;
+      setDone(Object.entries(written).map(([k, v]) => `${v} ${k}`).join(' · ') || 'Nothing written.');
+      setScan(null);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggle = (name: string) => {
+    const next = new Set(chosen);
+    if (next.has(name)) next.delete(name); else next.add(name);
+    setChosen(next);
+  };
+
+  const selectedRecords = scan?.sources
+    .filter(x => chosen.has(x.source))
+    .reduce((n, x) => n + x.records, 0) ?? 0;
+
+  return (
+    <div className="module-section">
+      <h2 className="module-h2">Import Apple Health export</h2>
+      <p className="module-muted vitara-import-sub">
+        The <code>export.xml</code> from inside your Apple Health export zip — not
+        <code>export_cda.xml</code>, which is the same data in a clinical format we do
+        not need. Large files are fine; it streams. Nothing is written until you confirm.
+      </p>
+
+      <div className="vitara-import-row">
+        <input type="file" accept=".xml" onChange={e => { setFile(e.target.files?.[0] ?? null); setScan(null); setDone(null); }} />
+        <button className="btn-ghost" disabled={!file || busy} onClick={upload}>
+          {busy && !scan ? 'Reading… this takes a minute' : 'Read file'}
+        </button>
+      </div>
+
+      {error && <p className="module-error">{error}</p>}
+      {done && <p className="vitara-import-ok">Saved. {done}</p>}
+
+      {scan && (
+        <div className="vitara-import-result">
+          <p className="module-muted">
+            {scan.megabytes} MB · {scan.recordsSeen.toLocaleString()} records ·{' '}
+            {scan.days.toLocaleString()} days
+            {scan.firstDay && <> · {scan.firstDay} to {scan.lastDay}</>}
+          </p>
+
+          <div>
+            <p className="vitara-import-samplehead">Choose what to import</p>
+            <ul className="vitara-src-list">
+              {scan.sources.map(src => (
+                <li key={src.source} className={chosen.has(src.source) ? '' : 'vitara-src-off'}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={chosen.has(src.source)}
+                      onChange={() => toggle(src.source)}
+                    />
+                    <span className="vitara-src-name">{src.source}</span>
+                    <span className="vitara-src-count">
+                      {src.records.toLocaleString()} records
+                      {src.days > 0 && <> · {src.days.toLocaleString()} days</>}
+                    </span>
+                  </label>
+
+                  {/* Said on the row it applies to, not in a footnote. The reason is
+                      specific to this source and belongs next to the decision. */}
+                  {src.recommendedOff && (
+                    <p className="vitara-src-why">
+                      Already synced directly from Oura, with sleep stages and HRV that
+                      Apple Health never receives. Importing would replace better data
+                      with a coarser copy.
+                    </p>
+                  )}
+
+                  {src.metrics.length > 0 && (
+                    <p className="vitara-src-metrics">{src.metrics.map(m => m.replace(/_/g, ' ')).join(' · ')}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {scan.heightMetres && (
+            <label className="san-checkbox-label">
+              <input type="checkbox" checked={setHeight} onChange={e => setSetHeight(e.target.checked)} />
+              Set my height to {(scan.heightMetres * 100).toFixed(0)}cm — needed for BMI and waist-to-height
+            </label>
+          )}
+
+          {scan.ignored.length > 0 && (
+            <p className="vitara-import-ignored">
+              <strong>Not imported:</strong> {scan.ignored.join(', ')}
+            </p>
+          )}
+
+          {scan.warnings.length > 0 && (
+            <ul className="vitara-import-warnings">
+              {scan.warnings.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          )}
+
+          <div className="vitara-import-row">
+            <button className="btn-primary" disabled={busy || chosen.size === 0} onClick={commit}>
+              {busy ? 'Saving…' : `Import ${selectedRecords.toLocaleString()} records`}
+            </button>
+            <button className="btn-ghost" disabled={busy} onClick={() => setScan(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── APPLE HEALTH IMPORT ───────────────────────────────────────────────────────
 
 // Uploading an Apple Health export as a spreadsheet.
@@ -1648,6 +1845,7 @@ function VitaraInner() {
         <>
           <NotLinked/>
           <MeasurePanel/>
+          <XmlImportPanel/>
           <ImportPanel/>
         </>
       )}
@@ -1667,7 +1865,7 @@ function VitaraInner() {
           {page === 'nutrition' && <NutritionPage/>}
           {page === 'protocols' && <ProtocolsPage/>}
           {page === 'measure'   && <MeasurePanel/>}
-          {page === 'import'    && <ImportPanel/>}
+          {page === 'import'    && <><XmlImportPanel/><ImportPanel/></>}
         </>
       )}
     </div>

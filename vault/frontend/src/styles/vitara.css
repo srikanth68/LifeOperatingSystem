@@ -679,3 +679,59 @@ h1.module-title  { font-size: 1.35rem; margin-bottom: 0; }
   font-style: italic;
   margin-top: 2px;
 }
+
+/* ── Apple Health XML source picker ───────────────────────────────────────────
+ * Oura appears here with its real counts and its box unticked. Hiding it would
+ * make the decision for the user; the reason sits on the row it applies to. */
+
+.vitara-src-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vitara-src-list > li {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 9px 11px;
+  background: var(--surface2);
+}
+
+.vitara-src-list > li > label {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  cursor: pointer;
+}
+
+.vitara-src-name { font-size: 0.84rem; color: var(--text1); }
+
+.vitara-src-count {
+  font-size: 0.72rem;
+  color: var(--text3);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* Unticked rows stay fully legible — they are a choice being displayed, not
+   something disabled. */
+.vitara-src-off { opacity: 0.72; }
+
+.vitara-src-why {
+  margin: 6px 0 0 26px;
+  font-size: 0.73rem;
+  line-height: 1.45;
+  color: var(--warn, #d09a36);
+  max-width: 62ch;
+}
+
+.vitara-src-metrics {
+  margin: 5px 0 0 26px;
+  font-size: 0.7rem;
+  color: var(--text3);
+  line-height: 1.4;
+}
