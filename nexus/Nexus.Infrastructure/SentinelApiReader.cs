@@ -94,6 +94,17 @@ public class SentinelApiReader : ISentinelReader
 
     public Task<List<WatchItem>> GetWatchlistAsync() => GetJsonAsync<List<WatchItem>>("watchlist");
 
+    public async Task<string?> GetPremarketJsonAsync()
+    {
+        using var resp = await GetAsync("premarket");
+        // An engine older than the premarket screen has no such route.
+        if (resp.StatusCode == HttpStatusCode.NotFound) return null;
+        resp.EnsureSuccessStatusCode();
+        // Verbatim, like ticker detail: every candidate embeds a full TickerDetail, and
+        // re-serializing through DTOs would silently drop any field Nexus doesn't model.
+        return await resp.Content.ReadAsStringAsync();
+    }
+
     public async Task<StatusDto> GetStatusAsync()
     {
         using var resp = await GetAsync("status");

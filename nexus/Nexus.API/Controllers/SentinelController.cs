@@ -88,6 +88,22 @@ public class SentinelController : ControllerBase
         catch (SentinelUnavailableException ex) { return Unavailable(ex.Message); }
     }
 
+    // The morning shortlist: names the engine screened but does NOT track. Read-only like
+    // everything here -- nothing on this route adds a name to the board or watchlist.
+    [HttpGet("premarket")]
+    public async Task<IActionResult> GetPremarket()
+    {
+        try
+        {
+            var json = await _reader.GetPremarketJsonAsync();
+            if (json is null)
+                return NotFound(new ErrorResponse { Error = "not_supported", Message = "This Sentinel engine doesn't serve the premarket screen yet." });
+
+            return Content(json, "application/json; charset=utf-8");
+        }
+        catch (SentinelUnavailableException ex) { return Unavailable(ex.Message); }
+    }
+
     private ObjectResult Unavailable(string message) =>
         StatusCode(503, new ErrorResponse { Error = "unavailable", Message = message });
 

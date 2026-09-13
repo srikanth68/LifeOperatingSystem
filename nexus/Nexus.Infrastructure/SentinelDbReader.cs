@@ -246,6 +246,12 @@ public class SentinelDbReader : ISentinelReader
         };
     }
 
+    // The shortlist is produced and served by the engine's API; sentinel.db has no agreed
+    // table for it, so a Nexus reading the file directly cannot offer it.
+    public Task<string?> GetPremarketJsonAsync() =>
+        throw new SentinelUnavailableException(
+            "The premarket shortlist is served by Sentinel's API only. Set SENTINEL_API_URL to read it.");
+
     // US equity regular trading hours: Mon-Fri, 9:30-16:00 America/New_York.
     private static bool IsUsMarketOpen(DateTime utcNow)
     {

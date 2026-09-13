@@ -8,6 +8,10 @@ import type { TickerDetail, Report, Signal, TradePlan } from '../pages/NexusModu
 
 interface Props {
   symbol: string;
+  // Supplied when the caller already holds the full TickerDetail -- the premarket
+  // shortlist embeds one per candidate. No request is made in that case, which also
+  // matters for correctness: those names aren't tracked, so /tickers/{symbol} has none.
+  detail?: TickerDetail;
   onClose: () => void;
 }
 
@@ -130,10 +134,11 @@ function TradePlanBlock({ plan }: { plan: TradePlan }) {
   );
 }
 
-export function NexusDetailPanel({ symbol, onClose }: Props) {
+export function NexusDetailPanel({ symbol, detail, onClose }: Props) {
   const q = useQuery<TickerDetail>({
     queryKey: ['nexus-detail', symbol],
     queryFn: () => get<TickerDetail>(`${BASE}/tickers/${symbol}`),
+    enabled: !detail,
   });
 
   useEffect(() => {
@@ -142,7 +147,10 @@ export function NexusDetailPanel({ symbol, onClose }: Props) {
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  const d = q.data;
+  const d = detail ?? q.data;
+  // A disabled query reports "pending" forever, so both states only apply when fetching.
+  const loading = !detail && q.isPending;
+  const failed = !detail && q.isError;
 
   return (
     <div className="nexus-overlay" onClick={onClose}>
@@ -156,9 +164,9 @@ export function NexusDetailPanel({ symbol, onClose }: Props) {
           <button className="nexus-panel-close" onClick={onClose} aria-label="Close">×</button>
         </div>
 
-        {q.isPending && <p style={{ color: 'var(--text2)' }}>Loading {symbol}…</p>}
+        {loading && <p style={{ color: 'var(--text2)' }}>Loading {symbol}…</p>}
 
-        {q.isError && (
+        {failed && (
           <div className="module-empty" style={{ '--mc': 'var(--nexus)' } as React.CSSProperties}>
             <div className="module-empty-icon">⚠️</div>
             <h2>Can't load {symbol}</h2>
@@ -289,5 +297,6 @@ function verdictColor(action: string) {
   const a = action.toLowerCase();
   if (a === 'buy' || a === 'accumulate') return 'var(--cash-l)';
   if (a === 'trim' || a === 'avoid') return 'var(--debt-l)';
-  return 'var(--gold-l)';
+  if (a === 'hold') return 'var(--gold-l)';
+  return 'var(--text2)'; // an action added later: neutral, matching ActionBadge
 }

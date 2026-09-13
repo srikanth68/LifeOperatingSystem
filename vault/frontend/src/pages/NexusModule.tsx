@@ -14,10 +14,11 @@ export const BASE = `${API}/api/nexus/sentinel`;
 
 const qc = makeModuleQueryClient(20_000);
 
-type Page = 'watchlist' | 'portfolio' | 'alerts';
+type Page = 'watchlist' | 'premarket' | 'portfolio' | 'alerts';
 
 const TABS: { id: Page; label: string }[] = [
   { id: 'watchlist', label: 'Watchlist' },
+  { id: 'premarket', label: 'Premarket' },
   { id: 'portfolio',  label: 'Portfolio' },
   { id: 'alerts',     label: 'Alerts' },
 ];
@@ -138,8 +139,13 @@ export function relTime(iso: string | null) {
   return `${Math.round(hrs / 24)}d ago`;
 }
 
+// The action enum is closed for styling but open on the wire: a value the engine adds
+// later renders neutral instead of borrowing a colour it hasn't earned.
+const KNOWN_ACTIONS = new Set(['buy', 'accumulate', 'hold', 'trim', 'avoid']);
+
 export function ActionBadge({ action }: { action: string }) {
-  return <span className={`nexus-action-badge ${action.toLowerCase()}`}>{action}</span>;
+  const a = action.toLowerCase();
+  return <span className={`nexus-action-badge ${KNOWN_ACTIONS.has(a) ? a : 'unknown'}`}>{action}</span>;
 }
 
 export function FreshnessBadge({ freshness }: { freshness: string }) {
@@ -284,6 +290,125 @@ function WatchlistPage({ onSelect }: { onSelect: (symbol: string) => void }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// ── Premarket ────────────────────────────────────────────────────────────
+// Sentinel's morning shortlist: a one-shot daily screen of names worth a look today.
+//
+// These are NOT tracked. The engine never watches or trades them, and nothing in this
+// view writes anywhere -- the user reads the list and adds the names they want to their
+// own Robinhood watchlist by hand. The cards, dashed edge and subheader exist so the list
+// can't be mistaken for the live board.
+
+export interface PremarketCandidate {
+  rank: number;
+  symbol: string;
+  action: string;
+  conviction: number;
+  composite: number;
+  price: number;
+  changePct: number | null;
+  company: string | null;
+  thesis: string;
+  detail: TickerDetail;       // same shape as GET /tickers/{symbol}
+}
+
+interface PremarketResponse {
+  generatedAt: string | null; // UTC; null if the screen has never run
+  count: number;
+  candidates: PremarketCandidate[];
+}
+
+function premarketError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (msg === '404') return "This Sentinel engine doesn't serve the premarket screen yet.";
+  if (msg === '503') return "Sentinel isn't reachable right now, so the shortlist can't be loaded.";
+  return friendlyError(e);
+}
+
+const chgClass = (n: number | null) => (n == null || n === 0 ? 'flat' : n > 0 ? 'up' : 'down');
+
+function PremarketPage({ onSelect }: { onSelect: (c: PremarketCandidate) => void }) {
+  const q = useQuery<PremarketResponse>({
+    queryKey: ['nexus-premarket'],
+    queryFn: () => get(`${BASE}/premarket`),
+    // Produced about once a day; every few minutes is plenty while the view is open.
+    refetchInterval: 5 * 60_000,
+  });
+
+  const data = q.data;
+  const candidates = useMemo(
+    () => [...(data?.candidates ?? [])].sort((a, b) => a.rank - b.rank),
+    [data],
+  );
+  const nothingYet = !!data && (data.generatedAt == null || data.count === 0 || candidates.length === 0);
+
+  return (
+    <div style={style}>
+      <div className="nexus-pm-head">
+        <div>
+          <h3 style={{ margin: 0 }}>Premarket shortlist</h3>
+          <p className="nexus-pm-sub">
+            Daily suggestions — not tracked. Add the ones you want to your Robinhood watchlist manually.
+          </p>
+        </div>
+        <div className="nexus-pm-meta">
+          {data?.generatedAt && (
+            <span>Generated <b>{relTime(data.generatedAt)}</b> · {formatInTz(data.generatedAt)}</span>
+          )}
+          <button className="btn-ghost" onClick={() => q.refetch()} disabled={q.isFetching}>
+            {q.isFetching ? 'Refreshing…' : '↻ Refresh'}
+          </button>
+        </div>
+      </div>
+
+      {/* Non-blocking: a failed refresh keeps the last shortlist on screen below. */}
+      {q.isError && (
+        <div className="nexus-pm-error" role="alert">
+          <span>{premarketError(q.error)}</span>
+          <button className="module-retry-btn" onClick={() => q.refetch()}>Retry</button>
+        </div>
+      )}
+
+      {q.isPending && (
+        <div className="nexus-pm-grid" aria-busy="true" aria-label="Loading the premarket shortlist">
+          {[0, 1, 2].map(i => <div key={i} className="nexus-pm-card nexus-pm-skeleton" />)}
+        </div>
+      )}
+
+      {nothingYet && (
+        <div className="module-empty" style={style}>
+          <div className="module-empty-icon">🌅</div>
+          <h2>No premarket candidates yet</h2>
+          <p>The morning screen runs weekday mornings.</p>
+        </div>
+      )}
+
+      {!nothingYet && candidates.length > 0 && (
+        <ol className="nexus-pm-grid">
+          {candidates.map(c => (
+            <li key={`${c.rank}-${c.symbol}`}>
+              <button type="button" className="nexus-pm-card" onClick={() => onSelect(c)}>
+                <div className="nexus-pm-top">
+                  <span className="nexus-pm-rank">#{c.rank}</span>
+                  <span className="nexus-sym-cell nexus-pm-sym">{c.symbol}</span>
+                  <ActionBadge action={c.action} />
+                </div>
+                {c.company && <div className="nexus-pm-co">{c.company}</div>}
+                <div className="nexus-pm-stats">
+                  <span className="nexus-pm-conv"><ConvictionPips value={c.conviction} /> <b>{c.conviction}/10</b></span>
+                  <span>Composite <b>{c.composite >= 0 ? '+' : ''}{c.composite.toFixed(2)}</b></span>
+                  <span className="nexus-price-cell">{fmtMoney(c.price)}</span>
+                  <span className={`nexus-chg ${chgClass(c.changePct)}`}>{fmtPct(c.changePct)}</span>
+                </div>
+                <p className="nexus-pm-thesis" title={c.thesis}>{c.thesis}</p>
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
     </div>
   );
 }
@@ -441,7 +566,10 @@ function AlertsPage({ onSelect }: { onSelect: (symbol: string) => void }) {
 
 function NexusInner() {
   const [page, setPage] = useState<Page>('watchlist');
-  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  // A premarket candidate arrives with its full detail already attached; board and alert
+  // rows carry only a symbol, and the panel fetches for those.
+  const [selected, setSelected] = useState<{ symbol: string; detail?: TickerDetail } | null>(null);
+  const setSelectedSymbol = (symbol: string) => setSelected({ symbol });
 
   return (
     <div>
@@ -454,9 +582,12 @@ function NexusInner() {
       </nav>
       <StatusBar />
       {page === 'watchlist' && <WatchlistPage onSelect={setSelectedSymbol} />}
+      {page === 'premarket' && <PremarketPage onSelect={c => setSelected({ symbol: c.symbol, detail: c.detail })} />}
       {page === 'portfolio' && <PortfolioPage />}
       {page === 'alerts' && <AlertsPage onSelect={setSelectedSymbol} />}
-      {selectedSymbol && <NexusDetailPanel symbol={selectedSymbol} onClose={() => setSelectedSymbol(null)} />}
+      {selected && (
+        <NexusDetailPanel symbol={selected.symbol} detail={selected.detail} onClose={() => setSelected(null)} />
+      )}
     </div>
   );
 }

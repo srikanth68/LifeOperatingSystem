@@ -12,6 +12,10 @@ public interface ISentinelReader
     Task<List<PositionRow>> GetPositionsAsync();
     Task<List<WatchItem>> GetWatchlistAsync();
     Task<StatusDto> GetStatusAsync();
+
+    // Raw JSON of the morning shortlist, passed through verbatim (API_CONTRACT.md §4).
+    // Null when the engine does not serve the endpoint at all.
+    Task<string?> GetPremarketJsonAsync();
 }
 
 // Thrown when sentinel.db doesn't exist yet — maps to HTTP 503 per API_CONTRACT.md §7.

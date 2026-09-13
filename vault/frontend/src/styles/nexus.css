@@ -76,6 +76,7 @@
 .nexus-action-badge.buy, .nexus-action-badge.accumulate { color: var(--cash-l); background: var(--cash-dim); }
 .nexus-action-badge.hold { color: var(--gold-l); background: var(--gold-glow); }
 .nexus-action-badge.trim, .nexus-action-badge.avoid { color: var(--debt-l); background: var(--debt-dim); }
+.nexus-action-badge.unknown { color: var(--text2); background: rgba(255,255,255,0.04); }
 
 .nexus-conviction-track {
   display: inline-flex;
@@ -101,6 +102,42 @@
 .nexus-freshness-badge.live { color: var(--cash-l); }
 .nexus-freshness-badge.recorded { color: var(--nexus); }
 .nexus-freshness-badge.stale { color: var(--debt-l); }
+
+/* ── Premarket shortlist ──
+   Cards rather than the board's table, with a dashed edge: these names are suggestions
+   the engine does not track, and must not read as the live board. */
+.nexus-pm-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.nexus-pm-sub { margin: 0.3rem 0 0; font-size: 0.8rem; color: var(--text2); }
+.nexus-pm-meta { display: flex; align-items: center; gap: 0.75rem; font-size: 0.75rem; color: var(--text3); flex-wrap: wrap; }
+.nexus-pm-meta b { color: var(--text); font-weight: 600; }
+.nexus-pm-error {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: 0.6rem 0.9rem; margin-bottom: 1rem; font-size: 0.8rem;
+  color: var(--debt-l); background: var(--debt-dim);
+  border: 1px solid rgba(232,68,68,0.3); border-radius: var(--r-sm);
+}
+.nexus-pm-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 0.8rem; }
+.nexus-pm-card {
+  display: flex; flex-direction: column; gap: 0.45rem;
+  width: 100%; height: 100%; min-width: 0; box-sizing: border-box;
+  text-align: left; padding: 0.9rem 1rem;
+  background: rgba(255,255,255,0.02); color: var(--text); font: inherit;
+  border: 1px dashed var(--border2); border-radius: var(--r-md);
+  cursor: pointer; transition: border-color 0.12s, background 0.12s;
+}
+.nexus-pm-card:hover, .nexus-pm-card:focus-visible { border-color: var(--nexus); background: rgba(79,158,248,0.05); outline: none; }
+.nexus-pm-top { display: flex; align-items: center; gap: 0.6rem; }
+.nexus-pm-top .nexus-action-badge { margin-left: auto; }
+.nexus-pm-rank { font-size: 0.72rem; font-weight: 700; color: var(--text3); font-variant-numeric: tabular-nums; }
+.nexus-pm-sym { font-size: 1.05rem; }
+.nexus-pm-co { font-size: 0.75rem; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nexus-pm-stats { display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem 0.9rem; font-size: 0.78rem; color: var(--text2); }
+.nexus-pm-stats b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.nexus-pm-conv { display: inline-flex; align-items: center; gap: 0.35rem; }
+.nexus-pm-thesis { margin: 0; font-size: 0.78rem; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nexus-pm-skeleton { min-height: 128px; cursor: default; animation: nexus-pm-pulse 1.4s ease-in-out infinite; }
+@keyframes nexus-pm-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 0.9; } }
+@media (prefers-reduced-motion: reduce) { .nexus-pm-skeleton { animation: none; } }
 
 /* ── Portfolio table ── */
 .nexus-pl.up { color: var(--cash-l); }
