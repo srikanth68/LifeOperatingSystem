@@ -25,6 +25,7 @@ struct ChatView: View {
     @State private var pickerItem: PhotosPickerItem?
     @State private var attachedJpeg: Data?
     @AppStorage("sanAutoSpeak") private var autoSpeak = false
+    @State private var confirmClear = false
 
     var body: some View {
         NavigationStack {
@@ -59,7 +60,22 @@ struct ChatView: View {
                 inputBar
             }
             .navigationTitle("San")
-            .toolbar { voiceToolbar }
+            .toolbar {
+                voiceToolbar
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { confirmClear = true } label: {
+                        Image(systemName: "trash")
+                    }
+                    .disabled(messages.isEmpty || sending)
+                }
+            }
+            // Asked first, unlike the one-tap actions on Now: this cannot be undone.
+            .confirmationDialog("Clear San's entire chat history?",
+                                isPresented: $confirmClear, titleVisibility: .visible) {
+                Button("Clear chat", role: .destructive) { Task { await clearChat() } }
+            } message: {
+                Text("This can't be undone. Memories San has already saved are kept.")
+            }
             .task {
                 if speech == nil { speech = SpeechPlayer(client: client) }
                 await loadHistory()
@@ -188,6 +204,17 @@ struct ChatView: View {
             loadError = nil
         } catch {
             loadError = "Can't reach San: \(error.localizedDescription)"
+        }
+    }
+
+    private func clearChat() async {
+        do {
+            try await client.clearChat()
+            speech?.stop()
+            messages = []
+            loadError = nil
+        } catch {
+            loadError = "Couldn't clear chat: \(error.localizedDescription)"
         }
     }
 

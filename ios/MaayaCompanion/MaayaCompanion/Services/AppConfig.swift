@@ -11,6 +11,7 @@ import Foundation
 enum ModulePort {
     static let vault     = 5000
     static let vitara    = 5100
+    static let insight   = 5110   // Vitara Insight: findings, baselines, correlations
     static let aasthi    = 5200
     static let san       = 5300
     static let sutra     = 5400

@@ -47,6 +47,47 @@ final class MaayaClient {
     func nexusBoard() async throws -> [NexusBoardRow] {
         try await get(ModulePort.nexus, "/api/nexus/sentinel/board")
     }
+    func nexusWatchlist() async throws -> [NexusWatchItem] {
+        try await get(ModulePort.nexus, "/api/nexus/sentinel/watchlist")
+    }
+
+    // MARK: - Memory tab (NorthStar + Vitara Insight)
+
+    func facts() async throws -> [UserFactItem] {
+        try await get(ModulePort.northstar, "/api/facts")
+    }
+    func recentMemories(limit: Int = 30) async throws -> [MemoryItem] {
+        try await get(ModulePort.northstar, "/api/memory/recent?limit=\(limit)")
+    }
+    func insights() async throws -> [NorthStarInsight] {
+        try await get(ModulePort.northstar, "/api/insights?limit=20")
+    }
+    func healthFindings() async throws -> [HealthFinding] {
+        try await get(ModulePort.insight, "/api/health/findings")
+    }
+
+    @discardableResult
+    func deleteFact(_ key: String) async throws -> Data {
+        try await perform(ModulePort.northstar, "/api/facts/\(Self.pathSegment(key))", method: "DELETE",
+                          httpBody: nil, allowRefresh: true)
+    }
+    @discardableResult
+    func deleteMemory(_ id: String) async throws -> Data {
+        try await perform(ModulePort.northstar, "/api/memory/\(id)", method: "DELETE",
+                          httpBody: nil, allowRefresh: true)
+    }
+    @discardableResult
+    func dismissInsight(_ id: String) async throws -> Data {
+        try await perform(ModulePort.northstar, "/api/insights/\(id)/dismiss", method: "PATCH",
+                          httpBody: nil, allowRefresh: true)
+    }
+
+    // Fact keys are free text, so one containing "/" or "?" must not be read as more path.
+    private static func pathSegment(_ s: String) -> String {
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/?#")
+        return s.addingPercentEncoding(withAllowedCharacters: allowed) ?? s
+    }
 
     // MARK: - Reminders & alerts (for local-notification scheduling)
 
@@ -122,6 +163,13 @@ final class MaayaClient {
 
     func chatHistory() async throws -> [ChatMessage] {
         try await get(ModulePort.san, "/api/chat/messages")
+    }
+    // Same endpoint as the website's Clear Chat. Also shortens every later turn's prompt,
+    // since San resends recent history on each message.
+    @discardableResult
+    func clearChat() async throws -> Data {
+        try await perform(ModulePort.san, "/api/chat/messages", method: "DELETE",
+                          httpBody: nil, allowRefresh: true)
     }
     // mode: "voice" on a spoken turn, nil when typed. imageDataUrl carries an attached
     // photo as a data: URL. Both are optional on the wire, so an older server ignores them.

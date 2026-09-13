@@ -1,13 +1,13 @@
 import SwiftUI
 
-// Three tabs, down from five.
+// Five tabs: San, Now, Nexus, Memory, Settings.
 //
-// The old set was Dashboard / San / Status / Health / Settings -- three of the five were
-// read-only reporting: net worth, module latency, sleep scores. All true, none of them a
-// reason to pick up a phone. The website is the better place to look at the system; the
-// phone is where something gets done about it.
+// The old Dashboard / Status / Health tabs were dropped as read-only reporting -- net
+// worth, module latency, sleep scores -- true, but no reason to pick up a phone.
 //
-// So: talk to San, act on what is outstanding, and configure. Nothing else.
+// The two added since earn their place differently. Memory is where a wrong fact or a
+// junk memory gets deleted before San recalls it again. Nexus is the one read-only screen,
+// kept because a glance at the watchlist is exactly what a phone is picked up for.
 //
 // The initialiser still takes the managers it always did, even though only Settings reads
 // most of them now -- SyncManager holds references to all three, and unpicking that is a
@@ -29,6 +29,14 @@ struct ContentView: View {
 
                 Tab("Now", systemImage: "checklist") {
                     NowView(client: client)
+                }
+
+                Tab("Nexus", systemImage: "chart.line.uptrend.xyaxis") {
+                    NexusView(client: client)
+                }
+
+                Tab("Memory", systemImage: "brain.head.profile") {
+                    MemoryView(client: client)
                 }
 
                 Tab("Settings", systemImage: "gear") {
