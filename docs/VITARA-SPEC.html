@@ -344,7 +344,7 @@
       <span><b>Modules</b> vitara · vitara-worker · vitara-insight</span>
       <span><b>Store</b> one SQLite file, 28 tables</span>
       <span><b>Tests</b> 283</span>
-      <span><b>Read from</b> f0c22b4</span>
+      <span><b>Read from</b> c16f434</span>
     </div>
   </header>
 
@@ -539,6 +539,12 @@
           <code>vitara</code> creates schema: two processes racing to
           <code>CREATE TABLE IF NOT EXISTS</code> on a cold boot is how the database ends
           up locked.
+        </p>
+        <p>
+          <b>They share an environment file too</b>, <code>vitara.env</code>, so any setting
+          that must differ per process &mdash; the port above all &mdash; has to be overridden
+          under that service's <code>environment:</code> in <code>docker-compose.yml</code>.
+          Missing exactly that shipped Insight listening on the wrong port.
         </p>
       </div>
     </section>
@@ -1642,6 +1648,10 @@ GET /api/health/correlations   with the caveat and the method</code></pre>
               <td><b>nginx would have rejected the 810MB upload</b> with a 413 at a 100m site-wide cap.</td>
               <td>Dedicated location block, 2g limit, request buffering off, 30-minute timeouts.</td>
             </tr>
+            <tr>
+              <td><b>The Insight tab returned 502 from the day it shipped.</b> <code>vitara-insight</code> shares <code>vitara.env</code> with <code>vitara</code>, which sets <code>BIND_URL</code> to 5100 &mdash; so Insight listened on 5100 while nginx, San and the MCP gateway all called 5110. The findings worker silently read nothing.</td>
+              <td>A service-level <code>environment: BIND_URL</code> in <code>docker-compose.yml</code>, which wins over <code>env_file</code>: one shared secrets file, one port per process.</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -1685,7 +1695,7 @@ GET /api/health/correlations   with the caveat and the method</code></pre>
 
   <footer>
     <span>docs · Vitara + Insight</span>
-    <span>read from f0c22b4 · 2026-09-12</span>
+    <span>read from c16f434 · 2026-09-12</span>
     <span>283 Vitara tests</span>
   </footer>
 

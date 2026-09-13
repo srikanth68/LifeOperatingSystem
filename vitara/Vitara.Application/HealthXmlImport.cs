@@ -86,8 +86,9 @@ public static class HealthXmlImport
     // What a real reading can be.
     //
     // A real export contained a "resting heart rate" far above any resting value, a
-    // night totalling under a minute and another over fifteen hours. None of those are measurements; they are an
-    // app writing to the wrong field, a sensor glitch, and a day with a stuck span.
+    // night totalling under a minute and another over fifteen hours. None of those are
+    // measurements; they are an app writing to the wrong field, a sensor glitch, and a
+    // day with a stuck span.
     //
     // Left in, they do exactly what the Oura naps did: a baseline pooling a 0.5-minute
     // night with 400-minute ones has a collapsed mean and an exploded spread, and every
