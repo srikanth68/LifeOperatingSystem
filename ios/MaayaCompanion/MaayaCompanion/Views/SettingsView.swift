@@ -1,4 +1,5 @@
 import SwiftUI
+internal import CoreLocation
 
 struct SettingsView: View {
     // Host + scheme are the single source of truth for every module URL; the
