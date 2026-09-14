@@ -40,4 +40,24 @@ public class AudioTranscodeTests
     [InlineData("", "")]
     public void MissingEverythingStillReturnsSomething(string? ct, string? name)
         => Assert.Equal(".bin", AudioTranscode.ExtensionFor(ct, name));
+
+    // The iPhone uploads "utterance.wav". When the input and output temp files shared
+    // stem + ".wav", ffmpeg refused to overwrite its own input and every phone call
+    // failed with "That recording couldn't be decoded".
+    [Theory]
+    [InlineData(".wav")]
+    [InlineData(".WAV")]
+    [InlineData(".webm")]
+    [InlineData(".m4a")]
+    [InlineData(null)]
+    public void InputAndOutputAreNeverTheSameFile(string? ext)
+    {
+        var (inPath, outPath) = AudioTranscode.TempPaths("/tmp/san-stt-abc", ext);
+        Assert.NotEqual(inPath, outPath, StringComparer.OrdinalIgnoreCase);
+        Assert.EndsWith(".wav", outPath);
+    }
+
+    [Fact]
+    public void AWavUploadKeepsItsExtensionForTheDemuxer()
+        => Assert.Equal("/tmp/san-stt-abc.wav", AudioTranscode.TempPaths("/tmp/san-stt-abc", ".wav").InPath);
 }

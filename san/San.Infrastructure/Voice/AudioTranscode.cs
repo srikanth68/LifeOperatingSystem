@@ -34,10 +34,8 @@ public static class AudioTranscode
     // length, which strict decoders reject. Files make both problems disappear.
     public static async Task<byte[]> ToWavAsync(Stream input, string? sourceExtension, CancellationToken ct = default)
     {
-        var dir = Path.GetTempPath();
-        var stem = Path.Combine(dir, $"san-stt-{Guid.NewGuid():N}");
-        var inPath = stem + (string.IsNullOrWhiteSpace(sourceExtension) ? ".bin" : sourceExtension);
-        var outPath = stem + ".wav";
+        var stem = Path.Combine(Path.GetTempPath(), $"san-stt-{Guid.NewGuid():N}");
+        var (inPath, outPath) = TempPaths(stem, sourceExtension);
 
         try
         {
@@ -115,6 +113,16 @@ public static class AudioTranscode
             TryDelete(outPath);
         }
     }
+
+    // The input keeps the upload's extension (ffmpeg's demuxer hint); the output always
+    // gets a suffix of its own. They used to share stem + ".wav", so a WAV upload -- which
+    // is exactly what the iPhone sends -- made input and output the same file. ffmpeg
+    // refuses that ("Output ... same as Input #0 - exiting") before reading a sample, and
+    // every call from the phone came back "That recording couldn't be decoded". Browsers
+    // upload WebM or MP4, which is why voice worked on the website all along.
+    public static (string InPath, string OutPath) TempPaths(string stem, string? sourceExtension) =>
+        (stem + (string.IsNullOrWhiteSpace(sourceExtension) ? ".bin" : sourceExtension),
+         stem + ".16k.wav");
 
     // MediaRecorder's mime type, mapped to the extension ffmpeg uses to pick a demuxer.
     // Only a hint — ffmpeg probes the actual content and overrides a wrong guess.
