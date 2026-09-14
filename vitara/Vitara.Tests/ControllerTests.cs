@@ -586,6 +586,67 @@ public class BioAgeControllerTests
         var bioAge = json.GetProperty("bioAge").GetDouble();
         Assert.True(bioAge <= 45.0, $"BioAge {bioAge} should be clamped to chronoAge + 15");
     }
+
+    // The label travels with the number: every consumer of the endpoint gets the words
+    // that stop an estimate being read as a clinical age.
+    [Fact]
+    public async Task BioAge_CarriesItsLabelDisclaimerAndMethod()
+    {
+        var json = await SufficientAsync(cvAge: null);
+        Assert.Equal("Estimate", json.GetProperty("label").GetString());
+        Assert.Contains("not a medical", json.GetProperty("disclaimer").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(json.GetProperty("method").GetString()));
+    }
+
+    // Contributions are the reasons behind the number, so they must add up to it.
+    [Fact]
+    public async Task BioAge_ContributionsSumToTheDelta_WhenNotClamped()
+    {
+        var json = await SufficientAsync(cvAge: 35.0);
+        var contributions = json.GetProperty("contributions").EnumerateArray().ToList();
+
+        Assert.Contains(contributions, c => c.GetProperty("key").GetString() == "cardiovascular_age");
+        Assert.False(json.GetProperty("clamped").GetBoolean());
+        var sum = contributions.Sum(c => c.GetProperty("years").GetDouble());
+        Assert.Equal(json.GetProperty("delta").GetDouble(), sum, 1);
+        Assert.Equal(1.0, contributions.Sum(c => c.GetProperty("weight").GetDouble()), 2);
+    }
+
+    // A factor with no data is left out rather than shown as zero years, which would read
+    // as "this factor is exactly average".
+    [Fact]
+    public async Task BioAge_OmitsFactorsWithNoData()
+    {
+        var json = await SufficientAsync(cvAge: null);
+        var keys = json.GetProperty("contributions").EnumerateArray()
+            .Select(c => c.GetProperty("key").GetString()).ToList();
+
+        Assert.DoesNotContain("cardiovascular_age", keys);
+        Assert.Contains("hrv", keys);
+    }
+
+    private static async Task<JsonElement> SufficientAsync(double? cvAge)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var repo = new FakeRepo { Profile = new UserProfile { Id = "lbl", Age = 40 } };
+        for (int i = 0; i < 10; i++)
+        {
+            var day = today.AddDays(-i);
+            repo.SleepData.Add(new SleepSession
+            {
+                Id = $"lbl-s{i}", Day = day,
+                BedtimeStart = day.AddDays(-1).ToDateTime(new TimeOnly(23, 0)),
+                BedtimeEnd = day.ToDateTime(new TimeOnly(7, 0)),
+                TotalSleepMinutes = 420, DeepMinutes = 70, RemMinutes = 90, LightMinutes = 180, AwakeMinutes = 30,
+                Score = 80 + i % 3, AvgHrv = 42.0 + i,
+            });
+            repo.ReadinessData.Add(new DailyReadiness { Id = $"lbl-r{i}", Day = day, Score = 78 + i % 4, RestingHeartRate = 62 });
+        }
+        if (cvAge is { } v) repo.CvAgeData.Add(new DailyCardiovascularAge { Id = "lbl-cv", Day = today, VascularAge = v });
+
+        var ok = Assert.IsType<OkObjectResult>(await new BioAgeController(repo).Get());
+        return JsonDocument.Parse(JsonSerializer.Serialize(ok.Value, Opts)).RootElement;
+    }
 }
 
 // ── Protocols Controller ──

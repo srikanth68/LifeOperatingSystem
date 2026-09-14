@@ -1,142 +1,438 @@
 /* Vitara Insight — the derived half of health.
  *
  * Sits next to Vitara's teal rather than claiming a new hue, because it reads the
- * same data. Deeper and bluer, which separates the two tabs at a glance without
- * making them look unrelated. */
+ * same data: deeper and bluer, separating the two tabs at a glance without making
+ * them look unrelated.
+ *
+ * Colour jobs, each validated against both surfaces with the dataviz checks:
+ *   severity (status) ... usual/info blue, notable amber, high red. Always paired
+ *                         with an icon and a word -- the amber/red pair sits in the
+ *                         CVD warning band, which is legal only with that second channel.
+ *   polarity .......... younger blue / older orange for the bio-age contributions,
+ *                         with a neutral midline. Positions carry the sign too.
+ * Text never wears a data colour; marks beside the text carry identity. */
 :root {
-  --insight-sev-info:    #7d8fa3;
-  --insight-sev-notable: #d09a36;
-  --insight-sev-high:    #d2603f;
+  --insight-usual:   #2f9fd0;
+  --insight-notable: #b98a1a;
+  --insight-high:    #d9453f;
+  --insight-younger: #2f9fd0;
+  --insight-older:   #d2603f;
+  --insight-wash:    rgba(47, 159, 208, 0.12);
+  --insight-hair:    rgba(122, 150, 192, 0.22);
+}
+
+/* Light surfaces need a slightly deeper amber to stay inside the lightness band. */
+:root[data-theme="light"] {
+  --insight-notable: #c2901a;
+  --insight-wash:    rgba(47, 159, 208, 0.14);
+  --insight-hair:    rgba(61, 88, 128, 0.18);
 }
 
 .insight-page { --module-accent: var(--insight); }
 
-.insight-sub { max-width: 68ch; }
+.insight-header { margin-bottom: 1.25rem; }
+.insight-header .module-h1 { margin: 0 0 0.25rem; }
 
-/* ── Status banner ──────────────────────────────────────────────────────────
- * Three states that mean genuinely different things, and the one worth designing
- * for is "never computed" — which otherwise looks exactly like "nothing wrong". */
+.insight-muted { margin: 0; color: var(--text2); font-size: 0.85rem; line-height: 1.55; }
+.insight-lede { max-width: 72ch; margin-bottom: 1rem; }
 
-.insight-status {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 14px 16px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface2);
-  margin-bottom: 20px;
-}
-
-.insight-status-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  margin-top: 6px;
-  flex: none;
-  background: var(--insight);
-}
-
-.insight-status-current { border-left: 3px solid var(--insight); }
-.insight-status-current .insight-status-dot { background: var(--insight); }
-
-.insight-status-stale { border-left: 3px solid var(--insight-sev-notable); }
-.insight-status-stale .insight-status-dot { background: var(--insight-sev-notable); }
-
-/* Never run. Loudest of the three on purpose: a reassuring answer with nothing
-   behind it is worse than no answer. */
-.insight-status-unrun { border-left: 3px solid var(--insight-sev-high); }
-.insight-status-unrun .insight-status-dot { background: var(--insight-sev-high); }
-
-.insight-status-text {
-  margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  color: var(--text1);
-}
-
-.insight-status-meta {
-  margin: 5px 0 0;
-  font-size: 0.76rem;
+.insight-eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--text3);
+}
+
+.insight-h2 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.02rem;
+  font-weight: 600;
+  margin: 0 0 0.35rem;
+  color: var(--text);
+}
+
+.insight-section { margin-top: 2.25rem; }
+
+.insight-card {
+  position: relative;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 1.25rem 1.4rem;
+  overflow: hidden;
+}
+
+/* Held space rather than a flashing skeleton, so nothing jumps when data lands. */
+.insight-card.is-loading { min-height: 190px; opacity: 0.5; }
+
+/* ── Top row: verdict + bio-age ──────────────────────────────────────────── */
+
+.insight-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 1rem;
+}
+@media (max-width: 900px) { .insight-top { grid-template-columns: 1fr; } }
+
+/* ── Verdict ─────────────────────────────────────────────────────────────── */
+
+.insight-verdict {
+  --state: var(--insight-usual);
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+  background:
+    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--state) 14%, transparent), transparent 60%),
+    var(--surface2);
+}
+.insight-verdict.state-flagged { --state: var(--insight-notable); }
+.insight-verdict.state-stale   { --state: var(--insight-notable); }
+/* Never analysed is the loudest of the four on purpose: a reassuring answer with
+   nothing behind it is worse than no answer. */
+.insight-verdict.state-unrun   { --state: var(--insight-high); }
+
+.insight-pulse {
+  position: relative;
+  flex: none;
+  width: 58px;
+  height: 58px;
+  margin-top: 0.2rem;
+}
+.insight-pulse span {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--state);
+  opacity: 0;
+  animation: insight-ripple 3.2s ease-out infinite;
+}
+.insight-pulse span:nth-child(2) { animation-delay: 1.05s; }
+.insight-pulse span:nth-child(3) { animation-delay: 2.1s; }
+.insight-pulse::after {
+  content: '';
+  position: absolute;
+  inset: 19px;
+  border-radius: 50%;
+  background: var(--state);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--state) 70%, transparent);
+}
+@keyframes insight-ripple {
+  0%   { transform: scale(0.35); opacity: 0.9; }
+  100% { transform: scale(1);    opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .insight-pulse span { animation: none; opacity: 0.35; transform: scale(0.8); }
+}
+
+.insight-verdict-body { min-width: 0; }
+
+.insight-verdict-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.55rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  margin: 0 0 0.4rem;
+  color: var(--text);
+}
+
+.insight-sev-chips {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0;
+  margin: 0.85rem 0 0;
+}
+.insight-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.74rem;
+  color: var(--text);
+  background: var(--surface3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem 0.2rem 0.4rem;
+}
+
+.insight-meta {
+  margin: 0.9rem 0 0;
+  font-size: 0.74rem;
+  color: var(--text3);
+}
+
+/* ── Severity icon ───────────────────────────────────────────────────────── */
+
+.insight-icon { width: 15px; height: 15px; flex: none; }
+.insight-icon path:not(.glyph), .insight-icon circle { stroke: none; }
+.insight-icon .glyph { fill: none; stroke: var(--surface2); stroke-width: 1.8; stroke-linecap: round; }
+.insight-icon.sev-info    { fill: var(--insight-usual); }
+.insight-icon.sev-notable { fill: var(--insight-notable); }
+.insight-icon.sev-high    { fill: var(--insight-high); }
+
+/* ── Biological age ──────────────────────────────────────────────────────── */
+
+.insight-bio-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.insight-bio-head .insight-eyebrow { margin: 0; }
+
+/* The label is a real UI element, not fine print: it is the first thing read beside
+   the number, so the number is never seen without it. */
+.insight-badge {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text2);
+  border: 1px solid var(--border2);
+  border-radius: 999px;
+  padding: 0.18rem 0.6rem;
+  cursor: help;
+}
+
+.insight-bio-figure { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem 0.9rem; margin: 0.6rem 0 1rem; }
+
+.insight-hero-number {
+  font-size: 3.4rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.insight-bio-delta { font-size: 0.86rem; color: var(--text2); }
+.insight-bio-arrow { font-size: 0.7rem; margin-right: 0.3rem; }
+.insight-bio-arrow.younger { color: var(--insight-younger); }
+.insight-bio-arrow.older   { color: var(--insight-older); }
+
+.insight-contrib { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.insight-contrib-axis,
+.insight-contrib-row {
+  display: grid;
+  grid-template-columns: minmax(8.5rem, 0.9fr) minmax(0, 1.3fr) 3.6rem;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.insight-contrib-poles {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  color: var(--text3);
+}
+
+.insight-contrib-name { font-size: 0.8rem; color: var(--text); line-height: 1.25; }
+.insight-contrib-value { display: block; font-size: 0.7rem; color: var(--text3); font-variant-numeric: tabular-nums; }
+
+.insight-contrib-track { position: relative; height: 16px; }
+.insight-contrib-mid {
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  background: var(--insight-hair);
+}
+.insight-contrib-bar {
+  position: absolute;
+  top: 3px;
+  height: 10px;
+  min-width: 2px;
+}
+/* Rounded at the data end, square at the midline it grows from. */
+.insight-contrib-bar.younger { background: var(--insight-younger); border-radius: 4px 0 0 4px; }
+.insight-contrib-bar.older   { background: var(--insight-older);   border-radius: 0 4px 4px 0; }
+
+.insight-contrib-years {
+  text-align: right;
+  font-size: 0.76rem;
+  color: var(--text2);
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Findings ──────────────────────────────────────────────────────────────── */
+.insight-disclaimer {
+  margin: 1.1rem 0 0;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--text3);
+}
+
+.insight-howto { margin-top: 0.4rem; font-size: 0.74rem; color: var(--text3); }
+.insight-howto summary { cursor: pointer; color: var(--text2); }
+.insight-howto p { margin: 0.45rem 0 0; line-height: 1.5; }
+
+/* ── Findings ────────────────────────────────────────────────────────────── */
 
 .insight-findings {
   list-style: none;
-  margin: 0;
+  margin: 0.75rem 0 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 0.75rem;
 }
 
 .insight-finding {
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--insight-sev-info);
-  border-radius: 6px;
+  --sev: var(--insight-usual);
   background: var(--surface2);
-  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 0.9rem 1rem;
+  box-shadow: inset 3px 0 0 var(--sev);
 }
+.insight-finding.sev-notable { --sev: var(--insight-notable); }
+.insight-finding.sev-high    { --sev: var(--insight-high); }
 
-.insight-finding.sev-notable { border-left-color: var(--insight-sev-notable); }
-.insight-finding.sev-high    { border-left-color: var(--insight-sev-high); }
-
-.insight-finding-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
+.insight-finding-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.55rem; margin-bottom: 0.45rem; }
+.insight-sev-word { font-size: 0.72rem; font-weight: 600; color: var(--text); }
 .insight-type {
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--insight);
-  font-weight: 600;
-}
-
-.insight-metric {
-  font-size: 0.78rem;
-  color: var(--text2);
-}
-
-.insight-days {
-  font-size: 0.68rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--text3);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 1px 6px;
-  font-variant-numeric: tabular-nums;
 }
+.insight-metric { font-size: 0.74rem; color: var(--text2); margin-left: auto; }
 
-.insight-summary {
+.insight-summary { margin: 0; font-size: 0.87rem; line-height: 1.55; color: var(--text); }
+
+.insight-days { display: flex; align-items: center; gap: 3px; margin-top: 0.7rem; }
+.insight-days span { width: 7px; height: 7px; border-radius: 50%; background: var(--sev); opacity: 0.75; }
+.insight-days em { font-style: normal; font-size: 0.7rem; color: var(--text3); margin-left: 0.4rem; }
+
+/* ── Today against your normal ───────────────────────────────────────────── */
+
+.insight-tiles {
+  list-style: none;
   margin: 0;
-  font-size: 0.88rem;
-  line-height: 1.5;
-  color: var(--text1);
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.75rem;
 }
 
-/* ── Baselines ─────────────────────────────────────────────────────────────── */
+.insight-tile {
+  --band: var(--insight-usual);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 0.85rem 0.95rem 0.8rem;
+}
+.insight-tile.band-notable { --band: var(--insight-notable); }
+.insight-tile.band-high    { --band: var(--insight-high); }
+.insight-tile.band-none    { opacity: 0.72; }
 
-.insight-table-wrap { overflow-x: auto; }
+.insight-tile-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+.insight-tile-name { font-size: 0.8rem; font-weight: 600; color: var(--text); }
+.insight-tile-z { font-size: 0.72rem; color: var(--text2); font-variant-numeric: tabular-nums; }
+.insight-tile-verdict { margin: 0.15rem 0 0.55rem; font-size: 0.76rem; color: var(--text2); }
+.insight-tile-typical { margin: 0.45rem 0 0; font-size: 0.72rem; color: var(--text); }
+.insight-tile-typical span { color: var(--text3); }
 
-.insight-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.82rem;
-  min-width: 560px;
+.insight-strip, .insight-spark { display: block; width: 100%; overflow: visible; }
+.insight-strip { height: 22px; }
+.insight-spark { height: 34px; margin-top: 0.3rem; }
+
+.insight-strip .axis     { stroke: var(--insight-hair); stroke-width: 1; }
+.insight-strip .usual,
+.insight-spark .usual    { fill: var(--insight-wash); }
+.insight-strip .typical,
+.insight-spark .typical  { stroke: var(--insight-hair); stroke-width: 1; }
+
+.insight-strip .dot,
+.insight-spark .end {
+  stroke: var(--surface2);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.insight-strip .dot.band-usual,   .insight-spark .end.band-usual   { fill: var(--insight-usual); }
+.insight-strip .dot.band-notable, .insight-spark .end.band-notable { fill: var(--insight-notable); }
+.insight-strip .dot.band-high,    .insight-spark .end.band-high    { fill: var(--insight-high); }
+
+.insight-spark .line {
+  fill: none;
+  stroke: var(--text3);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+/* Invisible, generous hover targets for the per-day tooltip. */
+.insight-spark .hit { fill: transparent; }
+.insight-spark .hit:hover { fill: var(--insight-wash); }
+
+/* ── What moves with what ────────────────────────────────────────────────── */
+
+.insight-corr { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+
+.insight-corr-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(140px, 1fr) 7rem;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--border);
+}
+@media (max-width: 700px) {
+  .insight-corr-row { grid-template-columns: 1fr; gap: 0.35rem; }
 }
 
+.insight-corr-text { margin: 0; font-size: 0.85rem; line-height: 1.45; color: var(--text2); }
+.insight-corr-text strong { color: var(--text); font-weight: 600; }
+
+.insight-corr-plot { position: relative; height: 18px; }
+.insight-corr-plot .quiet { position: absolute; top: 4px; bottom: 4px; background: var(--insight-wash); border-radius: 3px; }
+.insight-corr-plot .mid   { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--insight-hair); }
+.insight-corr-plot .stem  { position: absolute; top: 8px; height: 2px; background: var(--insight); }
+.insight-corr-plot .dot {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: var(--insight);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.insight-corr-stat { margin: 0; font-size: 0.74rem; color: var(--text3); text-align: right; font-variant-numeric: tabular-nums; }
+
+.insight-method {
+  margin: 0.75rem 0 0;
+  font-size: 0.7rem;
+  color: var(--text3);
+}
+
+/* ── Every baseline (table view) ─────────────────────────────────────────── */
+
+.insight-table-details > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--border);
+}
+.insight-table-details > summary::-webkit-details-marker { display: none; }
+.insight-table-details > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 0.5rem;
+  color: var(--text3);
+  transition: transform 0.15s ease;
+}
+.insight-table-details[open] > summary::before { transform: rotate(90deg); }
+.insight-table-details > summary .insight-h2 { display: inline; }
+
+.insight-table-wrap { overflow-x: auto; margin-top: 0.5rem; }
+
+.insight-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; min-width: 560px; }
 .insight-table th {
   text-align: left;
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text3);
@@ -145,53 +441,18 @@
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
-
 .insight-table td {
-  padding: 9px 14px 9px 0;
+  padding: 8px 14px 8px 0;
   border-bottom: 1px solid var(--border);
-  color: var(--text1);
+  color: var(--text);
   vertical-align: top;
 }
+.insight-table th.num, .insight-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.insight-table th:last-child, .insight-table td:last-child { padding-right: 0; }
 
-.insight-table th.num,
-.insight-table td.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.insight-table th:last-child,
-.insight-table td:last-child { padding-right: 0; }
-
-/* Still listed, just not competing for attention. "Not enough data yet" is a real
-   answer; hiding the row would look identical to the metric not existing. */
+/* Still listed, just not competing for attention. */
 .insight-invalid td { color: var(--text3); }
 
-.insight-sig {
-  display: block;
-  font-size: 0.68rem;
-  color: var(--text3);
-  margin-top: 2px;
-}
-
-.insight-ok    { color: var(--insight); font-size: 0.72rem; }
-.insight-thin  { color: var(--text3);   font-size: 0.72rem; }
-
-.insight-regime {
-  display: block;
-  font-size: 0.68rem;
-  color: var(--text3);
-  margin-top: 2px;
-}
-
-/* ── Correlations ─────────────────────────────────────────────────────────── */
-
-.insight-up   { color: var(--insight); }
-.insight-down { color: var(--insight-sev-notable); }
-
-.insight-method {
-  margin: 0;
-  font-size: 0.7rem;
-  color: var(--text3);
-  font-variant-numeric: tabular-nums;
-}
+.insight-sig, .insight-regime { display: block; font-size: 0.66rem; color: var(--text3); margin-top: 2px; }
+.insight-ok   { color: var(--text2); font-size: 0.72rem; }
+.insight-thin { color: var(--text3); font-size: 0.72rem; }

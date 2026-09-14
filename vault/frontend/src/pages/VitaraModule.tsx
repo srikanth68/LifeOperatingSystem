@@ -504,7 +504,7 @@ interface AgeHistory {
 
 function BodyPage() {
   const qClient = useQueryClient();
-  const { data: bio } = useQuery<{ bioAge?: number; chronologicalAge: number; delta?: number; cardiovascularAge?: number; vo2Max?: number; factors: { hrvScore?: number; restingHrScore?: number; sleepScore?: number; readinessScore?: number; recoveryTrend?: number }; dataQuality: string; ageSource: string }>({
+  const { data: bio } = useQuery<{ bioAge?: number; chronologicalAge: number; delta?: number; cardiovascularAge?: number; vo2Max?: number; factors: { hrvScore?: number; restingHrScore?: number; sleepScore?: number; readinessScore?: number; recoveryTrend?: number }; dataQuality: string; ageSource: string; label?: string; disclaimer?: string }>({
     queryKey: ['bioage'], queryFn: () => get(`${API}/api/bioage`),
   });
   const { data: sleep } = useQuery<Sleep[]>({ queryKey: ['sleep', 30], queryFn: () => get(`${API}/api/sleep?days=30`) });
@@ -541,7 +541,9 @@ function BodyPage() {
     <div>
       {/* Bio Age Hero */}
       <div className="v-bioage">
-        <div className="v-bioage-eyebrow">Biological Age</div>
+        {/* Labelled wherever it is shown: the words come from the API so this tab, the
+            Insight tab and San all say the same thing about what the number is. */}
+        <div className="v-bioage-eyebrow">Biological Age · {bio?.label ?? 'Estimate'}</div>
         {bio?.bioAge != null ? (
           <>
             <div className="v-bioage-val" style={{ color: younger ? 'var(--vitara)' : '#ef4444' }}>{bio.bioAge.toFixed(1)}</div>
@@ -549,6 +551,7 @@ function BodyPage() {
               {younger ? 'v' : '^'} {Math.abs(bio.delta!).toFixed(1)} years {younger ? 'younger' : 'older'} than chronological age {bio.chronologicalAge}
             </div>
             <div className="v-bioage-source">age source: {bio.ageSource} | data: {bio.dataQuality}</div>
+            {bio.disclaimer && <div className="v-bioage-source">{bio.disclaimer}</div>}
           </>
         ) : <div style={{ color: 'var(--text3)', padding: '1rem' }}>{bio?.dataQuality === 'insufficient' ? 'Need 3+ days of data' : 'Computing...'}</div>}
       </div>

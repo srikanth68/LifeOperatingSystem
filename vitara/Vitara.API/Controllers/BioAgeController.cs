@@ -7,6 +7,19 @@ namespace Vitara.API.Controllers;
 [ApiController, Route("api/bioage")]
 public class BioAgeController(IVitaraRepository repo) : ControllerBase
 {
+    // Carried in the payload, not only in a UI, so every surface that shows the number --
+    // the Vitara and Insight tabs, San, anything later -- carries the same words with it.
+    // This is a heuristic built from ring data, and presenting it bare invites reading it
+    // as a clinical age.
+    public const string Label = "Estimate";
+    public const string Disclaimer =
+        "A wellness estimate from ring data: how your recovery signals compare with typical values " +
+        "for your age. It is not a medical or clinical measurement of biological age.";
+    public const string Method =
+        "30-day averages of HRV, resting heart rate, sleep score and readiness score, plus the readiness " +
+        "trend, are each converted to years above or below your age and blended by weight. When Oura " +
+        "reports a cardiovascular age it carries 40% of the weight. The blend is capped at ±15 years.";
+
     [HttpGet]
     public async Task<IActionResult> Get()
     {
@@ -64,36 +77,29 @@ public class BioAgeController(IVitaraRepository repo) : ControllerBase
         double? trendDelta = recoveryTrend.HasValue ? -recoveryTrend.Value * 3.0 : null;
 
         // If Oura cardiovascular age exists, blend it in (40% weight)
-        double? bioAge;
-        if (latestCvAge.HasValue)
-        {
-            var cvDelta = latestCvAge.Value - chronoAge;
-            var weights = new (double? delta, double weight)[]
+        var factors = latestCvAge.HasValue
+            ? new Factor[]
             {
-                (cvDelta, 0.40), (hrvDelta, 0.15), (rhrDelta, 0.15),
-                (sleepDelta, 0.15), (readDelta, 0.10), (trendDelta, 0.05)
-            };
-            var available = weights.Where(w => w.delta.HasValue).ToList();
-            var totalWeight = available.Sum(w => w.weight);
-            var weightedDelta = available.Sum(w => w.delta!.Value * w.weight) / totalWeight;
-            bioAge = chronoAge + Math.Clamp(weightedDelta, -15.0, 15.0);
-        }
-        else
-        {
-            var weights = new (double? delta, double weight)[]
-            {
-                (hrvDelta, 0.30), (rhrDelta, 0.25), (sleepDelta, 0.20),
-                (readDelta, 0.15), (trendDelta, 0.10)
-            };
-            var available = weights.Where(w => w.delta.HasValue).ToList();
-            if (available.Count == 0) { bioAge = null; }
-            else
-            {
-                var totalWeight = available.Sum(w => w.weight);
-                var weightedDelta = available.Sum(w => w.delta!.Value * w.weight) / totalWeight;
-                bioAge = chronoAge + Math.Clamp(weightedDelta, -15.0, 15.0);
+                new("cardiovascular_age", "Cardiovascular age", latestCvAge, "years", latestCvAge.Value - chronoAge, 0.40),
+                new("hrv", "HRV", hrvScore, "ms", hrvDelta, 0.15),
+                new("resting_hr", "Resting heart rate", rhrScore, "bpm", rhrDelta, 0.15),
+                new("sleep_score", "Sleep score", sleepScore, "/100", sleepDelta, 0.15),
+                new("readiness_score", "Readiness", readScore, "/100", readDelta, 0.10),
+                new("readiness_trend", "Readiness trend", recoveryTrend, "pts/day", trendDelta, 0.05),
             }
-        }
+            : new Factor[]
+            {
+                new("hrv", "HRV", hrvScore, "ms", hrvDelta, 0.30),
+                new("resting_hr", "Resting heart rate", rhrScore, "bpm", rhrDelta, 0.25),
+                new("sleep_score", "Sleep score", sleepScore, "/100", sleepDelta, 0.20),
+                new("readiness_score", "Readiness", readScore, "/100", readDelta, 0.15),
+                new("readiness_trend", "Readiness trend", recoveryTrend, "pts/day", trendDelta, 0.10),
+            };
+
+        var available = factors.Where(f => f.Delta.HasValue).ToList();
+        var totalWeight = available.Sum(f => f.Weight);
+        double? weightedDelta = available.Count == 0 ? null : available.Sum(f => f.Delta!.Value * f.Weight) / totalWeight;
+        double? bioAge = weightedDelta.HasValue ? chronoAge + Math.Clamp(weightedDelta.Value, -15.0, 15.0) : null;
 
         return Ok(new
         {
@@ -110,10 +116,31 @@ public class BioAgeController(IVitaraRepository repo) : ControllerBase
                 readinessScore = readScore.HasValue ? Math.Round(readScore.Value, 1) : (double?)null,
                 recoveryTrend = recoveryTrend.HasValue ? Math.Round(recoveryTrend.Value, 3) : (double?)null,
             },
+
+            // How much each factor moved the estimate, in years of the final figure --
+            // they add up to the unclamped delta. Without this the number is a verdict
+            // with no reasons, and the reasons are the useful part: "resting heart rate
+            // is adding two years" is something a person can act on.
+            contributions = available.Select(f => new
+            {
+                f.Key,
+                f.Name,
+                value = Math.Round(f.Value!.Value, f.Unit == "pts/day" ? 3 : 1),
+                f.Unit,
+                years = Math.Round(f.Delta!.Value * f.Weight / totalWeight, 2),
+                weight = Math.Round(f.Weight / totalWeight, 3),
+            }),
+            clamped = weightedDelta.HasValue && Math.Abs(weightedDelta.Value) > 15.0,
+
+            label = Label,
+            disclaimer = Disclaimer,
+            method = Method,
             dataQuality = quality,
             ageSource = profile?.Age != null ? "oura" : "config",
         });
     }
+
+    private sealed record Factor(string Key, string Name, double? Value, string Unit, double? Delta, double Weight);
 
     // Time-series history for the VO2max / cardiovascular-age trend chart.
     [HttpGet("history")]
