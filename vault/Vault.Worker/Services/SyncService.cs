@@ -7,7 +7,22 @@ namespace Vault.Worker.Services;
 public interface ISyncService
 {
     Task<SyncMetadata> SyncAsync();
+
+    // Rows Vault holds that Plaid no longer returns, over up to two years of history, for
+    // the user to review. Read-only.
+    Task<List<StaleTransaction>> FindStaleTransactionsAsync(int days = 730);
+
+    // Deletes the given rows -- but only those that are STILL stale when re-checked
+    // against Plaid at the moment of deletion. Returns how many were removed.
+    Task<int> RemoveStaleTransactionsAsync(IReadOnlyCollection<string> ids, int days = 730);
 }
+
+// A row Plaid no longer has. LikelyPendingCopy marks one with a posted twin nearby: same
+// account, similar amount, within a week -- the shape of a pending charge that posted
+// under a new id before sync knew how to follow it.
+public record StaleTransaction(
+    string Id, string AccountName, DateTime Date, decimal Amount, string Description,
+    bool LikelyPendingCopy, string? PostedTwinId);
 
 public class SyncService : ISyncService
 {
@@ -64,43 +79,17 @@ public class SyncService : ISyncService
                     {
                         await UpsertAccountAsync(pa, institution.Id);
                     }
+                    await _db.SaveChangesAsync();
 
                     // Sync transactions
                     var plaidTxns = await _plaidService.GetTransactionsAsync(item.AccessToken, startDate, endDate);
-                    foreach (var pt in plaidTxns)
-                    {
-                        var accountId = await _db.Accounts
-                            .Where(a => a.PlaidAccountId == pt.AccountId)
-                            .Select(a => a.Id)
-                            .FirstOrDefaultAsync();
+                    var (added, posted, removed) = await ApplyTransactionsAsync(
+                        plaidAccounts.Select(a => a.AccountId).ToList(), plaidTxns, startDate);
+                    transactionsAdded += added;
 
-                        if (accountId == null) continue;
-
-                        var exists = await _db.Transactions.AnyAsync(t => t.PlaidTransactionId == pt.TransactionId);
-                        if (!exists)
-                        {
-                            _db.Transactions.Add(new Transaction
-                            {
-                                Id = Guid.NewGuid().ToString(),
-                                PlaidTransactionId = pt.TransactionId,
-                                AccountId = accountId,
-                                Amount = pt.Amount,
-                                Currency = pt.Currency,
-                                TransactionDate = pt.Date,
-                                Description = pt.Name,
-                                MerchantName = pt.MerchantName,
-                                Category = pt.Category,
-                                IsPending = false,
-                                CreatedAt = DateTime.UtcNow,
-                                UpdatedAt = DateTime.UtcNow
-                            });
-                            transactionsAdded++;
-                        }
-                    }
-
-                    await _db.SaveChangesAsync();
-                    _logger.LogInformation("Synced item {ItemId}: {Accounts} accounts, {Txns} transactions",
-                        item.PlaidItemId, plaidAccounts.Count, plaidTxns.Count);
+                    _logger.LogInformation(
+                        "Synced item {ItemId}: {Accounts} accounts, {Txns} transactions ({Added} new, {Posted} pending posted, {Removed} pending dropped)",
+                        item.PlaidItemId, plaidAccounts.Count, plaidTxns.Count, added, posted, removed);
                 }
                 catch (Exception ex)
                 {
@@ -125,6 +114,170 @@ public class SyncService : ISyncService
         }
 
         return syncRecord;
+    }
+
+    // Writes one item's transactions for the sync window, keeping ONE row per purchase.
+    //
+    // Duplicates came from pending charges. Plaid returns a pending charge with its own
+    // transaction_id; when it posts, Plaid issues a NEW id for the posted version, points
+    // it back at the pending one, and stops returning the pending one. Sync stored every
+    // id it had not seen, marked everything not-pending, and never removed anything --
+    // so every purchase still pending during a sync stayed in Vault twice.
+    //
+    // Now: a posted transaction takes over its pending row (keeping any category the user
+    // set on it), and pending rows in the window that Plaid no longer returns are removed,
+    // since they either posted under a new id or were cancelled. Posted rows are never
+    // removed here; that is the reviewed cleanup's job.
+    public async Task<(int Added, int Posted, int Removed)> ApplyTransactionsAsync(
+        IReadOnlyCollection<string> itemPlaidAccountIds,
+        IReadOnlyList<PlaidTransactionData> plaidTxns,
+        DateTime windowStart)
+    {
+        var accountIds = await _db.Accounts
+            .Where(a => itemPlaidAccountIds.Contains(a.PlaidAccountId))
+            .ToDictionaryAsync(a => a.PlaidAccountId, a => a.Id);
+
+        int added = 0, posted = 0, removed = 0;
+        var now = DateTime.UtcNow;
+
+        foreach (var pt in plaidTxns)
+        {
+            if (!accountIds.TryGetValue(pt.AccountId, out var accountId)) continue;
+
+            var row = await _db.Transactions.FirstOrDefaultAsync(t => t.PlaidTransactionId == pt.TransactionId);
+
+            if (row is null && pt.PendingTransactionId is { Length: > 0 } pendingId)
+            {
+                row = await _db.Transactions.FirstOrDefaultAsync(t => t.PlaidTransactionId == pendingId);
+                if (row is not null)
+                {
+                    row.PlaidTransactionId = pt.TransactionId;
+                    posted++;
+                }
+            }
+
+            if (row is null)
+            {
+                _db.Transactions.Add(new Transaction
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    PlaidTransactionId = pt.TransactionId,
+                    AccountId = accountId,
+                    Amount = pt.Amount,
+                    Currency = pt.Currency,
+                    TransactionDate = pt.Date,
+                    Description = pt.Name,
+                    MerchantName = pt.MerchantName,
+                    Category = pt.Category,
+                    IsPending = pt.Pending,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                });
+                added++;
+                continue;
+            }
+
+            // Plaid is the source of truth for what the charge is. The category is the
+            // user's, once they have set one.
+            row.AccountId = accountId;
+            row.Amount = pt.Amount;
+            row.Currency = pt.Currency;
+            row.TransactionDate = pt.Date;
+            row.Description = pt.Name;
+            row.MerchantName = pt.MerchantName ?? row.MerchantName;
+            row.Category ??= pt.Category;
+            row.IsPending = pt.Pending;
+            row.UpdatedAt = now;
+        }
+
+        await _db.SaveChangesAsync();
+
+        var returned = plaidTxns.Select(t => t.TransactionId).ToHashSet();
+        var itemAccounts = accountIds.Values.ToList();
+        var pendingInWindow = await _db.Transactions
+            .Where(t => t.IsPending && itemAccounts.Contains(t.AccountId) && t.TransactionDate >= windowStart)
+            .ToListAsync();
+
+        foreach (var stale in pendingInWindow.Where(t => !returned.Contains(t.PlaidTransactionId)))
+        {
+            _db.Transactions.Remove(stale);
+            removed++;
+        }
+        await _db.SaveChangesAsync();
+
+        return (added, posted, removed);
+    }
+
+    public async Task<List<StaleTransaction>> FindStaleTransactionsAsync(int days = 730)
+    {
+        var end = DateTime.UtcNow.Date;
+        var start = end.AddDays(-Math.Clamp(days, 1, 730));
+        var result = new List<StaleTransaction>();
+
+        foreach (var item in await _db.PlaidItems.Where(i => i.IsActive).ToListAsync())
+        {
+            // Any failure throws and ends the whole check. A half-answered comparison would
+            // list real transactions as stale.
+            var plaidAccountIds = (await _plaidService.GetAccountsAsync(item.AccessToken)).Select(a => a.AccountId).ToList();
+            var accounts = await _db.Accounts.Where(a => plaidAccountIds.Contains(a.PlaidAccountId)).ToListAsync();
+            if (accounts.Count == 0) continue;
+
+            var txns = await _plaidService.GetTransactionsAsync(item.AccessToken, start, end);
+
+            // An empty history is far more likely a quiet failure than an account whose
+            // every transaction vanished. Flag nothing rather than everything.
+            if (txns.Count == 0) continue;
+
+            var returned = txns.Select(t => t.TransactionId).ToHashSet();
+
+            // Institutions keep different amounts of history. Nothing older than the oldest
+            // transaction Plaid actually returned is judged, since Plaid can't vouch for it.
+            var oldest = txns.Min(t => t.Date);
+            var accountIds = accounts.Select(a => a.Id).ToList();
+            var names = accounts.ToDictionary(a => a.Id, a => a.Name);
+
+            var local = await _db.Transactions
+                .Where(t => accountIds.Contains(t.AccountId) && t.TransactionDate >= oldest)
+                .AsNoTracking()
+                .ToListAsync();
+
+            var kept = local.Where(t => returned.Contains(t.PlaidTransactionId)).ToList();
+
+            foreach (var t in local.Where(t => !returned.Contains(t.PlaidTransactionId)))
+            {
+                // Tips and final amounts move a posted charge off its pending amount, so the
+                // twin match allows a quarter either way (at least a dollar).
+                var tolerance = Math.Max(1m, Math.Abs(t.Amount) * 0.25m);
+                var twin = kept.FirstOrDefault(k =>
+                    k.AccountId == t.AccountId
+                    && Math.Abs(k.Amount - t.Amount) <= tolerance
+                    && Math.Abs((k.TransactionDate - t.TransactionDate).TotalDays) <= 7);
+
+                result.Add(new StaleTransaction(
+                    t.Id, names[t.AccountId], t.TransactionDate, t.Amount, t.Description,
+                    twin is not null, twin?.Id));
+            }
+        }
+
+        return result.OrderByDescending(s => s.Date).ToList();
+    }
+
+    public async Task<int> RemoveStaleTransactionsAsync(IReadOnlyCollection<string> ids, int days = 730)
+    {
+        if (ids.Count == 0) return 0;
+
+        // Re-checked now, not trusted from the list the user reviewed: a transaction that
+        // Plaid has started returning again since then must survive the click.
+        var stillStale = (await FindStaleTransactionsAsync(days)).Select(s => s.Id).ToHashSet();
+        var toRemove = ids.Where(stillStale.Contains).Distinct().ToList();
+        if (toRemove.Count == 0) return 0;
+
+        var rows = await _db.Transactions.Where(t => toRemove.Contains(t.Id)).ToListAsync();
+        _db.Transactions.RemoveRange(rows);
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Removed {Count} stale transaction(s) after review.", rows.Count);
+        return rows.Count;
     }
 
     private async Task<Institution> EnsureInstitutionAsync(PlaidItem item)

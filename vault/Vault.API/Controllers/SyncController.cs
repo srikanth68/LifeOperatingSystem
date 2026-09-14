@@ -78,4 +78,40 @@ public class SyncController : ControllerBase
             ErrorMessage = sync.ErrorMessage
         });
     }
+
+    // Transactions Vault holds that Plaid no longer returns -- mostly pending copies of
+    // purchases that later posted under a new id, from before sync followed that link.
+    // Read-only: this lists them for review and deletes nothing.
+    [HttpGet("stale")]
+    public async Task<IActionResult> GetStale([FromQuery] int days = 730)
+    {
+        try
+        {
+            return Ok(await _syncService.FindStaleTransactionsAsync(days));
+        }
+        catch (Exception ex)
+        {
+            // A failed comparison must not look like "nothing to clean up".
+            _logger.LogError(ex, "Stale transaction check failed");
+            return StatusCode(502, new { error = "Couldn't compare with Plaid right now, so nothing was checked.", detail = ex.Message });
+        }
+    }
+
+    // Deletes only the reviewed rows that are still stale when re-checked against Plaid.
+    [HttpPost("stale/remove")]
+    public async Task<IActionResult> RemoveStale([FromBody] RemoveStaleRequest req)
+    {
+        try
+        {
+            var removed = await _syncService.RemoveStaleTransactionsAsync(req.Ids ?? [], req.Days ?? 730);
+            return Ok(new { removed });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Stale transaction removal failed");
+            return StatusCode(502, new { error = "Couldn't re-check with Plaid, so nothing was removed.", detail = ex.Message });
+        }
+    }
 }
+
+public record RemoveStaleRequest(List<string>? Ids, int? Days);

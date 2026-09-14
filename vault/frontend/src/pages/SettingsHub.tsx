@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { syncApi } from '@/services/api';
+import { syncApi, type StaleTransaction } from '@/services/api';
 import { makeModuleQueryClient } from '../services/moduleQuery';
 import { authHeaders } from '../services/auth';
 import { getThemePref, setThemePref, type ThemePref } from '../services/theme';
@@ -93,6 +93,114 @@ function EnvBadge({ env }: { env: string }) {
   );
 }
 
+// Reviewed cleanup of duplicate transactions.
+//
+// Sync used to keep a purchase's pending copy after it posted under a new Plaid id, so
+// some charges appear twice. Sync no longer does that; this removes the copies it already
+// left behind. Nothing is deleted without being listed here first, and the server
+// re-checks each selected row against Plaid at the moment of removal.
+function DuplicateReview() {
+  const [rows, setRows] = useState<StaleTransaction[] | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState<'checking' | 'removing' | null>(null);
+  const [msg, setMsg] = useState('');
+
+  const errorText = (e: unknown) =>
+    (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Something went wrong.';
+
+  const check = async () => {
+    setBusy('checking'); setMsg(''); setRows(null);
+    try {
+      const r = await syncApi.getStale();
+      setRows(r.data);
+      // Only the ones with a posted twin start selected. A row Plaid dropped with no twin
+      // might be a reversed charge you still want to see, so that one is your call.
+      setSelected(new Set(r.data.filter(s => s.likelyPendingCopy).map(s => s.id)));
+    } catch (e) {
+      setMsg(errorText(e));
+    } finally { setBusy(null); }
+  };
+
+  const remove = async () => {
+    if (selected.size === 0) return;
+    if (!window.confirm(`Remove ${selected.size} transaction(s)? Each is re-checked against Plaid first.`)) return;
+    setBusy('removing'); setMsg('');
+    try {
+      const r = await syncApi.removeStale([...selected]);
+      setMsg(`Removed ${r.data.removed} duplicate${r.data.removed === 1 ? '' : 's'}.`);
+      setRows(null); setSelected(new Set());
+    } catch (e) {
+      setMsg(errorText(e));
+    } finally { setBusy(null); }
+  };
+
+  const toggle = (id: string) => setSelected(s => {
+    const next = new Set(s);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+
+  return (
+    <>
+      <Row label="Find duplicate transactions" desc="Compares Vault with up to two years of Plaid history and lists what Plaid no longer has. Nothing is removed until you choose.">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          {msg && <span style={{ fontSize: '0.75rem', color: 'var(--text2)' }}>{msg}</span>}
+          <button className="btn-ghost" onClick={check} disabled={busy !== null}>
+            {busy === 'checking' ? 'Checking… this takes a minute' : 'Check'}
+          </button>
+        </div>
+      </Row>
+
+      {rows && rows.length === 0 && (
+        <p style={{ fontSize: '0.8rem', color: 'var(--text2)', padding: '0.75rem 0' }}>No duplicates — Vault matches Plaid.</p>
+      )}
+
+      {rows && rows.length > 0 && (
+        <div style={{ padding: '0.75rem 0' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', minWidth: 560 }}>
+              <thead>
+                <tr style={{ color: 'var(--text3)', textAlign: 'left', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  <th style={{ padding: '0 0.5rem 0.5rem 0' }} />
+                  <th style={{ padding: '0 0.75rem 0.5rem 0' }}>Date</th>
+                  <th style={{ padding: '0 0.75rem 0.5rem 0' }}>Account</th>
+                  <th style={{ padding: '0 0.75rem 0.5rem 0' }}>Description</th>
+                  <th style={{ padding: '0 0.75rem 0.5rem 0', textAlign: 'right' }}>Amount</th>
+                  <th style={{ padding: '0 0 0.5rem 0' }}>Why</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(s => (
+                  <tr key={s.id} style={{ borderTop: '1px solid var(--border)' }}>
+                    <td style={{ padding: '0.5rem 0.5rem 0.5rem 0' }}>
+                      <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} aria-label={`Select ${s.description}`} />
+                    </td>
+                    <td style={{ padding: '0.5rem 0.75rem 0.5rem 0', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{s.date.slice(0, 10)}</td>
+                    <td style={{ padding: '0.5rem 0.75rem 0.5rem 0' }}>{s.accountName}</td>
+                    <td style={{ padding: '0.5rem 0.75rem 0.5rem 0' }}>{s.description}</td>
+                    <td style={{ padding: '0.5rem 0.75rem 0.5rem 0', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{money(s.amount)}</td>
+                    <td style={{ padding: '0.5rem 0', color: 'var(--text3)', fontSize: '0.74rem' }}>
+                      {s.likelyPendingCopy ? 'Pending copy of a posted charge' : 'No longer in Plaid — check before removing'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.75rem' }}>
+            <button className="btn-ghost" onClick={() => { setRows(null); setSelected(new Set()); }} disabled={busy !== null}>Cancel</button>
+            <button className="btn-danger-ghost" onClick={remove} disabled={busy !== null || selected.size === 0}>
+              {busy === 'removing' ? 'Removing…' : `Remove ${selected.size} selected`}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function Integrations() {
   const [plaidEnv, setPlaidEnv] = useState('...');
   const [syncing, setSyncing] = useState(false);
@@ -148,6 +256,7 @@ function Integrations() {
             </button>
           </div>
         </Row>
+        <DuplicateReview />
         <Row label="Active Environment" desc="Set via PLAID_ENV in your .env file — restart the API to change">
           <EnvBadge env={plaidEnv} />
         </Row>

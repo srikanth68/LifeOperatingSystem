@@ -40,6 +40,7 @@ northstar/NorthStar.Tests/NorthStar.Tests.csproj
 vitara/Vitara.Tests/Vitara.Tests.csproj
 aasthi/Aasthi.Tests/Aasthi.Tests.csproj
 mcp/Maaya.Mcp.Tests/Maaya.Mcp.Tests.csproj
+vault/Vault.Tests/Vault.Tests.csproj
 "
 
 failed=0

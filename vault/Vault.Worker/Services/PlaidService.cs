@@ -20,7 +20,11 @@ public interface IPlaidService
 
 public record PlaidInstitutionInfo(string InstitutionId, string Name, string? Logo, string? Url);
 public record PlaidAccountData(string AccountId, string Name, string Type, string SubType, decimal Balance, decimal? AvailableBalance, string Currency);
-public record PlaidTransactionData(string TransactionId, string AccountId, decimal Amount, string Currency, DateTime Date, string Name, string? MerchantName, string? Category);
+// Pending and PendingTransactionId are what make a purchase one row instead of two: Plaid
+// issues a NEW transaction_id when a pending charge posts, and the posted one points back
+// at the pending one it replaces.
+public record PlaidTransactionData(string TransactionId, string AccountId, decimal Amount, string Currency, DateTime Date, string Name, string? MerchantName, string? Category,
+    bool Pending = false, string? PendingTransactionId = null);
 
 public class PlaidService : IPlaidService
 {
@@ -193,10 +197,13 @@ public class PlaidService : IPlaidService
             var response = await PostAsync("/transactions/get", payload);
             var body = await response.Content.ReadAsStringAsync();
 
+            // Thrown, not a silent break. A partial list used to be returned as if it were
+            // complete, and sync now removes pending rows Plaid no longer returns -- so a
+            // failed second page would read as "all of those were cancelled".
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogError("Plaid transactions/get failed: {Body}", body);
-                break;
+                throw new InvalidOperationException($"Plaid transactions/get failed with HTTP {(int)response.StatusCode}.");
             }
 
             using var doc = JsonDocument.Parse(body);
@@ -217,7 +224,10 @@ public class PlaidService : IPlaidService
                     t.GetProperty("name").GetString()!,
                     t.TryGetProperty("merchant_name", out var mn) && mn.ValueKind != JsonValueKind.Null
                         ? mn.GetString() : null,
-                    categories.FirstOrDefault()
+                    categories.FirstOrDefault(),
+                    t.TryGetProperty("pending", out var pe) && pe.ValueKind == JsonValueKind.True,
+                    t.TryGetProperty("pending_transaction_id", out var pti) && pti.ValueKind == JsonValueKind.String
+                        ? pti.GetString() : null
                 ));
 
                 offset++;

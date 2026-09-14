@@ -59,9 +59,25 @@ export const transactionsApi = {
     }),
 };
 
+// A transaction Vault holds that Plaid no longer returns. likelyPendingCopy marks one with a
+// posted twin nearby — the old sync's leftover pending copy of a purchase.
+export interface StaleTransaction {
+  id: string;
+  accountName: string;
+  date: string;
+  amount: number;
+  description: string;
+  likelyPendingCopy: boolean;
+  postedTwinId: string | null;
+}
+
 export const syncApi = {
   trigger: () => api.post<SyncStatus>('/sync/trigger'),
   getLatestStatus: () => api.get<SyncStatus>('/sync/status/latest'),
+  // Compares up to two years of Plaid history, so it is slow and gets a long timeout.
+  getStale: () => api.get<StaleTransaction[]>('/sync/stale', { timeout: 180_000 }),
+  removeStale: (ids: string[]) =>
+    api.post<{ removed: number }>('/sync/stale/remove', { ids }, { timeout: 180_000 }),
 };
 
 export const plaidApi = {
