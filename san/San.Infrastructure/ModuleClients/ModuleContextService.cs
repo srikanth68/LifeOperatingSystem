@@ -359,6 +359,30 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
              + string.Join("\n", lines);
     }
 
+    public async Task<string?> BuildUserFactsAsync(CancellationToken ct = default)
+    {
+        var result = await TryGetJsonAsync("northstar", "/api/facts", ct);
+        if (result is not { } arr || arr.ValueKind != JsonValueKind.Array) return null;
+
+        return San.Application.UserKnowledge.FactsBlock(arr.EnumerateArray().Select(f => (
+            Key: f.TryGetProperty("key", out var k) ? k.GetString() ?? "" : "",
+            Value: f.TryGetProperty("value", out var v) ? v.GetString() ?? "" : "")));
+    }
+
+    public async Task<string?> BuildActiveInsightsAsync(int limit = 3, CancellationToken ct = default)
+    {
+        // Undismissed only (the endpoint's default); a dismissed insight is one the user
+        // has already said is wrong or done with.
+        var result = await TryGetJsonAsync("northstar", $"/api/insights?limit={Math.Clamp(limit, 1, 10)}", ct);
+        if (result is not { } arr || arr.ValueKind != JsonValueKind.Array) return null;
+
+        return San.Application.UserKnowledge.InsightsBlock(arr.EnumerateArray().Select(i => (
+            Title: i.TryGetProperty("title", out var t) ? t.GetString() ?? "" : "",
+            Body: i.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "",
+            CreatedAt: i.TryGetProperty("createdAt", out var c) && c.TryGetDateTime(out var dt) ? dt : (DateTime?)null)),
+            limit);
+    }
+
     public Task<bool> SaveMemoryAsync(string content, string kind, int importance, CancellationToken ct = default) =>
         PostToBrainAsync(
             "/api/memory",

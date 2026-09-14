@@ -25,6 +25,12 @@ public interface IModuleContextService
     // permanently and silently.
     Task<bool> SaveMemoryAsync(string content, string kind, int importance, CancellationToken ct = default);
 
+    // NorthStar facts, formatted for the system prompt (stable between turns), and the
+    // newest active insights, for the per-turn context. Null when there are none or
+    // NorthStar is unreachable -- a chat turn never fails over either. See UserKnowledge.
+    Task<string?> BuildUserFactsAsync(CancellationToken ct = default);
+    Task<string?> BuildActiveInsightsAsync(int limit = 3, CancellationToken ct = default);
+
     // Records "this happened" into NorthStar's knowledge timeline (distinct from a
     // memory, which is a durable fact about the user). Email triage writes its
     // findings here so the brain — and therefore San's own time context on the next

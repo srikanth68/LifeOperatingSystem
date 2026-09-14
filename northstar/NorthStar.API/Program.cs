@@ -82,19 +82,12 @@ using (var scope = app.Services.CreateScope())
         CREATE INDEX IF NOT EXISTS IX_Memories_Kind ON Memories(Kind);
         CREATE INDEX IF NOT EXISTS IX_Memories_CreatedAt ON Memories(CreatedAt);
         CREATE INDEX IF NOT EXISTS IX_Memories_Importance ON Memories(Importance);
-        CREATE VIRTUAL TABLE IF NOT EXISTS MemoryFts USING fts5(Content, Tags, content='Memories', content_rowid='rowid');
-        CREATE TRIGGER IF NOT EXISTS Memories_ai AFTER INSERT ON Memories BEGIN
-            INSERT INTO MemoryFts(rowid, Content, Tags) VALUES (new.rowid, new.Content, new.Tags);
-        END;
-        CREATE TRIGGER IF NOT EXISTS Memories_ad AFTER DELETE ON Memories BEGIN
-            INSERT INTO MemoryFts(MemoryFts, rowid, Content, Tags) VALUES ('delete', old.rowid, old.Content, old.Tags);
-        END;
-        CREATE TRIGGER IF NOT EXISTS Memories_au AFTER UPDATE OF Content, Tags ON Memories BEGIN
-            INSERT INTO MemoryFts(MemoryFts, rowid, Content, Tags) VALUES ('delete', old.rowid, old.Content, old.Tags);
-            INSERT INTO MemoryFts(rowid, Content, Tags) VALUES (new.rowid, new.Content, new.Tags);
-        END;
     ";
     await cmd.ExecuteNonQueryAsync();
+
+    // The memory search index lives with the code that queries it, so tests build the
+    // same index production does. It also migrates an index created before stemming.
+    await MemorySearch.EnsureSchemaAsync(conn);
 }
 
 app.UseCors();

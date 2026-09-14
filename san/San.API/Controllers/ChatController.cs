@@ -132,6 +132,12 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         var memories = await moduleContext.RecallMemoriesAsync(req.Content);
         var memoryBlock = string.IsNullOrWhiteSpace(memories) ? null
             : $"From your long-term memory (NorthStar):\n{memories}";
+        // What San knows about the user regardless of what was just said. Facts are
+        // stable and ride the system prompt, inside the cached prefix; insights change,
+        // so they ride the per-turn context. Recall above only finds what the message's
+        // words happen to match, which is why a stated fact used to go unused.
+        var factsBlock = await moduleContext.BuildUserFactsAsync();
+        var insightsBlock = await moduleContext.BuildActiveInsightsAsync();
         var contextMs = contextSw.ElapsedMilliseconds;
         logger.LogInformation("Chat context build took {ContextMs}ms", contextMs);
 
@@ -185,12 +191,12 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         // per turn — recalled memory, the time line, the module snapshot — rides in the
         // newest user message instead, landing after the cached region.
         var systemPrompt = string.Join("\n\n",
-            new[] { basePrompt, toolInstructions, capabilities,
+            new[] { basePrompt, factsBlock, toolInstructions, capabilities,
                     SanOutputConventions.Text, spoken ? SanOutputConventions.Voice : null }
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
 
         var liveContext = string.Join("\n\n",
-            new[] { memoryBlock, timeContext, context, ownContext }
+            new[] { memoryBlock, insightsBlock, timeContext, context, ownContext }
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
 
         // Fenced and labelled, because it arrives where the user's own words go. Without
@@ -215,10 +221,13 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         // have so far been answered by guessing at this; now the numbers are in the log
         // next to the timings that they explain.
         logger.LogInformation(
-            "Prompt budget (~tokens): persona {Persona}, memory {Memory}, time {Time}, modules {Modules}, " +
-            "own {Own}, conventions {Conv}, tools {Tools} ({ToolCount} tools), history {History} → total {Total}",
+            "Prompt budget (~tokens): persona {Persona}, facts {Facts}, memory {Memory}, insights {Insights}, " +
+            "time {Time}, modules {Modules}, own {Own}, conventions {Conv}, tools {Tools} ({ToolCount} tools), " +
+            "history {History} → total {Total}",
             ChatWindow.EstimateTokens(basePrompt),
+            ChatWindow.EstimateTokens(factsBlock),
             ChatWindow.EstimateTokens(memoryBlock),
+            ChatWindow.EstimateTokens(insightsBlock),
             ChatWindow.EstimateTokens(timeContext),
             ChatWindow.EstimateTokens(context),
             ChatWindow.EstimateTokens(ownContext),

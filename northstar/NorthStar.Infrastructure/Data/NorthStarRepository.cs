@@ -1,3 +1,5 @@
+using System.Data;
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using NorthStar.Application.Interfaces;
 using NorthStar.Domain.Entities;
@@ -250,31 +252,72 @@ public class NorthStarRepository(NorthStarDbContext db) : INorthStarRepository
 
     public async Task<List<MemoryEntry>> RecallMemoriesAsync(string query, string? kind, int limit)
     {
-        // Sanitize into quoted FTS5 tokens joined by OR — broad recall, immune to
-        // MATCH syntax errors from user input. bm25 ascending = best match first.
-        var tokens = query.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(t => "\"" + t.Replace("\"", "\"\"") + "\"")
-            .ToArray();
-        if (tokens.Length == 0) return [];
-        var match = string.Join(" OR ", tokens);
+        // Topic words only, stemmed and prefix-matched, and never raw user text in the
+        // MATCH expression -- see MemorySearch. A message with no topic words recalls
+        // nothing rather than everything that shares an "is".
+        var match = MemorySearch.BuildMatch(query);
+        if (match is null) return [];
 
-        var results = await db.Memories.FromSqlRaw("""
-            SELECT m.* FROM Memories m
-            JOIN MemoryFts ON m.rowid = MemoryFts.rowid
-            WHERE MemoryFts MATCH {0} AND ({1} IS NULL OR m.Kind = {1})
-            ORDER BY bm25(MemoryFts), m.Importance DESC
-            LIMIT {2}
-            """, match, kind!, limit).AsNoTracking().ToListAsync();
+        // Candidates by text relevance, generously, then re-ranked on relevance together
+        // with importance, recency and reinforcement. bm25 is read out alongside the id
+        // because the blend needs the score itself, not just the order.
+        var conn = db.Database.GetDbConnection();
+        if (conn.State != ConnectionState.Open) await conn.OpenAsync();
 
-        // Fallback when FTS misses (e.g. partial words): plain substring scan.
+        var hits = new List<(Guid Id, double Bm25)>();
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = """
+                SELECT m.Id, bm25(MemoryFts) FROM MemoryFts
+                JOIN Memories m ON m.rowid = MemoryFts.rowid
+                WHERE MemoryFts MATCH $match AND ($kind IS NULL OR m.Kind = $kind)
+                ORDER BY bm25(MemoryFts)
+                LIMIT $take
+                """;
+            AddParameter(cmd, "$match", match);
+            AddParameter(cmd, "$kind", (object?)kind ?? DBNull.Value);
+            AddParameter(cmd, "$take", Math.Max(limit * 4, 20));
+
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                hits.Add((reader.GetGuid(0), reader.GetDouble(1)));
+        }
+
+        var results = new List<MemoryEntry>();
+        if (hits.Count > 0)
+        {
+            var ids = hits.Select(h => h.Id).ToList();
+            var byId = (await db.Memories.Where(m => ids.Contains(m.Id)).AsNoTracking().ToListAsync())
+                .ToDictionary(m => m.Id);
+            var relevance = MemorySearch.NormaliseBm25(hits.Select(h => h.Bm25).ToList());
+            var now = DateTime.UtcNow;
+
+            results = hits
+                .Select((h, i) => (Entry: byId.GetValueOrDefault(h.Id), Relevance: relevance[i]))
+                .Where(x => x.Entry is not null)
+                .OrderByDescending(x => MemorySearch.Score(
+                    x.Relevance, x.Entry!.Importance, x.Entry.CreatedAt, x.Entry.AccessCount, now))
+                .Select(x => x.Entry!)
+                // The same memory distilled twice is one thing to know, not two lines.
+                .DistinctBy(m => MemorySearch.Normalise(m.Content))
+                .Take(limit)
+                .ToList();
+        }
+
+        // Fallback when the index finds nothing, for a fragment inside a longer word:
+        // a substring scan per topic word, most important first.
         if (results.Count == 0)
         {
-            var lower = query.ToLowerInvariant();
-            var q = db.Memories.Where(m => m.Content.ToLower().Contains(lower) || m.Tags.ToLower().Contains(lower));
-            if (kind is not null) q = q.Where(m => m.Kind == kind);
-            results = await q.OrderByDescending(m => m.Importance)
-                .ThenByDescending(m => m.CreatedAt)
-                .Take(limit).AsNoTracking().ToListAsync();
+            foreach (var word in MemorySearch.Keywords(query).Where(w => w.Length >= 3))
+            {
+                var q = db.Memories.Where(m => m.Content.ToLower().Contains(word) || m.Tags.ToLower().Contains(word));
+                if (kind is not null) q = q.Where(m => m.Kind == kind);
+                results.AddRange(await q.OrderByDescending(m => m.Importance)
+                    .ThenByDescending(m => m.CreatedAt)
+                    .Take(limit).AsNoTracking().ToListAsync());
+                if (results.Count >= limit) break;
+            }
+            results = results.DistinctBy(m => m.Id).Take(limit).ToList();
         }
 
         // Reinforcement: recalled memories get touched, so "hot" memories are observable.
@@ -287,6 +330,14 @@ public class NorthStarRepository(NorthStarDbContext db) : INorthStarRepository
                     .SetProperty(m => m.AccessCount, m => m.AccessCount + 1));
         }
         return results;
+    }
+
+    private static void AddParameter(DbCommand cmd, string name, object value)
+    {
+        var p = cmd.CreateParameter();
+        p.ParameterName = name;
+        p.Value = value;
+        cmd.Parameters.Add(p);
     }
 
     public async Task<List<MemoryEntry>> GetRecentMemoriesAsync(int limit, string? kind)
