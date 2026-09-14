@@ -41,12 +41,26 @@ const CALIBRATE_MS = 700;        // ambient noise sampled before the first turn
 const SPEECH_MULT = 2.5;         // RMS above noiseFloor * this = speech
 const BARGE_MULT = 4.5;          // stricter while San is speaking (echo guard)
 const MIN_FLOOR = 0.012;         // never trust a calibration quieter than this
-const SILENCE_MS = 1200;         // trailing silence that ends an utterance
+const SILENCE_MS = 800;          // trailing silence that ends an utterance — still longer
+                                 // than a pause between words, and added to every reply
 const MIN_SPEECH_MS = 350;       // ignore coughs/clicks shorter than this
 const MAX_UTTERANCE_MS = 30_000; // hard cap so a stuck mic can't record forever
 const BARGE_SUSTAIN_MS = 300;    // sustained speech needed to interrupt San
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+// A valid 16 kHz mono 16-bit WAV of silence, built in memory for the warm-up request.
+function silentWav(seconds: number, rate = 16_000): ArrayBuffer {
+  const dataBytes = Math.floor(rate * seconds) * 2;
+  const buf = new ArrayBuffer(44 + dataBytes);
+  const v = new DataView(buf);
+  const tag = (at: number, s: string) => { for (let i = 0; i < 4; i++) v.setUint8(at + i, s.charCodeAt(i)); };
+  tag(0, 'RIFF'); v.setUint32(4, 36 + dataBytes, true); tag(8, 'WAVE');
+  tag(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  tag(36, 'data'); v.setUint32(40, dataBytes, true);
+  return buf;
+}
 
 export class VoiceCall {
   private handlers: CallHandlers;
@@ -87,8 +101,19 @@ export class VoiceCall {
     this.buf = new Uint8Array(new ArrayBuffer(this.analyser.fftSize));
     this.ctx.createMediaStreamSource(this.stream).connect(this.analyser);
 
+    this.warmTranscriber();
     await this.calibrate();
     void this.loop();
+  }
+
+  // The first clip of a call was measured at 13s to transcribe against under 2s for the
+  // next — the model's audio path starting cold. Half a second of silence, sent while
+  // the room is being calibrated, pays that before anyone is waiting. Result discarded.
+  private warmTranscriber(): void {
+    const form = new FormData();
+    form.append('audio', new Blob([silentWav(0.5)], { type: 'audio/wav' }), 'warmup.wav');
+    void fetch(`${SAN}/api/voice/transcribe`, { method: 'POST', headers: authHeaders(), body: form })
+      .catch(() => { /* a failed warm-up only means the first turn is slow, as before */ });
   }
 
   hangUp(): void {

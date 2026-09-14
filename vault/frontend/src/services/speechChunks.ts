@@ -14,18 +14,57 @@
 // The first chunk is deliberately much shorter than the rest: it is the only one whose
 // synthesis time the listener actually waits through.
 
-const FIRST_MAX = 100;   // ~3s to synthesise, ~8s to speak — enough cover for chunk 2
+// A sentence over the first cap used to go out whole; on a measured call that was 229
+// characters and 5.4s before the first word. The opening sentence is now cut at a clause
+// boundary instead, matching the iPhone app.
+const FIRST_MAX = 80;
 const REST_MAX  = 220;   // ~7s to synthesise, ~17s to speak
+const MIN_HEAD  = 25;    // never cut the opening so early it is a fragment, not a phrase
 
 // Sentence-ish boundaries. Deliberately conservative: a split in the wrong place is
 // audible as an odd pause, whereas a chunk that runs long only costs a little latency.
 const BOUNDARY = /(?<=[.!?])\s+|\n+/;
+const SPOKEN = /[\p{L}\p{N}]/u;
+const CLAUSE_MARKS = ',;:—–';
+
+// Cuts at the last clause mark (followed by a space) before `max`, else the last space.
+// Null when there is no sensible cut, and the sentence then goes out whole.
+function breakEarly(s: string, max: number): [string, string] | null {
+  const last = Math.min(max, s.length) - 1;
+  let cut = -1;
+  for (let i = last; i >= MIN_HEAD; i--) {
+    if (CLAUSE_MARKS.includes(s[i]) && s[i + 1] === ' ') { cut = i + 1; break; }
+  }
+  if (cut < 0) {
+    for (let i = last; i >= MIN_HEAD; i--) {
+      if (s[i] === ' ') { cut = i; break; }
+    }
+  }
+  if (cut < 0) return null;
+  const head = s.slice(0, cut).trim();
+  const tail = s.slice(cut).trim();
+  return head && tail ? [head, tail] : null;
+}
 
 export function splitForSpeech(text: string): string[] {
   const clean = text.trim();
   if (!clean) return [];
 
-  const pieces = clean.split(BOUNDARY).map(s => s.trim()).filter(Boolean);
+  // A "?!" or a stray "." after an emoji arrives as a piece of its own, and sent alone it
+  // is a whole TTS request for no sound. Pieces with nothing to pronounce join the one
+  // before them, or are dropped when there is none.
+  const pieces: string[] = [];
+  for (const p of clean.split(BOUNDARY).map(s => s.trim()).filter(Boolean)) {
+    if (SPOKEN.test(p)) pieces.push(p);
+    else if (pieces.length) pieces[pieces.length - 1] += ' ' + p;
+  }
+
+  // Only the opening chunk is worth cutting mid-sentence: it is the one being waited for.
+  if (pieces.length && pieces[0].length > FIRST_MAX) {
+    const cut = breakEarly(pieces[0], FIRST_MAX);
+    if (cut) pieces.splice(0, 1, cut[0], cut[1]);
+  }
+
   const chunks: string[] = [];
   let buf = '';
 
