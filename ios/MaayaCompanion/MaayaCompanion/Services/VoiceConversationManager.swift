@@ -47,7 +47,9 @@ final class VoiceConversationManager {
     private let speechMargin: Float = 12         // this far above the room = speech
     private let silenceMargin: Float = 6         // within this of the room = silence
     private let minVoicedFrames = 3              // ~0.25s: a click is not a sentence
-    private let silenceHang: TimeInterval = 1.0  // trailing silence that ends a turn
+    // Trailing silence that ends a turn. 0.7s is still longer than a between-words pause,
+    // and every tenth of a second here is added to every single reply.
+    private let silenceHang: TimeInterval = 0.7
     private let maxUtterance: TimeInterval = 25  // hard cap on one turn
     private let meterInterval: TimeInterval = 0.08
     private let levelFloorDb: Float = -50        // maps to level 0 on the orb
@@ -67,7 +69,28 @@ final class VoiceConversationManager {
         }
         configureSession()
         isActive = true
+        // Warm the transcriber while the user is still drawing breath. The first audio
+        // clip a call sends has been measured at 13s to transcribe against 1.7s for the
+        // next one -- the model's audio path starting cold. Half a second of silence pays
+        // that cost before anyone is waiting on it. The result is thrown away.
+        Task { [client] in _ = try? await client.transcribe(Self.silentWav(seconds: 0.5)) }
         await runLoop()
+    }
+
+    // A valid 16 kHz mono 16-bit WAV of silence, built by hand so warming up needs no
+    // bundled file.
+    static func silentWav(seconds: Double, sampleRate: Int = 16_000) -> Data {
+        let dataBytes = Int(Double(sampleRate) * seconds) * 2
+        var d = Data()
+        func tag(_ s: String) { d.append(contentsOf: Array(s.utf8)) }
+        func u32(_ v: Int) { withUnsafeBytes(of: UInt32(v).littleEndian) { d.append(contentsOf: $0) } }
+        func u16(_ v: Int) { withUnsafeBytes(of: UInt16(v).littleEndian) { d.append(contentsOf: $0) } }
+
+        tag("RIFF"); u32(36 + dataBytes); tag("WAVE")
+        tag("fmt "); u32(16); u16(1); u16(1); u32(sampleRate); u32(sampleRate * 2); u16(2); u16(16)
+        tag("data"); u32(dataBytes)
+        d.append(Data(count: dataBytes))
+        return d
     }
 
     func stop() {
