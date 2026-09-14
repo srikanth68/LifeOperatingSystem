@@ -30,13 +30,23 @@ final class VoiceConversationManager {
     private(set) var lastUserText = ""
     private(set) var lastSanText = ""
     private(set) var micDenied = false
+    private(set) var inputDb: Float = -160      // live mic power, shown while listening
+    private(set) var roomDb: Float = -160       // the room's measured quiet, ditto
     var isMuted = false
 
     private var isActive = false
+    private var endTurnRequested = false
 
     // ── VAD / endpointing tuning (dBFS; AVAudioRecorder power runs −160…0) ──
-    private let speechOnThreshold: Float = -28   // above this = speech present
-    private let silenceOffThreshold: Float = -37 // below this = silence
+    //
+    // Thresholds are RELATIVE to the room, not fixed. The fixed −28 dB this replaced
+    // never fired: the .voiceChat session applies noise suppression and gain control,
+    // which holds ordinary speech around −45…−35 dB. The call sat on "Listening…",
+    // discarded each 25-second clip as silence, and listened again -- forever.
+    private let calibrationWindow: TimeInterval = 0.4 // measure the room before judging speech
+    private let speechMargin: Float = 12         // this far above the room = speech
+    private let silenceMargin: Float = 6         // within this of the room = silence
+    private let minVoicedFrames = 3              // ~0.25s: a click is not a sentence
     private let silenceHang: TimeInterval = 1.0  // trailing silence that ends a turn
     private let maxUtterance: TimeInterval = 25  // hard cap on one turn
     private let meterInterval: TimeInterval = 0.08
@@ -67,6 +77,13 @@ final class VoiceConversationManager {
         deactivateSession()
         level = 0
         phase = .idle
+    }
+
+    // Tap while listening: "I'm done, send it." The guaranteed way out when the room is
+    // too loud for end-of-speech detection to tell voice from background.
+    func finishTurn() {
+        guard phase == .listening else { return }
+        endTurnRequested = true
     }
 
     // Tap-to-interrupt San mid-reply → straight back to listening.
@@ -184,22 +201,52 @@ final class VoiceConversationManager {
 
         let started = Date()
         var hasSpoken = false
+        var voicedFrames = 0
         var lastVoiceAt = Date()
+        var floor: Float = 0            // the room's quiet; min() of real samples replaces 0
+        var calibrated = false
+        var forced = false
+        endTurnRequested = false
 
         while isActive && !isMuted {
             try? await Task.sleep(nanoseconds: UInt64(meterInterval * 1_000_000_000))
             guard let r = recorder, r.isRecording else { break }
             r.updateMeters()
             let power = r.averagePower(forChannel: 0)
-            level = normalizedLevel(power)
+            inputDb = power
             let now = Date()
 
-            if power > speechOnThreshold {
-                hasSpoken = true
+            if endTurnRequested { forced = true; break }
+
+            // The quietest moment of the first 0.4s is the room. min() rather than an
+            // average, so someone who starts talking straight away doesn't set it.
+            if !calibrated {
+                floor = min(floor, power)
+                roomDb = floor
+                level = normalizedLevel(power, floor: levelFloorDb)
+                if now.timeIntervalSince(started) >= calibrationWindow { calibrated = true }
+                continue
+            }
+
+            level = normalizedLevel(power, floor: floor)
+            let speechOn = floor + speechMargin
+            let silenceOff = floor + silenceMargin
+
+            if power > speechOn {
+                voicedFrames += 1
+                if voicedFrames >= minVoicedFrames { hasSpoken = true }
                 lastVoiceAt = now
+            } else {
+                if !hasSpoken { voicedFrames = 0 }
+                // Follow a room that gets quieter at once, and one that gets louder slowly
+                // -- a fan switching on shouldn't take a whole turn to be learned.
+                if power < silenceOff {
+                    floor = power < floor ? power : floor + (power - floor) * 0.05
+                    roomDb = floor
+                }
             }
             // End of turn: we heard speech, and it's been quiet for silenceHang.
-            if hasSpoken && power < silenceOffThreshold && now.timeIntervalSince(lastVoiceAt) > silenceHang {
+            if hasSpoken && power < silenceOff && now.timeIntervalSince(lastVoiceAt) > silenceHang {
                 break
             }
             if now.timeIntervalSince(started) > maxUtterance { break }
@@ -208,9 +255,11 @@ final class VoiceConversationManager {
         recorder?.stop()
         recorder = nil
         level = 0
+        endTurnRequested = false
 
         defer { try? FileManager.default.removeItem(at: url) }
-        guard hasSpoken, isActive else { return nil }
+        // A tap to send is the user saying they spoke, whatever the meter thought.
+        guard hasSpoken || forced, isActive else { return nil }
 
         let data = await finalisedRecording(at: url)
         // A 16 kHz mono 16-bit WAV runs 32 KB/s, so a kilobyte is about 30ms -- less
@@ -288,8 +337,9 @@ final class VoiceConversationManager {
         }
     }
 
-    private func normalizedLevel(_ db: Float) -> Double {
-        guard db > levelFloorDb else { return 0 }
-        return Double((db - levelFloorDb) / -levelFloorDb)   // (db + 50) / 50
+    // Orb size from how far above the room the mic is, over a 30 dB span -- so it moves
+    // with your voice even when voice-chat processing keeps absolute levels low.
+    private func normalizedLevel(_ db: Float, floor: Float) -> Double {
+        Double(min(max((db - floor) / 30, 0), 1))
     }
 }

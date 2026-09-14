@@ -24,6 +24,13 @@ struct CallView: View {
                 Spacer()
                 orb
                 statusLabel
+                // Live readings, so a call that still won't end its turn can be tuned from
+                // real numbers instead of guesses.
+                if manager.phase == .listening {
+                    Text("mic \(Int(manager.inputDb)) dB · room \(Int(manager.roomDb)) dB")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.4))
+                }
                 transcript
                 Spacer()
                 controls
@@ -66,7 +73,10 @@ struct CallView: View {
                 .foregroundStyle(.black.opacity(0.8))
         }
         .contentShape(Circle())
-        .onTapGesture { manager.interrupt() }   // barge-in while speaking
+        // Listening: send what you said now. Speaking: cut San off.
+        .onTapGesture {
+            if manager.phase == .listening { manager.finishTurn() } else { manager.interrupt() }
+        }
         .onAppear { pulse = true }
     }
 
@@ -110,7 +120,7 @@ struct CallView: View {
     private var statusText: String {
         switch manager.phase {
         case .idle:          return "Connecting…"
-        case .listening:     return "Listening…"
+        case .listening:     return "Listening… tap the orb when done"
         case .transcribing:  return "Got it…"
         case .thinking:      return "San is thinking…"
         case .speaking:      return "San is speaking — tap to cut in"
