@@ -179,14 +179,22 @@ final class VoiceConversationManager {
         let chunks = SpeechChunks.split(reply)
         guard !chunks.isEmpty else { return }
 
-        // One chunk ahead, no more. Two would not arrive sooner -- the server renders
-        // them one at a time anyway -- and would waste work whenever the call is ended
-        // or barged in on mid-reply.
+        // Synthesis is strictly one request at a time; the next chunk starts only once the
+        // current chunk's audio has ARRIVED, and is then made while that audio plays.
+        //
+        // The next chunk used to be requested the moment the current one was. Kokoro runs
+        // on a handful of CPU cores, so the two shared them and finished together --
+        // measured on a call, a 41-character opening line and the 205-character sentence
+        // behind it both came back at 4.0s. The short first chunk exists to be fast, and
+        // competing with its successor erased exactly that.
         var next: Task<Data, Error>? = Task { [client] in try await client.speak(chunks[0]) }
 
         for i in chunks.indices {
             guard isActive else { next?.cancel(); return }
             guard let current = next else { return }
+
+            let audio = try await current.value
+            guard isActive else { return }
 
             if i + 1 < chunks.count {
                 let following = chunks[i + 1]
@@ -195,8 +203,6 @@ final class VoiceConversationManager {
                 next = nil
             }
 
-            let audio = try await current.value
-            guard isActive else { next?.cancel(); return }
             await play(audio)
         }
     }
