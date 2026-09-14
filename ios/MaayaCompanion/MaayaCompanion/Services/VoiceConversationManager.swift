@@ -266,7 +266,52 @@ final class VoiceConversationManager {
         // than a syllable. Sending it wastes a round trip and comes back as a decode
         // error, which reads like a bug rather than "you did not say anything".
         guard let data, data.count > 1024 else { return nil }
+        return Self.repairWavHeader(data)
+    }
+
+    // AVAudioRecorder writes the RIFF and data-chunk sizes only when it finalises the file,
+    // and that rewrite leaves the file's length unchanged -- so "the size stopped changing"
+    // cannot tell a finished WAV from one still declaring zero bytes of audio. ffmpeg on
+    // San trusts the declared size, decodes nothing, and the call fails with "That
+    // recording couldn't be decoded" even though every sample is in the file.
+    //
+    // The samples are all there, so correct the header rather than trying to outwait it.
+    // A header that is already right is left exactly as it was.
+    static func repairWavHeader(_ data: Data) -> Data {
+        var d = Data(data)                       // zero-based indices from here on
+        guard d.count > 12,
+              d.prefix(4) == Data("RIFF".utf8),
+              d.subdata(in: 8..<12) == Data("WAVE".utf8) else { return data }
+
+        var offset = 12
+        while offset + 8 <= d.count {
+            let id = d.subdata(in: offset..<(offset + 4))
+            let size = Int(readUInt32LE(d, at: offset + 4))
+            let body = offset + 8
+
+            if id == Data("data".utf8) {
+                let actual = d.count - body
+                if size == 0 || size > actual {
+                    writeUInt32LE(&d, UInt32(actual), at: offset + 4)
+                }
+                writeUInt32LE(&d, UInt32(d.count - 8), at: 4)
+                return d
+            }
+            // Chunks are word-aligned: an odd-sized chunk is followed by one pad byte.
+            offset = body + size + (size & 1)
+        }
         return data
+    }
+
+    private static func readUInt32LE(_ d: Data, at i: Int) -> UInt32 {
+        UInt32(d[i]) | UInt32(d[i + 1]) << 8 | UInt32(d[i + 2]) << 16 | UInt32(d[i + 3]) << 24
+    }
+
+    private static func writeUInt32LE(_ d: inout Data, _ v: UInt32, at i: Int) {
+        d[i]     = UInt8(truncatingIfNeeded: v)
+        d[i + 1] = UInt8(truncatingIfNeeded: v >> 8)
+        d[i + 2] = UInt8(truncatingIfNeeded: v >> 16)
+        d[i + 3] = UInt8(truncatingIfNeeded: v >> 24)
     }
 
     // AVAudioRecorder.stop() closes the file on its own queue, and the RIFF header's
