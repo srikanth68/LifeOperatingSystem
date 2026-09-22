@@ -155,13 +155,18 @@ export function NexusDetailPanel({ symbol, detail, onClose }: Props) {
   return (
     <div className="nexus-overlay" onClick={onClose}>
       <div className="nexus-panel" onClick={e => e.stopPropagation()}>
+        {/* A bar pinned to the top of the panel, not a floated corner button: the old
+            one could scroll or wrap out of sight, leaving Esc as the only way out. */}
         <div className="nexus-panel-actions">
+          <span className="nexus-panel-bar-sym">{symbol}</span>
           {/* Native print-to-PDF: keeps the panel's styling, no extra dependency.
               Print CSS (nexus.css) hides everything except this panel. */}
           <button className="nexus-panel-pdf" onClick={() => window.print()} title="Save this analysis as a PDF">
             ⤓ PDF
           </button>
-          <button className="nexus-panel-close" onClick={onClose} aria-label="Close">×</button>
+          <button className="nexus-panel-close" onClick={onClose} aria-label="Close" title="Close (Esc)">
+            ✕ Close
+          </button>
         </div>
 
         {loading && <p style={{ color: 'var(--text2)' }}>Loading {symbol}…</p>}
@@ -285,6 +290,11 @@ export function NexusDetailPanel({ symbol, detail, onClose }: Props) {
 
             <div className="nexus-source-line">
               {d.meta.freshness ?? 'RECORDED'} · {d.source} · as of {new Date(d.asOf).toLocaleString()}
+            </div>
+
+            {/* A way out at the end of a long read, without scrolling back up. */}
+            <div className="nexus-panel-foot">
+              <button className="nexus-panel-close" onClick={onClose}>✕ Close</button>
             </div>
           </>
         )}
