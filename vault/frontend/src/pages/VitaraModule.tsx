@@ -3,12 +3,12 @@ import type { ReactNode } from 'react';
 import { QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { makeModuleQueryClient } from '../services/moduleQuery';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
-  Area, AreaChart, LineChart, Line,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
 import { VitaraMetricsCatalogue } from '../components/VitaraMetricsCatalogue';
+import { Shell as HxShell, Tabs as HxTabs, Card, Ring, Stat, Chip, Delta as HxDelta, SectionHead, Empty } from '../components/health/HealthKit';
 import '../styles/modules.css';
 import '../styles/vitara.css';
 
@@ -126,27 +126,6 @@ const TT = {
 
 function Skel({ h = 180 }: { h?: number }) { return <div className="v-chart-skel" style={{ height: h }}/>; }
 
-// ── Score Ring SVG ────────────────────────────────────────────────────────────
-
-function ScoreRing({ score, color, size = 72, label }: { score?: number | null; color: string; size?: number; label?: string }) {
-  const r = (size - 12) / 2;
-  const circ = 2 * Math.PI * r;
-  const pct = score != null ? Math.min(score, 100) / 100 : 0;
-  return (
-    <div className="v-ring-wrap">
-      <svg className="v-ring-svg" width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <circle className="v-ring-bg" cx={size/2} cy={size/2} r={r}/>
-        <circle className="v-ring-fg" cx={size/2} cy={size/2} r={r}
-          stroke={color} strokeDasharray={circ} strokeDashoffset={circ * (1 - pct)}/>
-      </svg>
-      <div>
-        <div className="v-ring-val" style={{ color }}>{score ?? '--'}</div>
-        {label && <div className="v-ring-label">{label}</div>}
-      </div>
-    </div>
-  );
-}
-
 // ── Setup Screens ─────────────────────────────────────────────────────────────
 
 function NotLinked() {
@@ -196,6 +175,39 @@ function BackendDown() {
 
 // ── TODAY ─────────────────────────────────────────────────────────────────────
 
+function toneFor(score?: number | null): string {
+  if (score == null) return 'var(--text3)';
+  if (score >= 85) return 'var(--hx-good)';
+  if (score >= 70) return 'var(--hx-1)';
+  if (score >= 50) return 'var(--hx-warn)';
+  return 'var(--hx-bad)';
+}
+
+// One sentence, written from what actually arrived. The page used to open with three
+// score rings and no claim at all -- the reader had to assemble the answer themselves.
+function headline(d: Dashboard): { line: string; sub: string } {
+  const r = d.readiness?.score;
+  const slept = d.sleep ? fmtMin(d.sleep.totalMinutes) : null;
+
+  if (r == null && !slept) {
+    return {
+      line: 'Nothing has arrived for today yet.',
+      sub: 'Your ring uploads when you open the Oura app, usually in the morning. Everything below is the last reading each measurement had.',
+    };
+  }
+
+  const mood = r == null ? 'Today' : r >= 85 ? 'Well recovered' : r >= 70 ? 'Steady' : r >= 50 ? 'Take it easy' : 'Run down';
+  const parts: string[] = [];
+  if (slept) parts.push('you slept ' + slept);
+  if (d.readiness?.restingHr != null) parts.push('resting heart rate ' + d.readiness.restingHr + ' bpm');
+  if (d.activity?.steps != null) parts.push(d.activity.steps.toLocaleString() + ' steps so far');
+
+  return {
+    line: r == null ? 'Today' : mood + ' \u2014 readiness ' + Math.round(r),
+    sub: parts.length ? parts.join(', ') + '.' : 'No detail behind it yet today.',
+  };
+}
+
 function TodayPage({ status }: { status: OuraStatus }) {
   const qClient = useQueryClient();
   const { data: d } = useQuery<Dashboard>({ queryKey: ['dashboard'], queryFn: () => get(`${API}/api/dashboard`), refetchInterval: 60_000 });
@@ -207,184 +219,240 @@ function TodayPage({ status }: { status: OuraStatus }) {
   if (!d) return <Skel h={400}/>;
 
   // Hours since Oura last uploaded. Null when it has never synced, which the empty
-  // state already covers — the banner below is for a connection that WAS working.
+  // state already covers -- the banner below is for a connection that WAS working.
   const staleHours = status.lastSyncedAt
     ? (Date.now() - new Date(status.lastSyncedAt).getTime()) / 3_600_000
     : null;
 
-  const stressColor = d.stress?.summary === 'restored' ? 'var(--stress-low)' : d.stress?.summary === 'normal' ? 'var(--stress-mod)' : 'var(--stress-high)';
-  const resLevel = d.resilience?.level;
-  const resColor = resLevel === 'exceptional' || resLevel === 'strong' ? 'var(--vitara)' : resLevel === 'solid' ? '#4f9ef8' : resLevel === 'adequate' ? 'var(--gold)' : '#ef4444';
+  const { line, sub } = headline(d);
+  const hr = d.latestHeartRate?.bpm ?? d.readiness?.restingHr ?? null;
+  const samples = d.heartRateSamples ?? [];
 
   return (
     <div>
-      {/* Everything below is a daily rollup Oura computed at its last sync. Past about
-          a day and a half that stops being "recent" and starts being a dashboard
-          confidently describing a body it hasn't measured — which the small grey
-          timestamp in the status bar was far too quiet to convey. */}
       {staleHours != null && staleHours >= 36 && (
-        <div className="v-sync-warn">
-          Oura last synced {relTime(status.lastSyncedAt)} — every reading below predates that.
-          {' '}Open the Oura app on your phone to let it upload, then Sync Now.
+        <div className="hx-warn-banner">
+          <span className="hx-dot warn" style={{ marginTop: 6 }}/>
+          <span>
+            <b>Your ring last uploaded {relTime(status.lastSyncedAt)}.</b> Everything below predates that.
+            Open the Oura app on your phone to let it upload, then press Sync.
+          </span>
         </div>
       )}
 
-      {/* Status bar */}
-      <div className="v-status-bar">
-        <span className="v-ring-dot"/>
-        <span className="v-status-text">Oura Ring Connected</span>
-        <span className="v-status-since" title={status.lastSyncedAt ? new Date(status.lastSyncedAt).toLocaleString() : undefined}>
-          updated {relTime(status.lastSyncedAt)}
-        </span>
-        <button className={`v-sync-btn ${sync.isPending ? 'syncing' : ''}`} onClick={() => sync.mutate()} disabled={sync.isPending}>
-          {sync.isPending ? 'Syncing...' : sync.isSuccess ? 'Synced' : 'Sync Now'}
-        </button>
-        {sync.isError && <span className="v-sync-err">Failed</span>}
-      </div>
-
-      {/* Hero cards */}
-      <div className="v-hero">
-        <div className="v-hero-card v-hero-card--accent">
-          <div className="v-hero-label">Readiness<Freshness daysAgo={d.readiness?.daysAgo}/></div>
-          <ScoreRing score={d.readiness?.score} color={scoreColor(d.readiness?.score)} label={d.readiness?.level?.replace('_', ' ') ?? ''} />
-        </div>
-        <div className="v-hero-card">
-          <div className="v-hero-label">Sleep<Freshness daysAgo={d.sleep?.daysAgo}/></div>
-          <ScoreRing score={d.sleep?.score} color={scoreColor(d.sleep?.score)} label={d.sleep ? fmtMin(d.sleep.totalMinutes) : '--'} />
-        </div>
-        <div className="v-hero-card">
-          <div className="v-hero-label">Activity<Freshness daysAgo={d.activity?.daysAgo}/></div>
-          <ScoreRing score={d.activity?.score} color={scoreColor(d.activity?.score)} label={d.activity ? `${d.activity.steps.toLocaleString()} steps` : '--'} />
-        </div>
-      </div>
-
-      {/* Metrics grid */}
-      <div className="v-metrics">
-        {/* Leads with the newest actual reading rather than the daily resting rollup —
-            resting HR is a number Oura computes once a night, so it was never "current".
-            Resting and the 7d average both move down to context. */}
-        <div className="v-metric">
-          <div className="v-metric-label">Heart Rate</div>
-          <div className="v-metric-val" style={{ color: 'var(--heart)' }}>
-            {d.latestHeartRate?.bpm ?? d.readiness?.restingHr ?? '--'}<span className="v-metric-unit"> bpm</span>
-          </div>
-          <div className="v-metric-sub">
-            {d.latestHeartRate
-              ? `${relTime(d.latestHeartRate.timestamp)} · resting ${d.readiness?.restingHr ?? '--'}`
-              : d.weeklyAvg?.rhr != null
-                ? `resting · avg ${d.weeklyAvg.rhr} bpm (7d)`
-                : 'no reading yet today'}
-          </div>
-        </div>
-        <div className="v-metric">
-          <div className="v-metric-label">HRV<Freshness daysAgo={d.sleep?.daysAgo}/></div>
-          <div className="v-metric-val" style={{ color: '#818cf8' }}>
-            {d.sleep?.hrv ?? '--'}<span className="v-metric-unit"> ms</span>
-          </div>
-          <div className="v-metric-sub">{d.weeklyAvg?.hrv != null ? `avg ${d.weeklyAvg.hrv} ms (7d)` : 'no weekly average yet'}</div>
-        </div>
-        <div className="v-metric">
-          <div className="v-metric-label">Stress<Freshness daysAgo={d.stress?.daysAgo}/></div>
-          <div className="v-metric-val" style={{ color: stressColor, textTransform: 'capitalize' }}>
-            {d.stress?.summary ?? '--'}
-          </div>
-          {d.stress?.recoveryMinutes != null && <div className="v-metric-sub">{d.stress.recoveryMinutes}m recovery</div>}
-        </div>
-        <div className="v-metric">
-          <div className="v-metric-label">Resilience<Freshness daysAgo={d.resilience?.daysAgo}/></div>
-          <div className="v-metric-val" style={{ color: resColor, textTransform: 'capitalize' }}>
-            {resLevel ?? '--'}
-          </div>
-          {d.resilience?.sleepRecovery != null && <div className="v-metric-sub">sleep recovery {d.resilience.sleepRecovery}</div>}
-        </div>
-        <div className="v-metric">
-          <div className="v-metric-label">SpO2<Freshness daysAgo={d.spo2Data?.daysAgo}/></div>
-          <div className="v-metric-val" style={{ color: '#06c8a0' }}>
-            {d.spo2Data?.average != null ? `${d.spo2Data.average.toFixed(1)}` : (d.sleep?.spo2 != null ? d.sleep.spo2.toFixed(1) : '--')}<span className="v-metric-unit"> %</span>
-          </div>
-        </div>
-        <div className="v-metric">
-          <div className="v-metric-label">Cardio Age</div>
-          <div className="v-metric-val" style={{ color: d.cardiovascularAge != null && d.profile?.age != null && d.cardiovascularAge < d.profile.age ? 'var(--vitara)' : '#ef4444' }}>
-            {d.cardiovascularAge != null ? Math.round(d.cardiovascularAge) : '--'}
-          </div>
-          {d.profile?.age != null && <div className="v-metric-sub">chrono {d.profile.age}</div>}
-        </div>
-      </div>
-
-      {/* Heart rate strip */}
-      {d.heartRateSamples && d.heartRateSamples.length > 0 && (
-        <>
-          <div className="v-section">Heart Rate (24h)<span className="v-section-line"/></div>
-          <div className="v-hr-strip">
-            <div className="v-hr-header">
-              <div className="v-hr-now">{d.heartRateSamples[d.heartRateSamples.length - 1]?.bpm ?? '--'} bpm</div>
-              <div className="v-hr-range">
-                {Math.min(...d.heartRateSamples.map(h => h.bpm))} - {Math.max(...d.heartRateSamples.map(h => h.bpm))} bpm range
+      {/* Hero: the answer first, the scores beside it. */}
+      <div className="hx-hero">
+        <Card className="hx-hero-main">
+          <Ring score={d.readiness?.score} label="readiness" tone={toneFor(d.readiness?.score)} />
+          <div className="hx-hero-copy">
+            <p className="hx-eyebrow">
+              {new Date(d.date ?? Date.now()).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            </p>
+            <h2 className="hx-headline">{line}</h2>
+            <p className="hx-sub">{sub}</p>
+            {d.readiness?.level && (
+              <div style={{ marginTop: '0.6rem' }}>
+                <Chip tone={(d.readiness.score ?? 0) >= 70 ? 'good' : (d.readiness.score ?? 0) >= 50 ? 'warn' : 'bad'}>
+                  {d.readiness.level.replace('_', ' ')}
+                </Chip>
               </div>
+            )}
+          </div>
+        </Card>
+
+        <div className="hx-grid hx-grid-4">
+          <div className="hx-stat">
+            <div className="hx-stat-head">
+              <span className="hx-stat-label">Sleep</span>
+              {d.sleep?.daysAgo ? <Chip tone="warn">{d.sleep.daysAgo}d old</Chip> : null}
             </div>
-            <ResponsiveContainer width="100%" height={80}>
-              <AreaChart data={d.heartRateSamples.map(h => ({ t: new Date(h.timestamp).toLocaleTimeString('en-US', { hour: 'numeric' }), bpm: h.bpm }))} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                <defs>
-                  <linearGradient id="hrGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#ff6b8a" stopOpacity={0.3}/>
-                    <stop offset="100%" stopColor="#ff6b8a" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <Area type="monotone" dataKey="bpm" stroke="#ff6b8a" fill="url(#hrGrad)" strokeWidth={1.5} dot={false} isAnimationActive={false}/>
-                <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle}/>
-              </AreaChart>
-            </ResponsiveContainer>
+            <div className="hx-stat-value">
+              <span className="hx-stat-num">{d.sleep ? fmtMin(d.sleep.totalMinutes) : '\u2014'}</span>
+            </div>
+            <span className="hx-stat-sub">{d.sleep?.score != null ? `score ${d.sleep.score}` : 'No night recorded yet'}</span>
           </div>
-        </>
-      )}
 
-      {/* Sleep stages mini */}
-      {d.sleep && (
-        <>
-          <div className="v-section">Last Night<span className="v-section-line"/></div>
-          <SleepStagesBar deep={d.sleep.deepMinutes} rem={d.sleep.remMinutes} light={d.sleep.lightMinutes} />
-        </>
-      )}
+          <Stat
+            label="Steps"
+            value={d.activity?.steps != null ? d.activity.steps.toLocaleString() : null}
+            sub={d.weeklyAvg?.steps != null ? `usually ${Math.round(d.weeklyAvg.steps).toLocaleString()}` : 'no weekly average yet'}
+            empty="Nothing counted today"
+          />
 
-      {/* Recent workouts */}
-      {d.recentWorkouts && d.recentWorkouts.length > 0 && (
-        <>
-          <div className="v-section">Recent Workouts<span className="v-section-line"/></div>
-          <div className="v-workout-list">
-            {d.recentWorkouts.map((w, i) => (
-              <div key={i} className="v-workout-card">
-                <div className="v-workout-icon" style={{ background: 'rgba(6,200,160,0.08)' }}>
-                  {w.activity === 'running' ? '🏃' : w.activity === 'cycling' ? '🚴' : w.activity === 'walking' ? '🚶' : w.activity === 'swimming' ? '🏊' : '💪'}
-                </div>
-                <div className="v-workout-body">
-                  <div className="v-workout-name">{w.activity}</div>
-                  <div className="v-workout-meta">
-                    {w.calories != null && <span>{w.calories} cal</span>}
-                    {w.distance != null && w.distance > 0 && <span>{(w.distance / 1000).toFixed(1)} km</span>}
-                    {w.intensity && <span style={{ textTransform: 'capitalize' }}>{w.intensity}</span>}
-                  </div>
-                </div>
-              </div>
+          <Stat
+            label="Heart rate"
+            value={hr}
+            unit="bpm"
+            sub={d.latestHeartRate ? `latest, ${relTime(d.latestHeartRate.timestamp)}` : 'overnight resting rate'}
+            empty="No reading today"
+          />
+
+          <Stat
+            label="HRV"
+            value={d.sleep?.hrv != null ? Math.round(d.sleep.hrv) : null}
+            unit="ms"
+            sub={<HxDelta value={d.sleep?.hrv} reference={d.weeklyAvg?.hrv} goodWhen="higher" unit=" ms"/>}
+            empty="Not measured last night"
+          />
+        </div>
+      </div>
+
+      {/* Everything else the ring reported, each saying so when it reported nothing. */}
+      <SectionHead title="Overnight" note="Measured while you slept, against your own recent average." />
+      <div className="hx-grid hx-grid-4">
+        <Stat
+          label="Resting heart rate"
+          value={d.readiness?.restingHr}
+          unit="bpm"
+          sub={<HxDelta value={d.readiness?.restingHr} reference={d.weeklyAvg?.rhr} goodWhen="lower" unit=" bpm"/>}
+          empty="No overnight reading"
+        />
+        <Stat
+          label="Breathing rate"
+          value={d.sleep?.breathingRate != null ? d.sleep.breathingRate.toFixed(1) : null}
+          unit="/min"
+          sub="Steady normally, which is what makes a change worth noticing"
+          empty="Not measured last night"
+        />
+        <Stat
+          label="Blood oxygen"
+          value={d.spo2Data?.average != null ? d.spo2Data.average.toFixed(1) : (d.sleep?.spo2 != null ? d.sleep.spo2.toFixed(1) : null)}
+          unit="%"
+          sub={d.spo2Data?.breathingDisturbance != null ? `disturbance index ${d.spo2Data.breathingDisturbance}` : 'Average through the night'}
+          empty="Not measured last night"
+        />
+        <Stat
+          label="Skin temperature"
+          value={d.sleep?.skinTemp != null ? `${d.sleep.skinTemp > 0 ? '+' : ''}${d.sleep.skinTemp.toFixed(2)}` : null}
+          unit="\u00b0C"
+          sub="Against your own usual \u2014 an early illness signal"
+          empty="Not measured last night"
+        />
+        <Stat
+          label="Stress"
+          value={d.stress?.summary ? d.stress.summary.replace('_', ' ') : null}
+          sub={d.stress?.recoveryMinutes != null ? `${d.stress.recoveryMinutes} min of recovery` : 'From daytime heart rate and skin signals'}
+          empty="No stress reading today"
+        />
+        <Stat
+          label="Resilience"
+          value={d.resilience?.level ? d.resilience.level.replace('_', ' ') : null}
+          sub={d.resilience?.sleepRecovery != null ? `sleep recovery ${d.resilience.sleepRecovery}` : 'Built from weeks, not days'}
+          empty="Needs a few weeks of wear"
+        />
+        <Stat
+          label="Cardiovascular age"
+          value={d.cardiovascularAge != null ? Math.round(d.cardiovascularAge) : null}
+          unit="yrs"
+          sub={d.profile?.age != null ? `you are ${d.profile.age}` : 'An estimate, not a diagnosis'}
+          empty="Needs more wear to estimate"
+        />
+        <Stat
+          label="VO\u2082 max"
+          value={d.vo2Max != null ? d.vo2Max.toFixed(1) : null}
+          unit="ml/kg/min"
+          sub="Aerobic fitness; moves over months, not days"
+          empty="Not estimated yet"
+        />
+      </div>
+
+      {/* Last night, as one bar. */}
+      <SectionHead
+        title="Last night"
+        note={d.sleep ? `${fmtMin(d.sleep.totalMinutes)} asleep \u00b7 ${d.sleep.efficiency}% efficient` : undefined}
+      />
+      {d.sleep ? (
+        <div className="hx-chart">
+          <div className="hx-chart-head">
+            <span className="hx-chart-title">Sleep stages</span>
+            <span className="hx-legend">
+              <span><i style={{ background: 'var(--hx-2)' }}/>Deep {fmtMin(d.sleep.deepMinutes)}</span>
+              <span><i style={{ background: 'var(--hx-4)' }}/>REM {fmtMin(d.sleep.remMinutes)}</span>
+              <span><i style={{ background: 'var(--hx-6)' }}/>Light {fmtMin(d.sleep.lightMinutes)}</span>
+            </span>
+          </div>
+          {/* One bar, three segments, separated by the surface rather than by borders.
+              The legend above names them, so the bar carries no labels of its own. */}
+          <div className="hx-stages">
+            {[
+              { m: d.sleep.deepMinutes, c: 'var(--hx-2)', n: 'Deep' },
+              { m: d.sleep.remMinutes, c: 'var(--hx-4)', n: 'REM' },
+              { m: d.sleep.lightMinutes, c: 'var(--hx-6)', n: 'Light' },
+            ].map(seg => (
+              <span
+                key={seg.n}
+                title={`${seg.n} ${fmtMin(seg.m)}`}
+                style={{
+                  background: seg.c,
+                  width: `${(seg.m / (d.sleep!.deepMinutes + d.sleep!.remMinutes + d.sleep!.lightMinutes || 1)) * 100}%`,
+                }}
+              />
             ))}
           </div>
-        </>
+        </div>
+      ) : (
+        <Empty title="No night recorded.">Wear the ring overnight and it will appear here after the next sync.</Empty>
       )}
 
-      {/* VO2 Max card */}
-      {d.vo2Max != null && (
-        <div className="v-metrics" style={{ gridTemplateColumns: '1fr' }}>
-          <div className="v-metric v-metric--inline">
-            <div>
-              <div className="v-metric-label">VO2 Max</div>
-              <div className="v-metric-sub">Cardiorespiratory fitness</div>
-            </div>
-            <div className="v-metric-val" style={{ color: d.vo2Max >= 40 ? 'var(--vitara)' : d.vo2Max >= 30 ? 'var(--gold)' : '#ef4444' }}>
-              {d.vo2Max.toFixed(1)}<span className="v-metric-unit"> mL/kg/min</span>
-            </div>
-          </div>
+      {/* 24h heart rate. */}
+      <SectionHead
+        title="Heart rate today"
+        note={samples.length > 0 ? `${Math.min(...samples.map(h => h.bpm))}\u2013${Math.max(...samples.map(h => h.bpm))} bpm` : undefined}
+      />
+      {samples.length > 0 ? (
+        <div className="hx-chart">
+          <ResponsiveContainer width="100%" height={140}>
+            <AreaChart
+              data={samples.map(h => ({ t: new Date(h.timestamp).toLocaleTimeString('en-US', { hour: 'numeric' }), bpm: h.bpm }))}
+              margin={{ top: 6, right: 6, bottom: 0, left: 0 }}
+            >
+              <defs>
+                <linearGradient id="hxHr" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--hx-5)" stopOpacity={0.16}/>
+                  <stop offset="100%" stopColor="var(--hx-5)" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="var(--border)" vertical={false}/>
+              <XAxis dataKey="t" tick={{ fill: 'var(--text3)', fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={40}/>
+              <YAxis width={34} tick={{ fill: 'var(--text3)', fontSize: 11 }} tickLine={false} axisLine={false}/>
+              <Area type="monotone" dataKey="bpm" stroke="var(--hx-5)" fill="url(#hxHr)" strokeWidth={2} dot={false} isAnimationActive={false}/>
+              <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle}/>
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
+      ) : (
+        <Empty title="No heart-rate samples today.">These arrive with the ring's next upload.</Empty>
       )}
+
+      {/* Workouts. */}
+      <SectionHead title="Recent workouts" />
+      {d.recentWorkouts && d.recentWorkouts.length > 0 ? (
+        <div className="hx-grid hx-grid-3">
+          {d.recentWorkouts.map((w, i) => (
+            <div key={i} className="hx-stat">
+              <div className="hx-stat-head">
+                <span className="hx-stat-label" style={{ textTransform: 'capitalize' }}>{w.activity}</span>
+                {w.intensity && <Chip>{w.intensity}</Chip>}
+              </div>
+              <span className="hx-stat-sub">
+                {[
+                  w.calories != null ? `${w.calories} cal` : null,
+                  w.distance ? `${(w.distance / 1000).toFixed(1)} km` : null,
+                  w.startTime ? relTime(w.startTime) : null,
+                ].filter(Boolean).join(' \u00b7 ') || 'No detail recorded'}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <Empty title="No workouts in the last week.">Sessions the ring detects, or ones you log, show up here.</Empty>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
+        <button className="hx-btn hx-btn-ghost" onClick={() => sync.mutate()} disabled={sync.isPending}>
+          {sync.isPending ? 'Syncing\u2026' : sync.isError ? 'Sync failed \u2014 try again' : 'Sync with Oura'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -827,21 +895,6 @@ function ProtocolsPage() {
         ))}
       </div>
     </div>
-  );
-}
-
-// ── Shared Metric Card ───────────────────────────────────────────────────────
-
-// How old a reading is, shown only when it isn't today's. Silence means current, so
-// the common case stays uncluttered and an appearing badge actually means something.
-// Anything three days or older is styled as a warning: at that point the number is
-// history being read as a vital, which is the specific way this dashboard could mislead.
-function Freshness({ daysAgo }: { daysAgo?: number }) {
-  if (daysAgo == null || daysAgo <= 0) return null;
-  return (
-    <span className={`v-stale${daysAgo >= 3 ? ' v-stale--old' : ''}`}>
-      {daysAgo === 1 ? 'yesterday' : `${daysAgo}d ago`}
-    </span>
   );
 }
 
@@ -1850,41 +1903,41 @@ const PAGES: { id: Page; label: string }[] = [
 function VitaraInner() {
   const [page, setPage] = useState<Page>('today');
   const { data: status, isPending, isError } = useQuery<OuraStatus>({ queryKey: ['oura-status'], queryFn: () => get(`${API}/api/oura/status`) });
-  const MC = { '--mc': 'var(--vitara)' } as React.CSSProperties;
+
+  const heart = (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
+    </svg>
+  );
+
+  const linkState = !status ? null : !status.linked
+    ? <span className="hx-pill"><span className="hx-dot bad"/>Ring not connected</span>
+    : status.expired
+      ? <span className="hx-pill"><span className="hx-dot warn"/>Reconnect needed</span>
+      : <span className="hx-pill"><span className="hx-dot"/>Synced <b>{relTime(status.lastSyncedAt)}</b></span>;
 
   return (
-    <div>
-      <div className="module-header" style={MC}>
-        <div className="module-header-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
-          </svg>
-        </div>
-        <div>
-          <h1 className="module-title">Vitara</h1>
-          <div className="module-subtitle">Your health, measured — and compared only with you</div>
-        </div>
-      </div>
-
-      {isPending && <div className="v-connecting"><div className="v-connecting-dot"/>Connecting to Vitara...</div>}
+    <HxShell
+      title="Vitara"
+      subtitle="Your health, measured — and compared only with you"
+      icon={heart}
+      right={linkState}
+      tabs={status && !isError ? <HxTabs tabs={PAGES} active={page} onPick={setPage}/> : undefined}
+    >
+      {isPending && <div className="hx-empty">Connecting…</div>}
       {!isPending && isError && <BackendDown/>}
       {/* Import is shown whether or not Oura is linked. A manual upload is the
           fallback for having no ring connected, so gating it behind a working
           connection would hide it in the one case it exists for. */}
       {!isPending && !isError && status && (
         <>
-          {/* Shown above the tabs rather than instead of them. Without a ring the old
+          {/* Shown above the pages rather than instead of them. Without a ring the old
               screen was a dead end: no way to see what the system tracks, and the
               manual and import routes -- the two things that work with no ring at all
               -- were the only things on the page. */}
           {!status.linked && <NotLinked/>}
           {status.linked && status.expired && <OuraExpiredBanner/>}
 
-          <nav className="module-subnav" style={MC}>
-            {PAGES.map(p => (
-              <button key={p.id} className={`module-tab ${page === p.id ? 'active' : ''}`} onClick={() => setPage(p.id)}>{p.label}</button>
-            ))}
-          </nav>
           <PanelBoundary name={PAGES.find(p => p.id === page)?.label ?? 'This page'}>
             {page === 'today'     && <TodayPage status={status}/>}
             {page === 'all'       && <VitaraMetricsCatalogue/>}
@@ -1899,7 +1952,7 @@ function VitaraInner() {
           </PanelBoundary>
         </>
       )}
-    </div>
+    </HxShell>
   );
 }
 

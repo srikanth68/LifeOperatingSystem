@@ -1,0 +1,326 @@
+/* ── The health skin ─────────────────────────────────────────────────────────
+ *
+ * Vitara and Insight render as a light "paper" app inside Maaya's dark chrome,
+ * whatever the global theme is set to. They are the two tabs heading for a
+ * product of their own, and a health app that reads like a trading terminal is
+ * the wrong first impression -- while pure white is its own kind of hostile at
+ * 6am. So: warm paper, ink text, one confident accent, generous air.
+ *
+ * Done by REDEFINING THE APP'S OWN TOKENS inside .hx rather than by restyling
+ * every component. Everything underneath already draws with var(--surface),
+ * var(--text), var(--border); re-pointing those inside one wrapper re-skins
+ * panels that have not been rewritten yet, so the two tabs never sit half-dark
+ * while the rest of the redesign lands.
+ *
+ * Chart colours are the dataviz palette, validated (CVD, contrast, chroma) on
+ * white: teal, indigo, amber, violet, red, cyan in that fixed order; status is
+ * green / amber / red and always ships with a word beside it.
+ */
+
+.hx {
+  /* Canvas and cards */
+  --bg:        #f4f6f4;
+  --bg2:       #eef1ee;
+  --surface:   #ffffff;
+  --surface2:  #ffffff;
+  --surface3:  #f7f9f7;
+  --border:    #e4e8e4;
+  --border2:   #d3d9d3;
+
+  /* Ink */
+  --text:      #13201b;
+  --text1:     #13201b;
+  --text2:     #55655d;
+  --text3:     #8a968f;
+
+  /* Accent + status, as the rest of the app names them */
+  --vitara:      #0f8a72;
+  --vitara-dim:  rgba(15,138,114,0.08);
+  --vitara-glow: rgba(15,138,114,0.16);
+  --insight:     #3f5bd9;
+  --insight-dim: rgba(63,91,217,0.08);
+  --gold:        #c2790a;
+  --gold-l:      #a86a08;
+  --gold-glow:   rgba(194,121,10,0.1);
+  --cash:        #1a7f4b;
+  --cash-l:      #16703f;
+  --cash-dim:    rgba(26,127,75,0.1);
+  --debt:        #b8342a;
+  --debt-l:      #a52c23;
+  --debt-dim:    rgba(184,52,42,0.08);
+  --heart:       #c0442f;
+  --nexus:       #3f5bd9;
+
+  /* Chart series, in fixed order. Never cycled past six. */
+  --hx-1: #0f8a72;
+  --hx-2: #3f5bd9;
+  --hx-3: #c2790a;
+  --hx-4: #7a4bbd;
+  --hx-5: #c0442f;
+  --hx-6: #0f8aa0;
+
+  /* The legacy pages name their own hues; pointed at the validated palette so a page
+     that has not been rebuilt yet still draws in this skin's colours. */
+  --sleep-deep:  #3f5bd9;
+  --sleep-rem:   #7a4bbd;
+  --sleep-light: #0f8aa0;
+  --sleep-awake: #c0442f;
+  --stress-low:  #1a7f4b;
+  --stress-mod:  #c2790a;
+  --stress-high: #b8342a;
+
+  --hx-good: #1a7f4b;
+  --hx-warn: #d18f00;
+  --hx-bad:  #b8342a;
+
+  --hx-r: 18px;
+  --hx-shadow: 0 1px 2px rgba(19,32,27,0.04), 0 8px 24px -12px rgba(19,32,27,0.12);
+
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 24px;
+  padding: clamp(1rem, 2vw, 1.75rem);
+  margin: -0.5rem 0 0;
+  box-shadow: inset 0 0 0 1px rgba(19,32,27,0.05);
+  font-feature-settings: 'cv05' 1, 'ss01' 1;
+}
+
+/* ── Top bar ─────────────────────────────────────────────────────────────── */
+
+.hx-top {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.1rem;
+}
+
+.hx-mark {
+  width: 42px; height: 42px; flex: none;
+  display: grid; place-items: center;
+  border-radius: 13px;
+  background: var(--vitara-dim);
+  color: var(--vitara);
+}
+.hx-mark svg { width: 22px; height: 22px; }
+
+.hx-titles h1 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em;
+  margin: 0; color: var(--text);
+}
+.hx-titles p { margin: 0.1rem 0 0; font-size: 0.82rem; color: var(--text2); }
+
+.hx-top-right { margin-left: auto; display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+
+.hx-pill {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 999px; padding: 0.35rem 0.8rem;
+  font-size: 0.76rem; color: var(--text2); white-space: nowrap;
+}
+.hx-pill b { color: var(--text); font-weight: 600; }
+.hx-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--hx-good); flex: none; }
+.hx-dot.warn { background: var(--hx-warn); }
+.hx-dot.bad { background: var(--hx-bad); }
+
+.hx-btn {
+  border: 1px solid var(--vitara);
+  background: var(--vitara);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.4rem 0.95rem;
+  font-size: 0.78rem; font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.12s, opacity 0.12s;
+}
+.hx-btn:hover { filter: brightness(1.06); }
+.hx-btn:disabled { opacity: 0.55; cursor: default; }
+.hx-btn-ghost { background: var(--surface); color: var(--text2); border-color: var(--border2); }
+.hx-btn-ghost:hover { color: var(--text); border-color: var(--text3); filter: none; }
+
+/* ── Tabs: a scrollable segmented control, the way an app does it ────────── */
+
+.hx-tabs {
+  display: flex;
+  gap: 0.3rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--bg2);
+  border-radius: 999px;
+  padding: 0.3rem;
+  margin-bottom: 1.4rem;
+}
+.hx-tabs::-webkit-scrollbar { display: none; }
+
+.hx-tab {
+  border: none;
+  background: transparent;
+  color: var(--text2);
+  border-radius: 999px;
+  padding: 0.45rem 0.95rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s, box-shadow 0.14s;
+}
+.hx-tab:hover { color: var(--text); }
+.hx-tab.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(19,32,27,0.08);
+}
+
+/* ── Cards, sections, chips ──────────────────────────────────────────────── */
+
+.hx-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--hx-r);
+  padding: 1.1rem 1.2rem;
+  box-shadow: var(--hx-shadow);
+}
+
+.hx-section { margin: 1.6rem 0 0.8rem; display: flex; align-items: baseline; gap: 0.6rem; }
+.hx-section h2 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.95rem; font-weight: 700; margin: 0; color: var(--text);
+}
+.hx-section p { margin: 0; font-size: 0.78rem; color: var(--text3); }
+
+.hx-grid { display: grid; gap: 0.75rem; }
+.hx-grid-3 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.hx-grid-4 { grid-template-columns: repeat(auto-fit, minmax(182px, 1fr)); }
+
+.hx-chip {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  font-size: 0.7rem; font-weight: 600;
+  border-radius: 999px; padding: 0.15rem 0.55rem;
+  background: var(--surface3); color: var(--text2); border: 1px solid var(--border);
+}
+.hx-chip.good { color: var(--hx-good); border-color: rgba(26,127,75,0.25); background: rgba(26,127,75,0.07); }
+.hx-chip.warn { color: #9a6a00; border-color: rgba(209,143,0,0.3); background: rgba(209,143,0,0.09); }
+.hx-chip.bad  { color: var(--hx-bad); border-color: rgba(184,52,42,0.25); background: rgba(184,52,42,0.07); }
+
+/* ── The hero: today, in one card ────────────────────────────────────────── */
+
+.hx-hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 0.75rem; }
+@media (max-width: 860px) { .hx-hero { grid-template-columns: 1fr; } }
+
+.hx-hero-main { display: flex; gap: 1.3rem; align-items: center; flex-wrap: wrap; }
+.hx-hero-copy { min-width: 0; flex: 1; }
+.hx-eyebrow {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--text3); margin: 0 0 0.35rem;
+}
+.hx-headline {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(1.15rem, 2.2vw, 1.45rem); font-weight: 600; line-height: 1.3;
+  margin: 0 0 0.4rem; color: var(--text);
+}
+.hx-sub { margin: 0; font-size: 0.85rem; line-height: 1.6; color: var(--text2); }
+
+/* Score ring: a thin arc, not a heavy donut. */
+.hx-ring { position: relative; flex: none; }
+.hx-ring svg { display: block; transform: rotate(-90deg); }
+.hx-ring-track { stroke: var(--bg2); }
+.hx-ring-fill { stroke-linecap: round; transition: stroke-dasharray 0.5s ease; }
+.hx-ring-mid {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.05rem;
+}
+.hx-ring-num { font-size: 1.55rem; font-weight: 600; line-height: 1; color: var(--text); }
+.hx-ring-cap { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); }
+
+/* ── Stat tiles ──────────────────────────────────────────────────────────── */
+
+.hx-stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--hx-r);
+  padding: 0.85rem 0.95rem 0.9rem;
+  display: flex; flex-direction: column; gap: 0.3rem;
+  box-shadow: var(--hx-shadow);
+}
+.hx-stat-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.hx-stat-label { font-size: 0.76rem; font-weight: 600; color: var(--text2); }
+.hx-stat-value { display: flex; align-items: baseline; gap: 0.3rem; }
+.hx-stat-num { font-size: 1.5rem; font-weight: 600; line-height: 1.1; color: var(--text); }
+.hx-stat-unit { font-size: 0.78rem; color: var(--text3); }
+.hx-stat-sub { font-size: 0.72rem; color: var(--text3); line-height: 1.45; }
+.hx-stat.is-empty .hx-stat-num { color: var(--text3); }
+
+.hx-delta { font-size: 0.72rem; font-weight: 600; }
+.hx-delta.good { color: var(--hx-good); }
+.hx-delta.bad { color: var(--hx-bad); }
+.hx-delta.flat { color: var(--text3); }
+
+/* ── Empty and error states, never a blank space ─────────────────────────── */
+
+.hx-empty {
+  border: 1px dashed var(--border2);
+  border-radius: var(--hx-r);
+  background: transparent;
+  padding: 1.1rem 1.2rem;
+  color: var(--text2);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+.hx-empty b { color: var(--text); }
+
+.hx-warn-banner {
+  display: flex; gap: 0.6rem; align-items: flex-start;
+  border: 1px solid rgba(209,143,0,0.35);
+  background: rgba(209,143,0,0.08);
+  border-radius: var(--hx-r);
+  padding: 0.8rem 1rem;
+  font-size: 0.82rem; line-height: 1.55; color: var(--text);
+  margin-bottom: 1rem;
+}
+
+/* ── Charts ──────────────────────────────────────────────────────────────── */
+
+.hx-chart { background: var(--surface); border: 1px solid var(--border); border-radius: var(--hx-r); padding: 1rem 1.1rem; box-shadow: var(--hx-shadow); }
+.hx-chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
+.hx-chart-title { font-size: 0.85rem; font-weight: 600; color: var(--text); }
+.hx-chart-note { font-size: 0.74rem; color: var(--text3); }
+.hx-legend { display: flex; gap: 0.75rem; flex-wrap: wrap; font-size: 0.74rem; color: var(--text2); }
+.hx-legend span { display: inline-flex; align-items: center; gap: 0.3rem; }
+.hx-legend i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+
+/* Sleep stages, as one bar with surface gaps rather than borders. */
+.hx-stages { display: flex; gap: 2px; height: 30px; border-radius: 8px; overflow: hidden; }
+.hx-stages span { display: block; }
+
+/* ── Legacy panels, until each page is rebuilt ───────────────────────────
+   The old cards drew their own dark fills on top of the tokens. Re-pointed
+   here so a not-yet-rewritten page still reads as paper rather than sitting
+   half-dark next to the new ones. */
+
+.hx .v-metric,
+.hx .v-hero-card,
+.hx .v-chart,
+.hx .v-workout-card,
+.hx .v-bioage,
+.hx .card,
+.hx .v-hr-strip {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--hx-r) !important;
+  box-shadow: var(--hx-shadow);
+  color: var(--text);
+}
+.hx .v-status-bar { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; }
+.hx .v-section { color: var(--text); }
+.hx .v-section-line { background: var(--border); }
+.hx .module-subnav { border-bottom-color: var(--border); }
+.hx .btn-ghost { background: var(--surface); border-color: var(--border2); color: var(--text2); }
+.hx .btn-ghost:hover { color: var(--text); border-color: var(--text3); }
+.hx input, .hx select, .hx textarea {
+  background: var(--surface) !important;
+  border: 1px solid var(--border2) !important;
+  color: var(--text) !important;
+}
+.hx table { color: var(--text); }
