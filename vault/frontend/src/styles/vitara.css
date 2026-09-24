@@ -778,12 +778,22 @@ h1.module-title  { font-size: 1.35rem; margin-bottom: 0; }
 }
 
 .vm-card {
+  position: relative;
   display: flex; flex-direction: column; gap: 0.45rem;
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   padding: 0.9rem 1rem 0.95rem;
 }
+/* The group's colour as a hairline down the edge. Decoration -- see GROUP_ACCENT. */
+.vm-card::before {
+  content: '';
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px;
+  border-radius: var(--r-md) 0 0 var(--r-md);
+  background: var(--tile, transparent);
+}
+.vm-card.vm-no_data::before { opacity: 0.3; }
 /* Gone quiet gets a warm edge; never recorded is dashed and dimmed -- present, clearly
    not filled, and not shouting. */
 .vm-card.vm-stale { border-color: rgba(212,168,67,0.35); }

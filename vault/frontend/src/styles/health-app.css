@@ -195,7 +195,7 @@
 
 .hx-chip {
   display: inline-flex; align-items: center; gap: 0.35rem;
-  font-size: 0.7rem; font-weight: 600;
+  font-size: 0.7rem; font-weight: 600; white-space: nowrap;
   border-radius: 999px; padding: 0.15rem 0.55rem;
   background: var(--surface3); color: var(--text2); border: 1px solid var(--border);
 }
@@ -383,3 +383,68 @@
   background: var(--tile, transparent);
 }
 .hx-stat.is-empty::before { opacity: 0.35; }
+
+/* ── Day navigator, forms and list rows ────────────────────────────────── */
+
+.hx-daynav {
+  display: flex; align-items: center; justify-content: center; gap: 0.3rem;
+  margin: 0 0 1rem;
+}
+.hx-daynav-arrow, .hx-daynav-label {
+  border: 1px solid var(--border); background: var(--surface); color: var(--text2);
+  border-radius: 999px; cursor: pointer; font-size: 0.82rem; font-weight: 600;
+  padding: 0.35rem 0.9rem; transition: color 0.12s, border-color 0.12s;
+}
+.hx-daynav-arrow { padding: 0.35rem 0.75rem; }
+.hx-daynav-label { color: var(--text); min-width: 9rem; }
+.hx-daynav-arrow:hover:not(:disabled), .hx-daynav-label:hover { border-color: var(--text3); color: var(--text); }
+.hx-daynav-arrow:disabled { opacity: 0.4; cursor: default; }
+
+.hx-actions { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin: 0.8rem 0 0; }
+
+.hx-form, .hx-search { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.hx-form input, .hx-form select { width: 7.5rem; }
+.hx-search input { flex: 1; min-width: 12rem; }
+
+/* Progress toward a goal. Empty track when there is no goal, never a full bar. */
+.hx-bar {
+  height: 4px; border-radius: 999px; background: var(--bg2);
+  margin: 0.5rem 0 0.35rem; overflow: hidden;
+}
+.hx-bar span { display: block; height: 100%; border-radius: 999px; }
+
+.hx-list { display: flex; flex-direction: column; }
+.hx-row {
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+  padding: 0.55rem 0; border-top: 1px solid var(--border);
+}
+.hx-list > .hx-row:first-child { border-top: none; }
+.hx-row.sel { background: var(--surface3); border-radius: 12px; padding-left: 0.6rem; padding-right: 0.6rem; }
+.hx-row-main {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem;
+  background: none; border: none; padding: 0; text-align: left; cursor: pointer;
+}
+.hx-row-name { font-size: 0.85rem; font-weight: 600; color: var(--text); }
+.hx-row-meta { font-size: 0.73rem; color: var(--text3); line-height: 1.45; }
+.hx-row-form { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; width: 100%; }
+.hx-icon-btn {
+  border: none; background: none; cursor: pointer; color: var(--text3);
+  font-size: 1rem; line-height: 1; padding: 0.2rem 0.4rem; border-radius: 8px;
+}
+.hx-icon-btn:hover { color: var(--hx-bad); background: rgba(184,52,42,0.07); }
+
+.hx-row-value {
+  font-size: 0.95rem; font-weight: 600; color: var(--text);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.hx-row-value em { font-style: normal; font-size: 0.74rem; font-weight: 500; color: var(--text3); }
+
+.hx-check { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--text2); }
+.hx-check input { width: auto; }
+
+.hx-error {
+  margin: 0.7rem 0 0; font-size: 0.8rem; line-height: 1.5;
+  color: var(--hx-bad);
+}
+
+.hx-ok { margin: 0.7rem 0 0; font-size: 0.8rem; line-height: 1.5; color: var(--hx-good); font-weight: 600; }

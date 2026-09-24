@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
+import { Info } from './health/HealthKit';
 
 // Everything Vitara can know about you, including the parts it doesn't know yet.
 //
@@ -59,6 +60,18 @@ const SOURCE_LABEL: Record<MetricRow['source'], string> = {
   computed: 'Worked out',
 };
 
+// A colour per group, so a long scroll reads as sections rather than as one list. It is
+// decoration: state is still said in words, and these are the series palette rather than
+// the status one so a colour can never be mistaken for a verdict.
+const GROUP_ACCENT: Record<string, string> = {
+  Sleep: 'var(--hx-2)',
+  Recovery: 'var(--hx-5)',
+  Activity: 'var(--hx-1)',
+  Body: 'var(--hx-4)',
+  Vitals: 'var(--hx-3)',
+  Labs: 'var(--hx-6)',
+};
+
 const GROUP_BLURB: Record<string, string> = {
   Sleep: 'How long and how well you slept, from the ring on your finger.',
   Recovery: 'What your body did overnight — the earliest signs of illness, stress or a hard day.',
@@ -97,19 +110,22 @@ function agoText(daysAgo: number): string {
   return `${Math.round(daysAgo / 30)} months ago`;
 }
 
-function MetricCard({ row }: { row: MetricRow }) {
+function MetricCard({ row, accent }: { row: MetricRow; accent: string }) {
   const b = row.baseline;
 
   return (
-    <li className={`vm-card vm-${row.state}`}>
+    <li className={`vm-card vm-${row.state}`} style={{ ['--tile' as string]: accent }}>
       <div className="vm-card-top">
-        <span className="vm-card-label">{row.label}</span>
+        <span className="vm-card-label">
+          {row.label}
+          <Info label={`What ${row.label} is`}>{row.what}</Info>
+        </span>
         <span className={`vm-source vm-source-${row.source}`}>{SOURCE_LABEL[row.source]}</span>
       </div>
 
       {row.latest ? (
         <div className="vm-value">
-          <span className="vm-number">{display(row, row.latest.value)}</span>
+          <span className="vm-number" style={{ color: accent }}>{display(row, row.latest.value)}</span>
           <span className="vm-unit">{unitSuffix(row)}</span>
           <span className={`vm-when ${row.state === 'stale' ? 'is-stale' : ''}`}>
             {row.state === 'stale' ? `last seen ${agoText(row.latest.daysAgo)}` : agoText(row.latest.daysAgo)}
@@ -129,7 +145,7 @@ function MetricCard({ row }: { row: MetricRow }) {
         ) : b?.state === 'learning' ? (
           <>
             <span className="vm-learning-bar" aria-hidden="true">
-              <span style={{ width: `${Math.min(100, (b.n / (b.n + b.needs)) * 100)}%` }} />
+              <span style={{ width: `${Math.min(100, (b.n / (b.n + b.needs)) * 100)}%`, background: accent }} />
             </span>
             Learning your usual range — {b.n} of {b.n + b.needs} readings
           </>
@@ -139,8 +155,6 @@ function MetricCard({ row }: { row: MetricRow }) {
           <>{row.fillWith}</>
         )}
       </div>
-
-      <p className="vm-what">{row.what}</p>
 
       {b?.regimeStart && (
         <p className="vm-note">Your normal was rebuilt from {b.regimeStart}, after a lasting change.</p>
@@ -246,11 +260,13 @@ export function VitaraMetricsCatalogue() {
         return (
           <section key={group} className="vm-group">
             <div className="vm-group-head">
-              <h3>{group}</h3>
+              <h3 style={{ color: GROUP_ACCENT[group] ?? 'var(--vm-accent)' }}>{group}</h3>
               <p>{GROUP_BLURB[group] ?? ''}</p>
             </div>
             <ul className="vm-grid">
-              {rows.map(r => <MetricCard key={`${r.key}:${r.baseline?.signature ?? ''}`} row={r} />)}
+              {rows.map(r => (
+                <MetricCard key={`${r.key}:${r.baseline?.signature ?? ''}`} row={r} accent={GROUP_ACCENT[group] ?? 'var(--hx-1)'} />
+              ))}
             </ul>
           </section>
         );

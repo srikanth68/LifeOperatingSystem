@@ -3,12 +3,12 @@ import type { ReactNode } from 'react';
 import { QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { makeModuleQueryClient } from '../services/moduleQuery';
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
 import { VitaraMetricsCatalogue } from '../components/VitaraMetricsCatalogue';
-import { Shell as HxShell, Tabs as HxTabs, Card, Ring, Stat, Chip, Delta as HxDelta, SectionHead, Empty, Info } from '../components/health/HealthKit';
+import { Shell as HxShell, Tabs as HxTabs, Card, Ring, Stat, Chip, Delta as HxDelta, SectionHead, Empty, Info, HX_SERIES } from '../components/health/HealthKit';
 import '../styles/modules.css';
 import '../styles/vitara.css';
 
@@ -1075,33 +1075,59 @@ function ReadinessPage() {
 
 const PROTOCOL_STATUS_LABEL: Record<string, string> = { 'on-track': 'on track', behind: 'behind', suggested: 'suggested', manual: 'manual' };
 
+// The tone here is deliberate: a protocol behind target is BEHIND, not failing. The
+// badge says which, the bar shows how far, and the reasoning sits behind the i so the
+// card stays a status at a glance.
+const PROTOCOL_TONE: Record<string, 'good' | 'warn' | 'neutral'> = {
+  'on-track': 'good', behind: 'warn', suggested: 'neutral', manual: 'neutral',
+};
+
 function ProtocolsPage() {
   const { data, isPending } = useQuery<ProtocolResult[]>({ queryKey: ['protocols'], queryFn: () => get(`${API}/api/protocols`) });
   if (isPending) return <Skel h={220}/>;
-  if (!data?.length) return <div className="v-empty">No protocols configured</div>;
+  if (!data?.length) {
+    return (
+      <Empty title="No protocols yet.">
+        A protocol is a target you are holding yourself to — a supplement, a training block, a bedtime.
+        They appear here once Vitara has enough data to track one, or once you set one.
+      </Empty>
+    );
+  }
+
+  const onTrack = data.filter(x => x.status === 'on-track').length;
 
   return (
     <div>
-      <div className="v-protocol-list">
-        {data.map(p => (
-          <div key={p.name} className="v-protocol-card">
-            <div className="v-protocol-icon">{p.icon}</div>
-            <div className="v-protocol-body">
-              <div className="v-protocol-name">
-                {p.name}
-                <span className={`v-protocol-badge v-protocol-badge-${p.status}`}>{PROTOCOL_STATUS_LABEL[p.status] ?? p.status}</span>
+      <SectionHead
+        title="What you are holding yourself to"
+        note={`${onTrack} of ${data.length} on track`}
+        info="Each protocol is checked against your own measurements, not against a schedule you tick off. Behind means the numbers have not moved yet, which is information rather than a failure."
+      />
+      <div className="hx-grid hx-grid-3">
+        {data.map((x, i) => {
+          const tone = PROTOCOL_TONE[x.status] ?? 'neutral';
+          const accent = tone === 'good' ? MOVE : tone === 'warn' ? TEMP : NIGHT;
+          return (
+            <div key={x.name} className="hx-stat" style={{ ['--tile' as string]: HX_SERIES[i % HX_SERIES.length] }}>
+              <div className="hx-stat-head">
+                <span className="hx-stat-label">
+                  {x.icon} {x.name}
+                  <Info label={`About ${x.name}`}>{x.desc}</Info>
+                </span>
+                <Chip tone={tone}>{PROTOCOL_STATUS_LABEL[x.status] ?? x.status}</Chip>
               </div>
-              <div className="v-protocol-target">{p.target}</div>
-              {p.metric && <div className="v-protocol-metric">{p.metric}</div>}
-              {p.progressPct != null && (
-                <div className="v-protocol-progress">
-                  <div className="v-protocol-progress-fill" style={{ width: `${p.progressPct}%`, background: p.status === 'on-track' ? 'var(--vitara)' : 'var(--gold)' }}/>
-                </div>
+              <div className="hx-stat-value">
+                <span className="hx-stat-num" style={{ fontSize: '1.05rem', color: 'var(--text)' }}>{x.target}</span>
+              </div>
+              {x.progressPct != null && (
+                <div className="hx-bar"><span style={{ width: `${Math.min(100, x.progressPct)}%`, background: accent }}/></div>
               )}
-              <div className="v-protocol-desc">{p.desc}</div>
+              <span className="hx-stat-sub">
+                {x.metric ?? (x.progressPct != null ? `${Math.round(x.progressPct)}% of the way there` : 'Nothing measured against this yet')}
+              </span>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -1286,196 +1312,235 @@ function NutritionPage() {
   }));
 
   return (
-    <div className="vn">
-      {/* ── Date navigator ── */}
-      <div className="vn-date-nav">
-        <button className="vn-date-arrow" onClick={() => shiftDay(-1)}>‹</button>
-        <button className="vn-date-label" onClick={() => setDay(today)}>
-          {day === today ? 'Today' : new Date(day + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+    <div>
+      {/* Which day you are looking at. */}
+      <div className="hx-daynav">
+        <button className="hx-daynav-arrow" onClick={() => shiftDay(-1)} aria-label="Previous day">‹</button>
+        <button className="hx-daynav-label" onClick={() => setDay(today)}>
+          {day === today ? 'Today' : new Date(day + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
         </button>
-        <button className="vn-date-arrow" onClick={() => shiftDay(1)} disabled={day >= today}>›</button>
+        <button className="hx-daynav-arrow" onClick={() => shiftDay(1)} disabled={day >= today} aria-label="Next day">›</button>
       </div>
 
-      {/* ── Macro summary cards ── */}
-      <div className="vn-macros">
-        <div className="vn-macro vn-macro--cal">
-          <div className="vn-macro-val">{Math.round(t?.calories ?? 0)}</div>
-          <div className="vn-macro-label">kcal{todayRow?.calorieGoal ? ` / ${todayRow.calorieGoal}` : ''}</div>
-        </div>
-        <div className="vn-macro vn-macro--protein">
-          <div className="vn-macro-val">{Math.round(t?.protein ?? 0)}g</div>
-          <div className="vn-macro-label">Protein{todayRow?.proteinGoal ? ` / ${Math.round(todayRow.proteinGoal)}g` : ''}</div>
-        </div>
-        <div className="vn-macro vn-macro--carbs">
-          <div className="vn-macro-val">{Math.round(t?.carbs ?? 0)}g</div>
-          <div className="vn-macro-label">Carbs{todayRow?.carbGoal ? ` / ${Math.round(todayRow.carbGoal)}g` : ''}</div>
-        </div>
-        <div className="vn-macro vn-macro--fat">
-          <div className="vn-macro-val">{Math.round(t?.fat ?? 0)}g</div>
-          <div className="vn-macro-label">Fat{todayRow?.fatGoal ? ` / ${Math.round(todayRow.fatGoal)}g` : ''}</div>
-        </div>
+      {/* What the day adds up to, against whatever goals are set. */}
+      <div className="hx-grid hx-grid-4">
+        <MacroTile label="Calories" value={t?.calories} unit="kcal" goal={todayRow?.calorieGoal} accent={MOVE}
+                   info="Everything logged for this day. Nothing is counted that you have not entered, so an empty day means nothing logged — not nothing eaten."/>
+        <MacroTile label="Protein" value={t?.protein} unit="g" goal={todayRow?.proteinGoal} accent={NIGHT}
+                   info="Roughly 1.6 to 2.2 grams per kilogram of bodyweight is the usual range for someone training; your own target goes in Daily goals."/>
+        <MacroTile label="Carbs" value={t?.carbs} unit="g" goal={todayRow?.carbGoal} accent={TEMP}
+                   info="Your main fuel for hard efforts. What matters for most people is the total across the week rather than any single day."/>
+        <MacroTile label="Fat" value={t?.fat} unit="g" goal={todayRow?.fatGoal} accent={BODY}
+                   info="Needed for hormones and for absorbing vitamins A, D, E and K. Very low fat intake over months tends to show up in sleep and mood."/>
       </div>
 
-      {/* ── Goals editor ── */}
-      <div className="vn-goals">
-        <button className="v-log-toggle" onClick={() => {
+      <div className="hx-actions">
+        <button className="hx-btn hx-btn-ghost" onClick={() => {
           if (!goalsOpen && todayRow) setGoals({
             cal: todayRow.calorieGoal?.toString() ?? '', protein: todayRow.proteinGoal?.toString() ?? '',
             carbs: todayRow.carbGoal?.toString() ?? '', fat: todayRow.fatGoal?.toString() ?? '',
           });
           setGoalsOpen(o => !o);
-        }}>{goalsOpen ? 'Cancel' : '⚙ Set Daily Goals'}</button>
-        {goalsOpen && (
-          <div className="v-log-form">
-            <input type="number" placeholder="kcal goal" value={goals.cal} onChange={e => setGoals(g => ({ ...g, cal: e.target.value }))}/>
+        }}>{goalsOpen ? 'Cancel' : 'Daily goals'}</button>
+        {!todayRow?.calorieGoal && !goalsOpen && <span className="hx-chart-note">No goals set — the bars above stay empty until you set them.</span>}
+      </div>
+
+      {goalsOpen && (
+        <Card>
+          <div className="hx-form">
+            <input type="number" placeholder="kcal" value={goals.cal} onChange={e => setGoals(g => ({ ...g, cal: e.target.value }))}/>
             <input type="number" placeholder="protein g" value={goals.protein} onChange={e => setGoals(g => ({ ...g, protein: e.target.value }))}/>
             <input type="number" placeholder="carbs g" value={goals.carbs} onChange={e => setGoals(g => ({ ...g, carbs: e.target.value }))}/>
             <input type="number" placeholder="fat g" value={goals.fat} onChange={e => setGoals(g => ({ ...g, fat: e.target.value }))}/>
-            <button className="v-log-save" disabled={saveGoals.isPending} onClick={() => saveGoals.mutate()}>{saveGoals.isPending ? '…' : 'Save Goals'}</button>
+            <button className="hx-btn" disabled={saveGoals.isPending} onClick={() => saveGoals.mutate()}>
+              {saveGoals.isPending ? 'Saving…' : 'Save goals'}
+            </button>
           </div>
-        )}
-      </div>
+        </Card>
+      )}
 
-      {/* ── Log controls ── */}
-      <div className="vn-controls">
-        <div className="vn-meal-pills">
+      {/* Add something. */}
+      <SectionHead title="Add food" info="Search the USDA food database, pick a portion, and it is logged against the meal you have selected. Portions are converted to grams before the macros are scaled."/>
+      <Card>
+        <div className="hx-tabs" style={{ marginBottom: '0.8rem' }}>
           {MEAL_TYPES.map(m => (
-            <button key={m} className={`vn-pill ${mealType === m ? 'active' : ''}`} onClick={() => setMealType(m)}>
+            <button key={m} className={`hx-tab ${mealType === m ? 'active' : ''}`} onClick={() => setMealType(m)}>
               {MEAL_ICON[m]} {m}
             </button>
           ))}
         </div>
-        <div className="vn-search-row">
-          <input className="vn-search-input" placeholder="Search food (e.g. idli, paneer, chicken breast)..." value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && doSearch()} />
-          <button className="vn-search-btn" onClick={doSearch} disabled={searching}>
-            {searching ? '...' : 'Search'}
-          </button>
+        <div className="hx-search">
+          <input placeholder="Search a food — idli, paneer, chicken breast…" value={search}
+                 onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && doSearch()}/>
+          <button className="hx-btn" onClick={doSearch} disabled={searching}>{searching ? 'Searching…' : 'Search'}</button>
         </div>
-      </div>
 
-      {/* ── Search results ── */}
-      {results.length > 0 && (
-        <div className="vn-results">
-          {results.map(f => {
-            const isSelected = selected?.fdcId === f.fdcId;
-            return (
-              <div key={f.fdcId} className={`vn-result-card ${isSelected ? 'vn-result-selected' : ''}`}>
-                <div className="vn-result-body" onClick={() => { setSelected(isSelected ? null : f); setUnit(f.servingSize ? 'serving' : 'g'); setQty(f.servingSize ? '1' : '100'); }}>
-                  <div className="vn-result-name">{f.name}</div>
-                  <div className="vn-result-meta">
-                    {f.brand && <span>{f.brand} · </span>}
-                    <span className="vn-result-per100">per 100g: {Math.round(f.nutrients.calories ?? 0)} cal · {Math.round(f.nutrients.protein ?? 0)}P · {Math.round(f.nutrients.carbs ?? 0)}C · {Math.round(f.nutrients.fat ?? 0)}F</span>
-                    {f.servingSize && <span className="vn-result-serving"> · 1 serving = {f.servingSize}{f.servingUnit}</span>}
-                  </div>
+        {results.length > 0 && (
+          <div className="hx-list" style={{ marginTop: '0.8rem' }}>
+            {results.map(f => {
+              const isSelected = selected?.fdcId === f.fdcId;
+              return (
+                <div key={f.fdcId} className={`hx-row ${isSelected ? 'sel' : ''}`}>
+                  <button className="hx-row-main" onClick={() => { setSelected(isSelected ? null : f); setUnit(f.servingSize ? 'serving' : 'g'); setQty(f.servingSize ? '1' : '100'); }}>
+                    <span className="hx-row-name">{f.name}</span>
+                    <span className="hx-row-meta">
+                      {f.brand ? `${f.brand} · ` : ''}
+                      per 100 g: {Math.round(f.nutrients.calories ?? 0)} kcal · {Math.round(f.nutrients.protein ?? 0)} P · {Math.round(f.nutrients.carbs ?? 0)} C · {Math.round(f.nutrients.fat ?? 0)} F
+                      {f.servingSize ? ` · 1 serving = ${f.servingSize}${f.servingUnit ?? ''}` : ''}
+                    </span>
+                  </button>
+                  {isSelected && (
+                    <div className="hx-row-form">
+                      <input type="number" min="0.1" step="0.5" value={qty} onChange={e => setQty(e.target.value)} style={{ width: 76 }}/>
+                      <select value={unit} onChange={e => setUnit(e.target.value)}>
+                        {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                      {preview && (
+                        <span className="hx-row-meta">
+                          {preview.calories} kcal · {preview.protein} P · {preview.carbs} C · {preview.fat} F
+                        </span>
+                      )}
+                      <button className="hx-btn" onClick={() => logFood.mutate(f)}>Add</button>
+                    </div>
+                  )}
                 </div>
-                {isSelected && (
-                  <div className="vn-result-configure">
-                    <input className="vn-qty-input" type="number" min="0.1" step="0.5" value={qty} onChange={e => setQty(e.target.value)} />
-                    <select className="vn-unit-select" value={unit} onChange={e => setUnit(e.target.value)}>
-                      {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                    {preview && (
-                      <span className="vn-result-preview">
-                        {preview.calories} cal · {preview.protein}P · {preview.carbs}C · {preview.fat}F
-                      </span>
-                    )}
-                    <button className="vn-result-confirm" onClick={() => logFood.mutate(f)}>+ Add</button>
-                  </div>
-                )}
-              </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* What is already logged. */}
+      <SectionHead title="Logged" note={t?.calories ? `${Math.round(t.calories)} kcal so far` : undefined}/>
+      {hasMeals ? (
+        <div className="hx-grid hx-grid-3">
+          {MEAL_TYPES.map(mt => {
+            const items = mealsData?.meals[mt];
+            if (!items?.length) return null;
+            const mtCal = items.reduce((sum: number, m: MealItem) => sum + m.calories, 0);
+            return (
+              <Card key={mt}>
+                <div className="hx-chart-head">
+                  <span className="hx-chart-title">{MEAL_ICON[mt]} {mt}</span>
+                  <span className="hx-chart-note">{Math.round(mtCal)} kcal</span>
+                </div>
+                <div className="hx-list">
+                  {items.map((m: MealItem) => (
+                    <div key={m.id} className="hx-row">
+                      {editId === m.id ? (
+                        <div className="hx-row-form">
+                          <span className="hx-row-name">{m.foodName}</span>
+                          <input type="number" value={editQty} onChange={e => setEditQty(e.target.value)} style={{ width: 76 }}/>
+                          <select value={editUnit} onChange={e => setEditUnit(e.target.value)}>
+                            {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                          </select>
+                          <button className="hx-btn" onClick={() => updateMeal.mutate({ id: m.id, meal: m })}>Save</button>
+                          <button className="hx-icon-btn" onClick={() => setEditId(null)} aria-label="Cancel">×</button>
+                        </div>
+                      ) : (
+                        <>
+                          <button className="hx-row-main" onClick={() => { setEditId(m.id); setEditQty(String(m.servingQty)); setEditUnit(m.servingUnit || 'serving'); }}>
+                            <span className="hx-row-name">{m.foodName}</span>
+                            <span className="hx-row-meta">
+                              {Math.round(m.calories)} kcal · {Math.round(m.protein)} P · {Math.round(m.carbs)} C · {Math.round(m.fat)} F · {m.servingQty} {m.servingUnit}
+                            </span>
+                          </button>
+                          <button className="hx-icon-btn" onClick={() => deleteMeal.mutate(m.id)} aria-label={`Remove ${m.foodName}`}>×</button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Card>
             );
           })}
         </div>
+      ) : (
+        <Empty title={`Nothing logged for ${day === today ? 'today' : dayLabel(day)}.`}>
+          Search a food above and it lands here, counted into the totals at the top.
+        </Empty>
       )}
 
-      {/* ── Today's meals ── */}
-      <div className="v-section">Meals<span className="v-section-line"/></div>
-      {hasMeals ? MEAL_TYPES.map(mt => {
-        const items = mealsData?.meals[mt];
-        if (!items?.length) return null;
-        const mtCal = items.reduce((s: number, m: MealItem) => s + m.calories, 0);
-        return (
-          <div key={mt} className="vn-meal-group">
-            <div className="vn-meal-header">
-              <span>{MEAL_ICON[mt]} {mt}</span>
-              <span className="vn-meal-header-cal">{Math.round(mtCal)} cal</span>
-            </div>
-            {items.map((m: MealItem) => (
-              <div key={m.id} className="vn-meal-item">
-                {editId === m.id ? (
-                  <div className="vn-meal-edit-row">
-                    <span className="vn-meal-item-name">{m.foodName}</span>
-                    <input className="vn-qty-input" type="number" value={editQty} onChange={e => setEditQty(e.target.value)} />
-                    <select className="vn-unit-select" value={editUnit} onChange={e => setEditUnit(e.target.value)}>
-                      {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                    <button className="vn-edit-save" onClick={() => updateMeal.mutate({ id: m.id, meal: m })}>Save</button>
-                    <button className="vn-edit-cancel" onClick={() => setEditId(null)}>×</button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="vn-meal-item-body" onClick={() => { setEditId(m.id); setEditQty(String(m.servingQty)); setEditUnit(m.servingUnit || 'serving'); }}>
-                      <div className="vn-meal-item-name">{m.foodName}</div>
-                      <div className="vn-meal-item-macros">
-                        {Math.round(m.calories)} cal · {Math.round(m.protein)}g P · {Math.round(m.carbs)}g C · {Math.round(m.fat)}g F
-                        <span className="vn-meal-item-qty"> · {m.servingQty} {m.servingUnit}</span>
-                      </div>
-                    </div>
-                    <button className="vn-meal-item-del" onClick={() => deleteMeal.mutate(m.id)} title="Delete">×</button>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-        );
-      }) : (
-        <div className="v-empty">No meals logged for {day === today ? 'today' : day}. Search a food above to start.</div>
-      )}
-
-      {/* ── History chart ── */}
-      {historyChart.length > 1 && (
+      {/* The fortnight. */}
+      {historyChart.length > 1 ? (
         <>
-          <div className="v-section" style={{ marginTop: '1rem' }}>Calorie History<span className="v-section-line"/></div>
-          <div className="v-chart">
-            <ResponsiveContainer width="100%" height={160}>
+          <SectionHead title="Fourteen days" note="Calories logged per day" info="Only days you logged appear as a full bar. A short bar can mean a light day or a day you stopped logging halfway — this cannot tell the two apart."/>
+          <div className="hx-chart">
+            <ResponsiveContainer width="100%" height={170}>
               <BarChart data={historyChart} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                <CartesianGrid {...GRID}/>
+                <CartesianGrid {...GRID} vertical={false}/>
                 <XAxis dataKey="day" tick={AX} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(historyChart.length / 7) - 1)}/>
-                <YAxis tick={AX} tickLine={false} axisLine={false} width={40}/>
-                <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle} formatter={(v: number, name: string) => [`${v}${name === 'calories' ? ' kcal' : 'g'}`, name.charAt(0).toUpperCase() + name.slice(1)]}/>
-                <Bar dataKey="calories" radius={4} isAnimationActive={false}>
-                  {historyChart.map((d, i) => <Cell key={i} fill={d.calories >= 1800 ? '#06c8a0' : d.calories >= 1200 ? '#f59e0b' : '#ef4444'}/>)}
-                </Bar>
+                <YAxis tick={AX} tickLine={false} axisLine={false} width={44}/>
+                <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle} formatter={(v: number) => [`${v} kcal`, 'Logged']}/>
+                <Bar dataKey="calories" radius={[5, 5, 0, 0]} fill="var(--hx-1)" isAnimationActive={false}/>
               </BarChart>
             </ResponsiveContainer>
           </div>
 
-          <div className="v-section">Macro Breakdown<span className="v-section-line"/></div>
-          <div className="v-chart">
-            <ResponsiveContainer width="100%" height={140}>
+          <SectionHead title="Where the calories came from" note="Protein, carbs and fat, in grams"/>
+          <div className="hx-chart">
+            <ResponsiveContainer width="100%" height={150}>
               <BarChart data={historyChart} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                <CartesianGrid {...GRID}/>
+                <CartesianGrid {...GRID} vertical={false}/>
                 <XAxis dataKey="day" tick={AX} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(historyChart.length / 7) - 1)}/>
-                <YAxis tick={AX} tickLine={false} axisLine={false} width={30} unit="g"/>
-                <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle} formatter={(v: number) => [`${v}g`]}/>
-                <Bar dataKey="protein" stackId="m" fill="#06c8a0" radius={[0,0,0,0]} isAnimationActive={false}/>
-                <Bar dataKey="carbs" stackId="m" fill="#f59e0b" radius={[0,0,0,0]} isAnimationActive={false}/>
-                <Bar dataKey="fat" stackId="m" fill="#818cf8" radius={[4,4,0,0]} isAnimationActive={false}/>
+                <YAxis tick={AX} tickLine={false} axisLine={false} width={34} unit="g"/>
+                <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle} formatter={(v: number, n: string) => [`${v} g`, n.charAt(0).toUpperCase() + n.slice(1)]}/>
+                <Bar dataKey="protein" stackId="m" fill="var(--hx-2)" stroke="var(--surface)" strokeWidth={2} isAnimationActive={false}/>
+                <Bar dataKey="carbs" stackId="m" fill="var(--hx-3)" stroke="var(--surface)" strokeWidth={2} isAnimationActive={false}/>
+                <Bar dataKey="fat" stackId="m" fill="var(--hx-4)" stroke="var(--surface)" strokeWidth={2} radius={[5, 5, 0, 0]} isAnimationActive={false}/>
               </BarChart>
             </ResponsiveContainer>
-            <div className="vn-legend">
-              <span><span className="vn-legend-dot" style={{ background: '#06c8a0' }}/> Protein</span>
-              <span><span className="vn-legend-dot" style={{ background: '#f59e0b' }}/> Carbs</span>
-              <span><span className="vn-legend-dot" style={{ background: '#818cf8' }}/> Fat</span>
+            <div className="hx-legend" style={{ marginTop: '0.6rem' }}>
+              <span><i style={{ background: 'var(--hx-2)' }}/> Protein</span>
+              <span><i style={{ background: 'var(--hx-3)' }}/> Carbs</span>
+              <span><i style={{ background: 'var(--hx-4)' }}/> Fat</span>
             </div>
           </div>
+        </>
+      ) : (
+        <>
+          <SectionHead title="Fourteen days"/>
+          <Empty title="Not enough logged days to draw a chart.">
+            Two days with food logged is the minimum; the chart appears on its own after that.
+          </Empty>
         </>
       )}
     </div>
   );
 }
 
-
+// One macro, its goal, and how far through it the day is. Zero is shown as zero -- an
+// unlogged day and a genuinely empty one both say so in words underneath.
+function MacroTile({ label, value, unit, goal, accent, info }: {
+  label: string;
+  value?: number | null;
+  unit: string;
+  goal?: number | null;
+  accent: string;
+  info: string;
+}) {
+  const v = value ?? 0;
+  const pct = goal ? Math.min(100, (v / goal) * 100) : null;
+  return (
+    <div className="hx-stat" style={{ ['--tile' as string]: accent }}>
+      <div className="hx-stat-head">
+        <span className="hx-stat-label">{label}<Info>{info}</Info></span>
+      </div>
+      <div className="hx-stat-value">
+        <span className="hx-stat-num" style={{ color: v > 0 ? accent : 'var(--text3)' }}>{Math.round(v)}</span>
+        <span className="hx-stat-unit">{unit}</span>
+      </div>
+      {pct != null && (
+        <div className="hx-bar"><span style={{ width: `${pct}%`, background: accent }}/></div>
+      )}
+      <span className="hx-stat-sub">
+        {v === 0 ? 'Nothing logged yet'
+          : goal ? `${Math.round(pct!)}% of your ${Math.round(goal)} ${unit} goal`
+          : 'No goal set'}
+      </span>
+    </div>
+  );
+}
 
 // ── MANUAL MEASUREMENTS ───────────────────────────────────────────────────────
 
@@ -1569,113 +1634,94 @@ function MeasurePanel() {
   });
 
   return (
-    <div className="module-section">
-      <h2 className="module-h2">Record a reading</h2>
-      <p className="module-muted vitara-import-sub">
-        Blood pressure, glucose, waist, lab results — anything nothing measures for you.
-        These feed the same baselines Oura's data does.
-      </p>
+    <div>
+      <SectionHead
+        title="Record a reading"
+        note="Blood pressure, glucose, waist, lab results"
+        info="Anything nothing else measures for you. These feed exactly the same baselines the ring's data does. The questions beside the value are the ones that actually move the number — a standing evening reading is never compared against a seated morning one."
+      />
 
-      <div className="vitara-measure-form">
-        <select value={metric} onChange={e => setMetric(e.target.value)}>
-          {specs?.map(s => <option key={s.metric} value={s.metric}>{s.label}</option>)}
-        </select>
-
-        <input
-          type="number"
-          step="any"
-          placeholder="Value"
-          value={value}
-          onChange={e => setValue(e.target.value)}
-        />
-        <span className="vitara-measure-unit">{spec?.unit}</span>
-
-        {/* Only the context that actually splits this metric's baseline is asked for.
-            Asking about arm position for a lab result would be noise, and asking about
-            nothing at all would put standing-evening readings in the seated-morning
-            baseline. */}
-        {asks('position') && (
-          <select value={position} onChange={e => setPosition(e.target.value)}>
-            <option value="seated">Seated</option>
-            <option value="standing">Standing</option>
-            <option value="supine">Lying down</option>
+      <Card>
+        <div className="hx-form">
+          <select value={metric} onChange={e => setMetric(e.target.value)} style={{ minWidth: '13rem' }}>
+            {specs?.map(x => <option key={x.metric} value={x.metric}>{x.label}</option>)}
           </select>
-        )}
 
-        {asks('timeOfDay') && (
-          <select value={timeOfDay} onChange={e => setTimeOfDay(e.target.value)}>
-            <option value="waking">On waking</option>
-            <option value="morning">Morning</option>
-            <option value="afternoon">Afternoon</option>
-            <option value="evening">Evening</option>
-            <option value="night">Night</option>
-          </select>
-        )}
+          <input type="number" step="any" placeholder="Value" value={value}
+                 onChange={e => setValue(e.target.value)} style={{ width: '6.5rem' }}/>
+          <span className="hx-row-meta">{spec?.unit}</span>
 
-        {asks('fasting') && (
-          <label className="san-checkbox-label">
-            <input type="checkbox" checked={fasting} onChange={e => setFasting(e.target.checked)} />
-            Fasting
-          </label>
-        )}
+          {/* Only the context that actually splits THIS metric's baseline is asked for.
+              Asking about arm position for a lab result would be noise, and asking about
+              nothing at all would put standing-evening readings in the seated-morning
+              baseline. The server decides which questions those are. */}
+          {asks('position') && (
+            <select value={position} onChange={e => setPosition(e.target.value)}>
+              <option value="seated">Seated</option>
+              <option value="standing">Standing</option>
+              <option value="supine">Lying down</option>
+            </select>
+          )}
 
-        <input
-          placeholder="Note (optional)"
-          value={note}
-          onChange={e => setNote(e.target.value)}
-          style={{ flex: 1, minWidth: '140px' }}
-        />
+          {asks('timeOfDay') && (
+            <select value={timeOfDay} onChange={e => setTimeOfDay(e.target.value)}>
+              <option value="waking">On waking</option>
+              <option value="morning">Morning</option>
+              <option value="afternoon">Afternoon</option>
+              <option value="evening">Evening</option>
+              <option value="night">Night</option>
+            </select>
+          )}
 
-        <button
-          className="btn-primary"
-          disabled={!value || save.isPending}
-          onClick={() => save.mutate()}
-        >
-          {save.isPending ? 'Saving…' : 'Save'}
-        </button>
-      </div>
+          {asks('fasting') && (
+            <label className="hx-check">
+              <input type="checkbox" checked={fasting} onChange={e => setFasting(e.target.checked)}/>
+              Fasting
+            </label>
+          )}
 
-      {error && <p className="module-error">{error}</p>}
+          <input placeholder="Note (optional)" value={note} onChange={e => setNote(e.target.value)}
+                 style={{ flex: 1, minWidth: '10rem' }}/>
 
-      {recent && recent.length > 0 && (
-        <div className="insight-table-wrap">
-          <table className="vitara-import-table">
-            <thead>
-              <tr>
-                <th>When</th><th>What</th><th className="num">Value</th><th>Conditions</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {recent.slice(0, 30).map(m => (
-                <tr key={m.id}>
-                  <td>{m.at}</td>
-                  <td>{m.label}</td>
-                  <td className="num">{m.value} {m.unit}</td>
-                  {/* The signature is shown because it is the answer to "why is my
-                      evening reading not being compared with my morning ones". */}
-                  <td className="vitara-measure-sig">
-                    {m.signature || (m.source === 'manual' ? '—' : m.source)}
-                    {m.note && <span className="vitara-measure-note">{m.note}</span>}
-                  </td>
-                  <td>
-                    <button
-                      className="btn-danger-ghost"
-                      style={{ fontSize: '0.7rem' }}
-                      onClick={() => remove.mutate(m.id)}
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <button className="hx-btn" disabled={!value || save.isPending} onClick={() => save.mutate()}>
+            {save.isPending ? 'Saving…' : 'Save'}
+          </button>
         </div>
+        {error && <p className="hx-error">{error}</p>}
+      </Card>
+
+      <SectionHead
+        title="What you have recorded"
+        note={recent?.length ? `${recent.length} in the last 120 days` : undefined}
+        info="Conditions are shown because they are the answer to 'why is my evening reading not being compared with my morning ones'. Each set of conditions carries its own baseline."
+      />
+      {recent && recent.length > 0 ? (
+        <Card>
+          <div className="hx-list">
+            {recent.slice(0, 30).map(m => (
+              <div key={m.id} className="hx-row">
+                <div className="hx-row-main">
+                  <span className="hx-row-name">{m.label}</span>
+                  <span className="hx-row-meta">
+                    {m.at}
+                    {m.signature ? ` · ${m.signature}` : m.source !== 'manual' ? ` · ${m.source}` : ''}
+                    {m.note ? ` · ${m.note}` : ''}
+                  </span>
+                </div>
+                <span className="hx-row-value">{m.value} <em>{m.unit}</em></span>
+                <button className="hx-icon-btn" onClick={() => remove.mutate(m.id)} aria-label={`Delete ${m.label} from ${m.at}`}>×</button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : (
+        <Empty title="Nothing recorded yet.">
+          Take one blood-pressure reading at the same time of day for a fortnight and it becomes a baseline worth trusting.
+        </Empty>
       )}
     </div>
   );
 }
-
 
 // ── APPLE HEALTH XML IMPORT ───────────────────────────────────────────────────
 
@@ -1780,31 +1826,33 @@ function XmlImportPanel() {
     .reduce((n, x) => n + x.records, 0) ?? 0;
 
   return (
-    <div className="module-section">
-      <h2 className="module-h2">Import Apple Health export</h2>
-      <p className="module-muted vitara-import-sub">
-        The <code>export.xml</code> from inside your Apple Health export zip — not
-        <code>export_cda.xml</code>, which is the same data in a clinical format we do
-        not need. Large files are fine; it streams. Nothing is written until you confirm.
-      </p>
+    <div>
+      <SectionHead
+        title="Apple Health export"
+        note="The export.xml from your Apple Health zip"
+        info="Take export.xml, not export_cda.xml — the second is the same data in a clinical format nothing here needs. Large files are fine because it is read in a stream, and nothing is written until you confirm what to keep."
+      />
 
-      <div className="vitara-import-row">
-        <input type="file" accept=".xml" onChange={e => { setFile(e.target.files?.[0] ?? null); setScan(null); setDone(null); }} />
-        <button className="btn-ghost" disabled={!file || busy} onClick={upload}>
-          {busy && !scan ? 'Reading… this takes a minute' : 'Read file'}
-        </button>
-      </div>
+      <Card>
+        <div className="hx-form">
+          <input type="file" accept=".xml" onChange={e => { setFile(e.target.files?.[0] ?? null); setScan(null); setDone(null); }} style={{ flex: 1, minWidth: '14rem' }}/>
+          <button className="hx-btn" disabled={!file || busy} onClick={upload}>
+            {busy && !scan ? 'Reading… this takes a minute' : 'Read file'}
+          </button>
+        </div>
+        {error && <p className="hx-error">{error}</p>}
+        {done && <p className="hx-ok">Saved. {done}</p>}
 
-      {error && <p className="module-error">{error}</p>}
-      {done && <p className="vitara-import-ok">Saved. {done}</p>}
-
-      {scan && (
-        <div className="vitara-import-result">
-          <p className="module-muted">
-            {scan.megabytes} MB · {scan.recordsSeen.toLocaleString()} records ·{' '}
-            {scan.days.toLocaleString()} days
-            {scan.firstDay && <> · {scan.firstDay} to {scan.lastDay}</>}
-          </p>
+        {scan && (
+          <div className="vitara-import-result">
+            <div className="hx-grid hx-grid-4" style={{ margin: '0.9rem 0' }}>
+              <Stat label="File" accent={NIGHT} value={scan.megabytes} unit="MB" sub="read in a stream"/>
+              <Stat label="Records" accent={MOVE} value={scan.recordsSeen.toLocaleString()} sub="seen in the file"/>
+              <Stat label="Days" accent={TEMP} value={scan.days.toLocaleString()}
+                    sub={scan.firstDay ? `${scan.firstDay} to ${scan.lastDay}` : undefined}/>
+              <Stat label="Usable" accent={BODY} value={scan.recordsMapped.toLocaleString()}
+                    sub="records this understands" empty="None of it could be read"/>
+            </div>
 
           <div>
             <p className="vitara-import-samplehead">Choose what to import</p>
@@ -1861,14 +1909,15 @@ function XmlImportPanel() {
             </ul>
           )}
 
-          <div className="vitara-import-row">
-            <button className="btn-primary" disabled={busy || chosen.size === 0} onClick={commit}>
-              {busy ? 'Saving…' : `Import ${selectedRecords.toLocaleString()} records`}
-            </button>
-            <button className="btn-ghost" disabled={busy} onClick={() => setScan(null)}>Cancel</button>
+            <div className="hx-form" style={{ marginTop: '0.9rem' }}>
+              <button className="hx-btn" disabled={busy || chosen.size === 0} onClick={commit}>
+                {busy ? 'Saving…' : `Import ${selectedRecords.toLocaleString()} records`}
+              </button>
+              <button className="hx-btn hx-btn-ghost" disabled={busy} onClick={() => setScan(null)}>Cancel</button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </Card>
     </div>
   );
 }
@@ -1935,36 +1984,37 @@ function ImportPanel() {
   const pick = (f: File | null) => { setFile(f); setResult(null); setError(null); };
 
   return (
-    <div className="module-section">
-      <h2 className="module-h2">Import Apple Health</h2>
-      <p className="module-muted vitara-import-sub">
-        A .csv, .tsv or .xlsx export from an Apple Health export app. Both common
-        layouts work — one row per day with a column per metric, or one row per sample.
-        Nothing is saved until you confirm.
-      </p>
+    <div>
+      <SectionHead
+        title="A spreadsheet"
+        note=".csv, .tsv or .xlsx from an export app"
+        info="Both common layouts work: one row per day with a column per metric, or one row per sample. The file is read and shown to you first — nothing is saved until you confirm."
+      />
 
-      <div className="vitara-import-row">
-        <input
-          type="file"
-          accept=".csv,.tsv,.txt,.xlsx,.xlsm"
-          onChange={e => pick(e.target.files?.[0] ?? null)}
-        />
-        <button className="btn-ghost" disabled={!file || busy} onClick={() => send('preview')}>
-          {busy ? 'Reading…' : 'Read file'}
-        </button>
-        {result && !result.committed && result.readings > 0 && (
-          <button className="btn-primary" disabled={busy} onClick={() => send('commit')}>
-            Save {result.readings} readings
+      <Card>
+        <div className="hx-form">
+          <input
+            type="file"
+            accept=".csv,.tsv,.txt,.xlsx,.xlsm"
+            onChange={e => pick(e.target.files?.[0] ?? null)}
+            style={{ flex: 1, minWidth: '14rem' }}
+          />
+          <button className="hx-btn hx-btn-ghost" disabled={!file || busy} onClick={() => send('preview')}>
+            {busy ? 'Reading…' : 'Read file'}
           </button>
-        )}
-      </div>
+          {result && !result.committed && result.readings > 0 && (
+            <button className="hx-btn" disabled={busy} onClick={() => send('commit')}>
+              Save {result.readings} readings
+            </button>
+          )}
+        </div>
 
-      {error && <p className="module-error">{error}</p>}
+        {error && <p className="hx-error">{error}</p>}
 
-      {result && (
-        <div className="vitara-import-result">
-          {result.committed ? (
-            <p className="vitara-import-ok">
+        {result && (
+          <div className="vitara-import-result">
+            {result.committed ? (
+              <p className="hx-ok">
               Saved. {Object.entries(result.written ?? {})
                 .map(([k, v]) => (v > 0 ? `${v} ${k}` : k))
                 .join(' · ') || 'Nothing was stored.'}
@@ -2027,8 +2077,9 @@ function ImportPanel() {
               </table>
             </>
           )}
-        </div>
-      )}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
