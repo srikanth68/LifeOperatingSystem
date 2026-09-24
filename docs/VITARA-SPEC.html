@@ -343,8 +343,8 @@
     <div class="masthead-meta">
       <span><b>Modules</b> vitara · vitara-worker · vitara-insight</span>
       <span><b>Store</b> one SQLite file, 28 tables</span>
-      <span><b>Tests</b> 363</span>
-      <span><b>Read from</b> 77d4404</span>
+      <span><b>Tests</b> 375</span>
+      <span><b>Read from</b> 77aeab7</span>
     </div>
   </header>
 
@@ -1536,7 +1536,9 @@ GET /api/health/correlations   with the caveat and the method
 GET /api/health/metrics        one row per metric, including the empty ones
 GET /api/health/illness-eval   the illness detector scored against marked illness
 GET /api/health/signature      the bio signature: clock, week, recovery, responses
-GET /api/health/forecast       tomorrow, with the record that earned the method</code></pre>
+GET /api/health/signature/export  the same, portable: statistics and weights, no readings
+GET /api/health/forecast       tomorrow for four targets, each with its own record
+GET /api/health/simulate       what if I had slept more, and what cannot be answered</code></pre>
 
       <div class="why">
         <span class="tag">The status sentence</span>
@@ -1768,8 +1770,54 @@ GET /api/health/forecast       tomorrow, with the record that earned the method<
         real margin is the same answer dressed up as insight. <b>When it loses, the naive
         answer ships, labelled.</b> Losing is not an error state and is not hidden.
       </p>
+      <h3>What if, and the two refusals</h3>
+      <p>
+        The step from a forecast to something worth calling a clone: not "tomorrow will
+        be 74" but <b>"on days like today, when you had slept an hour more, tomorrow was
+        typically three points better"</b>. A linear model will answer any question put
+        to it, including questions about a life this person has never lived, and it will
+        answer them in the same confident tone as the ones it knows about. So there are
+        two refusals, and they are the feature:
+      </p>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Refusal</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td><b>No model</b></td><td>When nothing beat "tomorrow is like today", there is no lever to pull &mdash; a guess like that has no opinion about what you do differently.</td></tr>
+            <tr><td><b>No precedent</b></td><td>A scenario outside the middle ninety per cent of what this person has actually done is refused <em>by name</em>, with the range they do live in. The tails of a wearable series are mostly days the device was confused.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Every supported answer states that it is what these days did together, not proof
+        one caused the other. An evening with more sleep in it usually differs in other
+        ways too, and the model is carrying all of them.
+      </p>
+
+      <h3>Four targets, and a clamp</h3>
+      <p>
+        HRV and time asleep join readiness and resting heart rate. Predicting HRV from
+        "HRV today" is the same column entered twice, so the duplicate is dropped per
+        target rather than left for ridge to split arbitrarily between the pair.
+        Predictions are clamped to what each scale allows: a linear model extrapolates
+        happily past the end of the world, and a readiness of 118 is not a bold forecast,
+        it is a bug shown to someone as a number.
+      </p>
+
+      <h3>The export</h3>
+      <p>
+        <code>/api/health/signature/export</code> is the portable half: normals, sleep
+        clock, week shape, recovery, responses, and the fitted weights <b>in the units a
+        person reads</b> &mdash; and no individual readings, no specific days, no raw
+        sleep or heart-rate data. Someone holding that file can say what tomorrow looks
+        like and cannot say what last Tuesday was. A model that lost to the dull answer
+        exports no weights at all, only its verdict, so it cannot travel as a set of
+        numbers with the warning left behind.
+      </p>
+
       <p class="muted">
-        <code>/api/health/signature</code>, <code>/api/health/forecast</code>. Computed on
+        <code>/api/health/signature</code>, <code>/api/health/signature/export</code>,
+        <code>/api/health/forecast</code>, <code>/api/health/simulate</code>. Computed on
         demand; no table, no migration.
       </p>
     </section>
@@ -1815,8 +1863,8 @@ GET /api/health/forecast       tomorrow, with the record that earned the method<
 
   <footer>
     <span>docs · Vitara + Insight</span>
-    <span>read from 77d4404 · 2026-09-24</span>
-    <span>363 Vitara tests</span>
+    <span>read from 77aeab7 · 2026-09-24</span>
+    <span>375 Vitara tests</span>
   </footer>
 
 </div>
