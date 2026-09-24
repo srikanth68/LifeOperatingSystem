@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { makeModuleQueryClient } from '../services/moduleQuery';
 import { Shell, Info } from '../components/health/HealthKit';
@@ -136,6 +136,31 @@ interface BioSignature {
   respondsTo: { driver: string; outcome: string; lagDays: number; rho: number; n: number }[];
   respondsToCaveat: string;
   tomorrow: { readiness: Forecast | null; restingHeartRate: Forecast | null };
+}
+
+interface Scenario {
+  lever: string;
+  delta: number;
+  question: string;
+  from: number | null;
+  to: number | null;
+  change: number | null;
+  supported: boolean;
+  answer: string;
+}
+
+interface Simulation {
+  target: string;
+  unit: string;
+  caveat: string;
+  scenarios: Scenario[];
+}
+
+interface Forecasts {
+  readiness: Forecast | null;
+  restingHeartRate: Forecast | null;
+  hrv: Forecast | null;
+  timeAsleep: Forecast | null;
 }
 
 interface IllnessEval {
@@ -755,6 +780,118 @@ function Tomorrow({ what, unit, forecast }: { what: string; unit: string; foreca
   );
 }
 
+// Four of them now. Readiness and resting heart rate lead because they are what people
+// ask about; HRV and time asleep are the same machinery and the same honesty.
+function TomorrowRow() {
+  const { data } = useQuery({
+    queryKey: ['forecasts'],
+    queryFn: () => get<Forecasts>(`${API}/api/health/forecast`),
+  });
+  if (!data) return null;
+
+  return (
+    <div className="insight-forecast-row">
+      <Tomorrow what="readiness" unit="/100" forecast={data.readiness} />
+      <Tomorrow what="resting heart rate" unit="bpm" forecast={data.restingHeartRate} />
+      <Tomorrow what="HRV" unit="ms" forecast={data.hrv} />
+      <Tomorrow what="time asleep" unit="min" forecast={data.timeAsleep} />
+    </div>
+  );
+}
+
+// The counterfactual. Everything about this section is designed to be refusable: the
+// scenarios that cannot be answered are shown next to the ones that can, saying why.
+function WhatIf() {
+  const { data } = useQuery({
+    queryKey: ['simulate', 'readiness'],
+    queryFn: () => get<Simulation>(`${API}/api/health/simulate?target=readiness`),
+  });
+  if (!data || data.scenarios.length === 0) return null;
+
+  const answered = data.scenarios.filter(x => x.supported);
+  const refused = data.scenarios.filter(x => !x.supported);
+
+  return (
+    <section className="insight-section">
+      <h2 className="insight-h2">
+        What if
+        <Info label="Where these numbers come from">
+          {data.caveat} A scenario you have almost never lived is refused rather than answered, because
+          the model would happily answer it in exactly the same confident tone.
+        </Info>
+      </h2>
+
+      {answered.length === 0 ? (
+        <p className="insight-muted">{refused[0]?.answer}</p>
+      ) : (
+        <ul className="insight-whatif">
+          {answered.map(x => (
+            <li key={`${x.lever}${x.delta}`}>
+              <p className="insight-whatif-q">{x.question}</p>
+              <p className="insight-whatif-a">
+                <b className={x.change! > 0 ? 'up' : x.change! < 0 ? 'down' : ''}>
+                  {x.change! > 0 ? '+' : ''}{x.change} {data.unit}
+                </b>
+                <span>tomorrow&apos;s {data.target}</span>
+                <Info label="What this means">{x.answer}</Info>
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {answered.length > 0 && refused.length > 0 && (
+        <details className="insight-standing">
+          <summary>{refused.length} {refused.length === 1 ? 'question' : 'questions'} your data cannot answer</summary>
+          <ul className="insight-standing-list">
+            {refused.map(x => (
+              <li key={`${x.lever}${x.delta}`}>
+                <span className="insight-standing-text"><b>{x.question}</b> {x.answer}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </section>
+  );
+}
+
+// The signature as a file. Derived statistics and fitted weights only -- what leaves
+// can say what tomorrow looks like and cannot say what last Tuesday was.
+function ExportButton() {
+  const [busy, setBusy] = useState(false);
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch(`${API}/api/health/signature/export`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`${res.status}`);
+
+      const url = URL.createObjectURL(new Blob([JSON.stringify(await res.json(), null, 2)], { type: 'application/json' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `bio-signature-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // Nothing to recover: the button simply does not produce a file, and the tab
+      // around it is unaffected.
+    }
+    setBusy(false);
+  };
+
+  return (
+    <button className="insight-export" onClick={save} disabled={busy}>
+      {busy ? 'Preparing\u2026' : 'Export signature'}
+      <Info label="What is in the file">
+        Your normals, sleep clock, weekly shape, recovery, what you respond to, and the fitted weights
+        of any forecast that earned its place — in the units you read. No individual readings, no
+        specific days, no raw sleep or heart-rate data leave with it.
+      </Info>
+    </button>
+  );
+}
+
 function BioSignatureSection() {
   const { data } = useQuery({
     queryKey: ['bio-signature'],
@@ -777,10 +914,7 @@ function BioSignatureSection() {
             is what you are shown — said plainly rather than hidden.
           </Info>
         </h2>
-        <div className="insight-top">
-          <Tomorrow what="readiness" unit="/100" forecast={data.tomorrow.readiness} />
-          <Tomorrow what="resting heart rate" unit="bpm" forecast={data.tomorrow.restingHeartRate} />
-        </div>
+        <TomorrowRow />
       </section>
 
       <section className="insight-section">
@@ -791,6 +925,7 @@ function BioSignatureSection() {
             the week is weakest, how long you take to come back from a hard day, and what your numbers
             move with. Nothing here is compared with anyone else. {data.confidence.note}
           </Info>
+          <ExportButton />
         </h2>
 
         {nothingYet ? (
@@ -1033,6 +1168,7 @@ function InsightPage() {
 
         <Findings />
         <BioSignatureSection />
+        <WhatIf />
         <TodayVsNormal />
         <Correlations />
         <IllnessRecord />

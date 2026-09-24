@@ -611,3 +611,55 @@
 .insight-week-day.is-worst i { background: var(--insight-older); }
 .insight-week-day.is-best i { background: var(--insight-younger); }
 .insight-week-day.is-worst b, .insight-week-day.is-best b { color: var(--text); }
+
+/* ── Four forecasts, the what-ifs, and the export ────────────────────────── */
+
+.insight-forecast-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.75rem;
+}
+.insight-forecast-row .insight-forecast-value b { font-size: 1.8rem; }
+
+.insight-export {
+  margin-left: auto;
+  border: 1px solid var(--border2);
+  background: var(--surface2);
+  color: var(--text2);
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.insight-export:hover { color: var(--text); border-color: var(--text3); }
+.insight-export:disabled { opacity: 0.6; cursor: default; }
+.hx .insight-export { background: var(--surface); }
+
+.insight-whatif {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0.75rem;
+}
+.insight-whatif li {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 0.85rem 1rem;
+}
+.hx .insight-whatif li { background: var(--surface); box-shadow: var(--hx-shadow); }
+
+.insight-whatif-q { margin: 0; font-size: 0.8rem; font-weight: 600; color: var(--text); line-height: 1.45; }
+.insight-whatif-a { margin: 0.4rem 0 0; display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; }
+.insight-whatif-a b {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.25rem; font-weight: 600; color: var(--text3);
+  font-variant-numeric: tabular-nums;
+}
+/* Direction, not verdict: more readiness is up, and the sentence behind the i is what
+   says whether that is worth doing anything about. */
+.insight-whatif-a b.up { color: var(--insight-younger); }
+.insight-whatif-a b.down { color: var(--insight-older); }
+.insight-whatif-a span { font-size: 0.74rem; color: var(--text3); }
