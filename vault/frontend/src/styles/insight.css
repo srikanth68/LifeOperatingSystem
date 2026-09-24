@@ -560,3 +560,54 @@
 .insight-eval-stat span { font-size: 0.73rem; color: var(--text3); }
 
 .hx .insight-eval-stat { background: var(--surface); box-shadow: var(--hx-shadow); }
+
+/* ── Tomorrow, and the portrait ──────────────────────────────────────────── */
+
+.insight-forecast { display: flex; flex-direction: column; gap: 0.2rem; }
+.insight-forecast-value { display: flex; align-items: baseline; gap: 0.35rem; }
+.insight-forecast-value b {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 2.2rem; font-weight: 600; line-height: 1.05; color: var(--insight);
+  font-variant-numeric: tabular-nums;
+}
+.insight-forecast-value span { font-size: 0.82rem; color: var(--text3); }
+.insight-forecast-range { margin: 0.1rem 0 0; font-size: 0.78rem; color: var(--text2); }
+.insight-forecast-method {
+  margin: 0.45rem 0 0; font-size: 0.72rem; font-weight: 600;
+  color: var(--insight); display: flex; align-items: center;
+}
+/* The naive answer is not a failure state, so it is stated in plain ink rather than
+   flagged in a warning colour -- but it never pretends to be the model. */
+.insight-forecast-method.is-naive { color: var(--text3); font-weight: 500; }
+
+.insight-sig-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0.75rem;
+}
+.insight-sig { display: flex; flex-direction: column; gap: 0.15rem; padding: 1rem 1.1rem; }
+.insight-sig-wide { grid-column: 1 / -1; }
+.insight-sig-lead {
+  margin: 0.1rem 0 0;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.5rem; font-weight: 600; line-height: 1.1; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.insight-sig-note { margin: 0.15rem 0 0; font-size: 0.75rem; color: var(--text3); line-height: 1.5; }
+
+.insight-sig-list { list-style: none; margin: 0.4rem 0 0; padding: 0; }
+.insight-sig-list li {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem;
+  padding: 0.35rem 0; border-top: 1px solid var(--border);
+  font-size: 0.8rem; color: var(--text2);
+}
+.insight-sig-list li:first-child { border-top: none; }
+.insight-sig-list em { font-style: normal; font-size: 0.74rem; color: var(--text3); white-space: nowrap; }
+
+.insight-week { display: flex; align-items: flex-end; gap: 0.35rem; margin-top: 0.7rem; height: 62px; }
+.insight-week-day { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; flex: 1; }
+.insight-week-day i { display: block; width: 100%; border-radius: 4px 4px 0 0; background: var(--insight-hair); }
+.insight-week-day b { font-size: 0.64rem; font-weight: 600; color: var(--text3); }
+.insight-week-day.is-worst i { background: var(--insight-older); }
+.insight-week-day.is-best i { background: var(--insight-younger); }
+.insight-week-day.is-worst b, .insight-week-day.is-best b { color: var(--text); }

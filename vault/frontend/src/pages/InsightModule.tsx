@@ -100,6 +100,44 @@ interface CorrelationSet {
   correlations: Correlation[];
 }
 
+interface ForecastEvidence {
+  modelMae: number | null;
+  persistenceMae: number;
+  averageMae: number;
+  skill: number | null;
+  testedOnDays: number;
+  modelWins: boolean;
+  verdict: string;
+}
+
+interface Forecast {
+  day: string;
+  value: number;
+  low: number;
+  high: number;
+  method: 'model' | 'today' | 'none';
+  basis: string;
+  evidence: ForecastEvidence;
+}
+
+interface BioSignature {
+  version: number;
+  generatedOn: string;
+  confidence: { settled: number; learning: number; daysOfHistory: number; note: string };
+  sleepClock: {
+    bedtime: string; wake: string; bedtimeVariabilityMinutes: number;
+    socialJetlagMinutes: number; nights: number; note: string;
+  } | null;
+  week: {
+    byDay: Record<string, number>; best: string; worst: string;
+    spread: number; weeks: number; note: string;
+  } | null;
+  recovery: { days: number | null; episodes: number; note: string };
+  respondsTo: { driver: string; outcome: string; lagDays: number; rho: number; n: number }[];
+  respondsToCaveat: string;
+  tomorrow: { readiness: Forecast | null; restingHeartRate: Forecast | null };
+}
+
 interface IllnessEval {
   windowDays: number;
   daysEvaluated: number;
@@ -688,6 +726,166 @@ function Correlations() {
   );
 }
 
+// ── Tomorrow, and how this body runs ────────────────────────────────────
+
+// The one number on this page that can be wrong in public, so it is shown with its own
+// track record attached rather than on its own.
+function Tomorrow({ what, unit, forecast }: { what: string; unit: string; forecast: Forecast | null }) {
+  if (!forecast) return null;
+
+  const naive = forecast.method === 'today';
+
+  return (
+    <div className="insight-card insight-forecast">
+      <p className="insight-eyebrow">Tomorrow · {what}</p>
+      <div className="insight-forecast-value">
+        <b>{Math.round(forecast.value)}</b>
+        <span>{unit}</span>
+      </div>
+      <p className="insight-forecast-range">
+        usually lands between {Math.round(forecast.low)} and {Math.round(forecast.high)}
+      </p>
+      <p className={`insight-forecast-method ${naive ? 'is-naive' : ''}`}>
+        {naive ? 'same as today' : 'from your own model'}
+        <Info label="How this forecast is judged">
+          {forecast.basis} {forecast.evidence.verdict}
+        </Info>
+      </p>
+    </div>
+  );
+}
+
+function BioSignatureSection() {
+  const { data } = useQuery({
+    queryKey: ['bio-signature'],
+    queryFn: () => get<BioSignature>(`${API}/api/health/signature`),
+  });
+  if (!data) return null;
+
+  const { sleepClock: clock, week, recovery } = data;
+  const nothingYet = !clock && !week && recovery.days === null && data.respondsTo.length === 0;
+
+  return (
+    <>
+      <section className="insight-section">
+        <h2 className="insight-h2">
+          Tomorrow
+          <Info label="How tomorrow is predicted">
+            Fitted on your own history and nobody else's, then tested one day at a time against two
+            duller answers: assuming tomorrow is like today, and assuming an average day. Assuming
+            tomorrow is like today is a genuinely good forecast, so when the model cannot beat it that
+            is what you are shown — said plainly rather than hidden.
+          </Info>
+        </h2>
+        <div className="insight-top">
+          <Tomorrow what="readiness" unit="/100" forecast={data.tomorrow.readiness} />
+          <Tomorrow what="resting heart rate" unit="bpm" forecast={data.tomorrow.restingHeartRate} />
+        </div>
+      </section>
+
+      <section className="insight-section">
+        <h2 className="insight-h2">
+          How you run
+          <Info label="What this is">
+            A portrait of your own physiology, built only from your record: when you sleep, which day of
+            the week is weakest, how long you take to come back from a hard day, and what your numbers
+            move with. Nothing here is compared with anyone else. {data.confidence.note}
+          </Info>
+        </h2>
+
+        {nothingYet ? (
+          <p className="insight-muted">
+            Not enough history yet. This fills in on its own — the sleep clock needs about three weeks,
+            the weekly shape about six.
+          </p>
+        ) : (
+          <div className="insight-sig-grid">
+            {clock && (
+              <div className="insight-card insight-sig">
+                <p className="insight-eyebrow">Your clock</p>
+                <p className="insight-sig-lead">{clock.bedtime} → {clock.wake}</p>
+                <p className="insight-sig-note">
+                  give or take {Math.round(clock.bedtimeVariabilityMinutes)} min, over {clock.nights} nights
+                  <Info label="About your sleep clock">{clock.note}</Info>
+                </p>
+              </div>
+            )}
+
+            {week && (
+              <div className="insight-card insight-sig">
+                <p className="insight-eyebrow">Your week</p>
+                <p className="insight-sig-lead">{week.spread < 3 ? 'even' : week.worst.slice(0, 3)}</p>
+                <p className="insight-sig-note">
+                  {week.spread < 3
+                    ? 'no day stands out'
+                    : <>weakest day, by {Math.round(week.spread)} points</>}
+                  <Info label="About your week">{week.note}</Info>
+                </p>
+                {week.spread >= 3 && <WeekBars byDay={week.byDay} worst={week.worst} best={week.best} />}
+              </div>
+            )}
+
+            <div className="insight-card insight-sig">
+              <p className="insight-eyebrow">Coming back</p>
+              <p className="insight-sig-lead">{recovery.days === null ? '—' : `${recovery.days}d`}</p>
+              <p className="insight-sig-note">
+                {recovery.days === null ? 'not enough hard days yet' : `after a hard day, over ${recovery.episodes}`}
+                <Info label="About recovery">{recovery.note}</Info>
+              </p>
+            </div>
+
+            {data.respondsTo.length > 0 && (
+              <div className="insight-card insight-sig insight-sig-wide">
+                <p className="insight-eyebrow">
+                  You respond to
+                  <Info label="About these">{data.respondsToCaveat}</Info>
+                </p>
+                <ul className="insight-sig-list">
+                  {data.respondsTo.map(r => (
+                    <li key={`${r.driver}-${r.outcome}-${r.lagDays}`}>
+                      <span>{r.driver} → {r.outcome}</span>
+                      <em>{r.rho > 0 ? '+' : ''}{r.rho.toFixed(2)}{r.lagDays === 1 ? ' next day' : ' same day'}</em>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+// Seven bars, the weakest and strongest picked out. Colour is decoration here -- both
+// ends are named in the text beside them.
+function WeekBars({ byDay, worst, best }: { byDay: Record<string, number>; worst: string; best: string }) {
+  const order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const values = order.map(d => byDay[d]).filter(v => v !== undefined);
+  if (values.length === 0) return null;
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(1, max - min);
+
+  return (
+    <div className="insight-week">
+      {order.map(day => {
+        const v = byDay[day];
+        if (v === undefined) return <span key={day} className="insight-week-day is-empty" />;
+        const height = 18 + ((v - min) / span) * 30;
+        const tone = day === worst ? 'is-worst' : day === best ? 'is-best' : '';
+        return (
+          <span key={day} className={`insight-week-day ${tone}`} title={`${day}: ${v.toFixed(1)}`}>
+            <i style={{ height }} />
+            <b>{day[0]}</b>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Has the illness warning ever worked? ──────────────────────────────
 
 // The only claim here that can be checked against what actually happened, so it is.
@@ -834,6 +1032,7 @@ function InsightPage() {
         </div>
 
         <Findings />
+        <BioSignatureSection />
         <TodayVsNormal />
         <Correlations />
         <IllnessRecord />
