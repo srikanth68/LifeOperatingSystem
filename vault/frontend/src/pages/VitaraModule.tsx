@@ -8,7 +8,7 @@ import {
 import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
 import { VitaraMetricsCatalogue } from '../components/VitaraMetricsCatalogue';
-import { Shell as HxShell, Tabs as HxTabs, Card, Ring, Stat, Chip, Delta as HxDelta, SectionHead, Empty } from '../components/health/HealthKit';
+import { Shell as HxShell, Tabs as HxTabs, Card, Ring, Stat, Chip, Delta as HxDelta, SectionHead, Empty, Info } from '../components/health/HealthKit';
 import '../styles/modules.css';
 import '../styles/vitara.css';
 
@@ -179,6 +179,16 @@ function BackendDown() {
 
 // ── TODAY ─────────────────────────────────────────────────────────────────────
 
+// Tile accents. Decoration, grouped by what the measurement is about -- heart, night,
+// movement, temperature, body, breath -- so a wall of numbers reads as a set rather than
+// a spreadsheet. Meaning never rides on these: status is always a word or a chip.
+const HEART = 'var(--hx-5)';
+const NIGHT = 'var(--hx-2)';
+const MOVE  = 'var(--hx-1)';
+const TEMP  = 'var(--hx-3)';
+const BODY  = 'var(--hx-4)';
+const AIR   = 'var(--hx-6)';
+
 function toneFor(score?: number | null): string {
   if (score == null) return 'var(--text3)';
   if (score >= 85) return 'var(--hx-good)';
@@ -265,38 +275,47 @@ function TodayPage({ status }: { status: OuraStatus }) {
         </Card>
 
         <div className="hx-grid hx-grid-4">
-          <div className="hx-stat">
+          <div className="hx-stat" style={{ ['--tile' as string]: NIGHT }}>
             <div className="hx-stat-head">
-              <span className="hx-stat-label">Sleep</span>
+              <span className="hx-stat-label">
+                Sleep
+                <Info>Total time actually asleep, not time in bed. The score weighs how long you slept, when, and how broken it was.</Info>
+              </span>
               {d.sleep?.daysAgo ? <Chip tone="warn">{d.sleep.daysAgo}d old</Chip> : null}
             </div>
             <div className="hx-stat-value">
-              <span className="hx-stat-num">{d.sleep ? fmtMin(d.sleep.totalMinutes) : '—'}</span>
+              <span className="hx-stat-num" style={d.sleep ? { color: NIGHT } : undefined}>{d.sleep ? fmtMin(d.sleep.totalMinutes) : '—'}</span>
             </div>
             <span className="hx-stat-sub">{d.sleep?.score != null ? `score ${d.sleep.score}` : 'No night recorded yet'}</span>
           </div>
 
           <Stat
             label="Steps"
+            accent={MOVE}
             value={d.activity?.steps != null ? d.activity.steps.toLocaleString() : null}
             sub={d.weeklyAvg?.steps != null ? `usually ${Math.round(d.weeklyAvg.steps).toLocaleString()}` : 'no weekly average yet'}
             empty="Nothing counted today"
+            info="Counted by the ring. The comparison is your own recent average, not a ten-thousand-step target."
           />
 
           <Stat
             label="Heart rate"
+            accent={HEART}
             value={hr}
             unit="bpm"
             sub={d.latestHeartRate ? `latest, ${relTime(d.latestHeartRate.timestamp)}` : 'overnight resting rate'}
             empty="No reading today"
+            info="The most recent beat-rate the ring recorded. Your overnight resting rate sits on the Recovery tab."
           />
 
           <Stat
             label="HRV"
+            accent={NIGHT}
             value={d.sleep?.hrv != null ? Math.round(d.sleep.hrv) : null}
             unit="ms"
             sub={<HxDelta value={d.sleep?.hrv} reference={d.weeklyAvg?.hrv} goodWhen="higher" unit=" ms"/>}
             empty="Not measured last night"
+            info="Heart rate variability: the spacing between beats while you slept. Higher usually means better recovered, and only your own trend is meaningful — never someone else's number."
           />
         </div>
       </div>
@@ -306,57 +325,73 @@ function TodayPage({ status }: { status: OuraStatus }) {
       <div className="hx-grid hx-grid-4">
         <Stat
           label="Resting heart rate"
+          accent={HEART}
           value={d.readiness?.restingHr}
           unit="bpm"
           sub={<HxDelta value={d.readiness?.restingHr} reference={d.weeklyAvg?.rhr} goodWhen="lower" unit=" bpm"/>}
           empty="No overnight reading"
+          info="The lowest sustained rate your heart held overnight. It rises with illness, alcohol, a late meal or a hard training block."
         />
         <Stat
           label="Breathing rate"
+          accent={NIGHT}
           value={d.sleep?.breathingRate != null ? d.sleep.breathingRate.toFixed(1) : null}
           unit="/min"
-          sub="Steady normally, which is what makes a change worth noticing"
+          sub="while asleep"
           empty="Not measured last night"
+          info="Breaths per minute while you slept. It is remarkably steady night to night, which is exactly what makes a change worth noticing."
         />
         <Stat
           label="Blood oxygen"
+          accent={AIR}
           value={d.spo2Data?.average != null ? d.spo2Data.average.toFixed(1) : (d.sleep?.spo2 != null ? d.sleep.spo2.toFixed(1) : null)}
           unit="%"
-          sub={d.spo2Data?.breathingDisturbance != null ? `disturbance index ${d.spo2Data.breathingDisturbance}` : 'Average through the night'}
+          sub={d.spo2Data?.breathingDisturbance != null ? `disturbance index ${d.spo2Data.breathingDisturbance}` : 'averaged through the night'}
           empty="Not measured last night"
+          info="The share of your blood carrying oxygen, averaged across the night. Readings that sit below about 95% night after night are worth raising with a doctor."
         />
         <Stat
           label="Skin temperature"
+          accent={TEMP}
           value={d.sleep?.skinTemp != null ? `${d.sleep.skinTemp > 0 ? '+' : ''}${d.sleep.skinTemp.toFixed(2)}` : null}
           unit="°C"
-          sub="Against your own usual — an early illness signal"
+          sub="vs your own usual"
           empty="Not measured last night"
+          info="A deviation from your own baseline, not an absolute temperature. A sustained rise is often the earliest sign that something is coming."
         />
         <Stat
           label="Stress"
+          accent={TEMP}
           value={d.stress?.summary ? d.stress.summary.replace('_', ' ') : null}
-          sub={d.stress?.recoveryMinutes != null ? `${d.stress.recoveryMinutes} min of recovery` : 'From daytime heart rate and skin signals'}
+          sub={d.stress?.recoveryMinutes != null ? `${d.stress.recoveryMinutes} min of recovery` : 'daytime reading'}
           empty="No stress reading today"
+          info="Built from daytime heart rate and skin signals. Recovery minutes are the time your body spent settling back down again."
         />
         <Stat
           label="Resilience"
+          accent={BODY}
           value={d.resilience?.level ? d.resilience.level.replace('_', ' ') : null}
-          sub={d.resilience?.sleepRecovery != null ? `sleep recovery ${d.resilience.sleepRecovery}` : 'Built from weeks, not days'}
+          sub={d.resilience?.sleepRecovery != null ? `sleep recovery ${d.resilience.sleepRecovery}` : 'long-run measure'}
           empty="Needs a few weeks of wear"
+          info="How well you bounce back from load, built from weeks of sleep and daytime recovery rather than from any single day."
         />
         <Stat
           label="Cardiovascular age"
+          accent={HEART}
           value={d.cardiovascularAge != null ? Math.round(d.cardiovascularAge) : null}
           unit="yrs"
-          sub={d.profile?.age != null ? `you are ${d.profile.age}` : 'An estimate, not a diagnosis'}
+          sub={d.profile?.age != null ? `you are ${d.profile.age}` : 'estimated'}
           empty="Needs more wear to estimate"
+          info="Oura's estimate of how old your vascular measurements look. An estimate from a ring, not a diagnosis."
         />
         <Stat
           label="VO₂ max"
+          accent={MOVE}
           value={d.vo2Max != null ? d.vo2Max.toFixed(1) : null}
           unit="ml/kg/min"
-          sub="Aerobic fitness; moves over months, not days"
+          sub="aerobic fitness"
           empty="Not estimated yet"
+          info="The oxygen your body can use at full effort — the standard measure of aerobic fitness. It moves over months of training, not over days."
         />
       </div>
 
@@ -541,17 +576,21 @@ function SleepPage() {
         </Card>
 
         <div className="hx-grid hx-grid-4">
-          <Stat label="Deep" value={lastNight ? fmtMin(lastNight.deepMinutes) : null}
+          <Stat label="Deep" accent="var(--sleep-deep)" value={lastNight ? fmtMin(lastNight.deepMinutes) : null}
                 sub={<HxDelta value={lastNight?.deepMinutes} reference={a.deep} goodWhen="higher" unit=" min"/>}
+                info="The deepest stage, when most physical repair happens. It is usually the first thing a short night takes away."
                 empty="Not measured"/>
-          <Stat label="REM" value={lastNight ? fmtMin(lastNight.remMinutes) : null}
+          <Stat label="REM" accent="var(--sleep-rem)" value={lastNight ? fmtMin(lastNight.remMinutes) : null}
                 sub={<HxDelta value={lastNight?.remMinutes} reference={a.rem} goodWhen="higher" unit=" min"/>}
+                info="The dreaming stage, tied to memory and mood. It comes mostly in the second half of the night, so waking early cuts it first."
                 empty="Not measured"/>
-          <Stat label="HRV" value={lastNight?.avgHrv != null ? Math.round(lastNight.avgHrv) : null} unit="ms"
+          <Stat label="HRV" accent="var(--hx-2)" value={lastNight?.avgHrv != null ? Math.round(lastNight.avgHrv) : null} unit="ms"
                 sub={<HxDelta value={lastNight?.avgHrv} reference={a.hrv} goodWhen="higher" unit=" ms"/>}
+                info="Heart rate variability averaged across the night. Compared against your own recent nights, never against anyone else's."
                 empty="Not measured"/>
-          <Stat label="Efficiency" value={lastNight != null ? Math.round(lastNight.efficiency * 100) : null} unit="%"
+          <Stat label="Efficiency" accent="var(--sleep-light)" value={lastNight != null ? Math.round(lastNight.efficiency * 100) : null} unit="%"
                 sub={a.eff != null ? `usually ${Math.round(a.eff * 100)}%` : 'no average yet'}
+                info="The share of your time in bed that you were actually asleep. Above about 85% is generally considered good."
                 empty="Not measured"/>
         </div>
       </div>
@@ -673,17 +712,25 @@ function BodyPage() {
         </Card>
 
         <div className="hx-grid hx-grid-4">
-          <Stat label="Cardiovascular age" value={bio?.cardiovascularAge != null ? Math.round(bio.cardiovascularAge) : null} unit="yrs"
-                sub={bio?.chronologicalAge ? `you are ${bio.chronologicalAge}` : undefined} empty="Needs more wear"/>
-          <Stat label="VO₂ max" value={bio?.vo2Max?.toFixed(1)} unit="ml/kg/min" sub="Aerobic fitness" empty="Not estimated yet"/>
-          <Stat label="Weight" value={latestWeight ? kgToLb(latestWeight.weightKg).toFixed(1) : null} unit="lb"
-                sub={latestWeight ? `recorded ${dayLabel(latestWeight.day)}` : undefined} empty="Nothing recorded yet"/>
-          <Stat label="BMI" value={latestBmi != null ? latestBmi.toFixed(1) : null}
-                sub={heightM ? 'Waist-to-height is the better guide' : 'Set your height on the Record tab'} empty="Needs weight and height"/>
+          <Stat label="Cardiovascular age" accent={HEART} value={bio?.cardiovascularAge != null ? Math.round(bio.cardiovascularAge) : null} unit="yrs"
+                sub={bio?.chronologicalAge ? `you are ${bio.chronologicalAge}` : 'estimated'}
+                info="Oura's estimate of how old your vascular measurements look. An estimate from a ring, not a diagnosis."
+                empty="Needs more wear"/>
+          <Stat label="VO₂ max" accent={MOVE} value={bio?.vo2Max?.toFixed(1)} unit="ml/kg/min" sub="aerobic fitness"
+                info="The oxygen your body can use at full effort. It moves over months of training, not over days."
+                empty="Not estimated yet"/>
+          <Stat label="Weight" accent={BODY} value={latestWeight ? kgToLb(latestWeight.weightKg).toFixed(1) : null} unit="lb"
+                sub={latestWeight ? `recorded ${dayLabel(latestWeight.day)}` : undefined}
+                info="Shown in pounds, stored in kilograms so the phone sync and BMI stay consistent."
+                empty="Nothing recorded yet"/>
+          <Stat label="BMI" accent={BODY} value={latestBmi != null ? latestBmi.toFixed(1) : null}
+                sub={heightM ? 'weight against height' : 'Set your height on the Record tab'}
+                info="Weight against height. It says nothing about muscle or about where fat sits, which is why waist-to-height is the better guide."
+                empty="Needs weight and height"/>
         </div>
       </div>
 
-      <SectionHead title="Record a weight" note="Shown in pounds; stored in kilograms so the phone sync and BMI stay consistent."/>
+      <SectionHead title="Record a weight" info="Enter pounds. It is stored in kilograms so the phone sync and the BMI calculation stay consistent with each other."/>
       <Card>
         <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <input type="number" step="0.1" placeholder="lb" value={weight}
@@ -829,14 +876,22 @@ function ActivityPage() {
         </Card>
 
         <div className="hx-grid hx-grid-4">
-          <Stat label="Steps" value={today?.steps?.toLocaleString()}
-                sub={<HxDelta value={today?.steps} reference={a.steps} goodWhen="higher"/>} empty="Nothing counted today"/>
-          <Stat label="Active calories" value={today?.activeCalories != null ? Math.round(today.activeCalories) : null} unit="kcal"
-                sub={<HxDelta value={today?.activeCalories} reference={a.cal} goodWhen="higher" unit=" kcal"/>} empty="Nothing counted today"/>
-          <Stat label="High intensity" value={today?.highActivityMinutes} unit="min"
-                sub={<HxDelta value={today?.highActivityMinutes} reference={a.highMin} goodWhen="higher" unit=" min"/>} empty="None today"/>
-          <Stat label="Distance" value={today?.steps != null ? ((today.steps * 0.00075).toFixed(1)) : null} unit="km"
-                sub="Estimated from your steps" empty="Nothing counted today"/>
+          <Stat label="Steps" accent={MOVE} value={today?.steps?.toLocaleString()}
+                sub={<HxDelta value={today?.steps} reference={a.steps} goodWhen="higher"/>}
+                info="Counted by the ring. The comparison is your own recent average, not a ten-thousand-step target."
+                empty="Nothing counted today"/>
+          <Stat label="Active calories" accent={TEMP} value={today?.activeCalories != null ? Math.round(today.activeCalories) : null} unit="kcal"
+                sub={<HxDelta value={today?.activeCalories} reference={a.cal} goodWhen="higher" unit=" kcal"/>}
+                info="Burned above resting, estimated from movement and heart rate. It excludes the calories you burn just being alive."
+                empty="Nothing counted today"/>
+          <Stat label="High intensity" accent={HEART} value={today?.highActivityMinutes} unit="min"
+                sub={<HxDelta value={today?.highActivityMinutes} reference={a.highMin} goodWhen="higher" unit=" min"/>}
+                info="Minutes spent at hard effort. Everything gentler is counted as medium or low activity instead."
+                empty="None today"/>
+          <Stat label="Distance" accent={AIR} value={today?.steps != null ? ((today.steps * 0.00075).toFixed(1)) : null} unit="km"
+                sub="from your steps"
+                info="Estimated from your step count at an average stride length, so treat it as a rough figure rather than a measurement."
+                empty="Nothing counted today"/>
         </div>
       </div>
 
@@ -929,10 +984,19 @@ function ReadinessPage() {
             <p className="hx-eyebrow">{today ? dayLabel(today.day) : 'Today'}</p>
             <h2 className="hx-headline">
               {today?.level ? today.level.replace('_', ' ') : today?.score != null ? 'Recovery' : 'Nothing today yet'}
+              <Info label="What readiness means">
+                How recovered you are, read from your overnight heart rate, heart rate variability and
+                temperature — measured against your own recent nights, never against anyone else.
+              </Info>
             </h2>
             <p className="hx-sub">
-              How recovered you are, from your overnight heart rate, heart-rate variability and
-              temperature — measured against your own recent nights, not against anyone else.
+              {today
+                ? [today.restingHeartRate != null ? `${today.restingHeartRate} bpm resting` : null,
+                   today.hrvBalance != null ? `HRV balance ${today.hrvBalance}` : null,
+                   today.temperatureDeviation != null
+                     ? `${today.temperatureDeviation > 0 ? '+' : ''}${today.temperatureDeviation.toFixed(2)} °C`
+                     : null].filter(Boolean).join(' · ') || 'Scored, but the underlying readings are missing.'
+                : 'Wear the ring overnight and this fills in after the next sync.'}
             </p>
             <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.7rem', flexWrap: 'wrap' }}>
               {(['optimal', 'good', 'pay_attention'] as const).map(l => (
@@ -946,17 +1010,22 @@ function ReadinessPage() {
         </Card>
 
         <div className="hx-grid hx-grid-4">
-          <Stat label="Resting heart rate" value={today?.restingHeartRate} unit="bpm"
+          <Stat label="Resting heart rate" accent={HEART} value={today?.restingHeartRate} unit="bpm"
                 sub={<HxDelta value={today?.restingHeartRate} reference={a.rhr} goodWhen="lower" unit=" bpm"/>}
+                info="The lowest sustained rate your heart held overnight. It rises with illness, alcohol, a late meal or a hard training block."
                 empty="No overnight reading"/>
-          <Stat label="HRV balance" value={today?.hrvBalance} unit="/100"
+          <Stat label="HRV balance" accent={NIGHT} value={today?.hrvBalance} unit="/100"
                 sub={<HxDelta value={today?.hrvBalance} reference={a.hrv} goodWhen="higher"/>}
+                info="Last night's heart rate variability scored against your own last two weeks. Fifty is your normal."
                 empty="Needs more nights"/>
-          <Stat label="Recovery index" value={today?.recoveryIndex} unit="/100"
+          <Stat label="Recovery index" accent={BODY} value={today?.recoveryIndex} unit="/100"
                 sub={<HxDelta value={today?.recoveryIndex} reference={a.recov} goodWhen="higher"/>}
+                info="How early in the night your heart rate settled to its lowest point. Settling early scores higher; alcohol and late food push it later."
                 empty="Needs more nights"/>
-          <Stat label="Temperature" value={today?.temperatureDeviation != null ? `${today.temperatureDeviation > 0 ? '+' : ''}${today.temperatureDeviation.toFixed(2)}` : null}
-                unit="°C" sub="Against your own usual" empty="Not measured"/>
+          <Stat label="Temperature" accent={TEMP} value={today?.temperatureDeviation != null ? `${today.temperatureDeviation > 0 ? '+' : ''}${today.temperatureDeviation.toFixed(2)}` : null}
+                unit="°C" sub="vs your own usual"
+                info="A deviation from your own baseline, not an absolute temperature. A sustained rise is often the earliest sign of illness."
+                empty="Not measured"/>
         </div>
       </div>
 

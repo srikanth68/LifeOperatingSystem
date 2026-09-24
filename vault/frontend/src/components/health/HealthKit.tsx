@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import '../../styles/health-app.css';
 
@@ -56,15 +57,55 @@ export function Tabs<T extends string>({ tabs, active, onPick }: {
   );
 }
 
+// The explanation, on request.
+//
+// Every tile used to carry a sentence about what the number means. Read once, that is
+// useful; read every morning it is clutter, and it crowded out the number itself. The
+// words stay -- one tap away, never gone.
+export function Info({ children, label = 'What is this?' }: { children: ReactNode; label?: string }) {
+  const [open, setOpen] = useState(false);
+  const [flip, setFlip] = useState(false);
+  const pop = useRef<HTMLSpanElement>(null);
+
+  // A tile in the last column would push its note off the right edge, so the note
+  // measures itself once and hangs from its right edge instead.
+  useLayoutEffect(() => {
+    if (!open || !pop.current) return;
+    const r = pop.current.getBoundingClientRect();
+    setFlip(r.right > window.innerWidth - 8);
+  }, [open]);
+
+  return (
+    <span className="hx-info-wrap">
+      <button
+        type="button"
+        className={`hx-info ${open ? 'open' : ''}`}
+        aria-expanded={open}
+        aria-label={label}
+        onClick={() => { setFlip(false); setOpen(o => !o); }}
+      >
+        i
+      </button>
+      {open && (
+        <span className={`hx-pop ${flip ? 'flip' : ''}`} role="note" ref={pop}>
+          {children}
+          <button type="button" className="hx-pop-close" onClick={() => setOpen(false)} aria-label="Close">×</button>
+        </span>
+      )}
+    </span>
+  );
+}
+
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <div className={`hx-card ${className}`}>{children}</div>;
 }
 
-export function SectionHead({ title, note }: { title: string; note?: string }) {
+export function SectionHead({ title, note, info }: { title: string; note?: string; info?: ReactNode }) {
   return (
     <div className="hx-section">
       <h2>{title}</h2>
       {note && <p>{note}</p>}
+      {info && <Info>{info}</Info>}
     </div>
   );
 }
@@ -109,25 +150,35 @@ export function Ring({ score, size = 104, label, tone = 'var(--vitara)' }: {
   );
 }
 
-// One number, its name, and what it is measured against. `empty` is the whole point:
-// a tile with nothing in it says so and says what would fill it.
-export function Stat({ label, value, unit, sub, chip, empty }: {
+// One number, its name, and what it is measured against.
+//
+// `empty` is the whole point: a tile with nothing in it says so, and says what would
+// fill it. `info` holds the explanation, which sits behind the i rather than under every
+// number. `accent` tints the value, so a wall of tiles reads as a set of measurements
+// rather than a spreadsheet -- it carries no meaning of its own, which is why it is the
+// series palette and never the status colours.
+export function Stat({ label, value, unit, sub, chip, empty, info, accent }: {
   label: string;
   value?: string | number | null;
   unit?: string;
   sub?: ReactNode;
   chip?: ReactNode;
   empty?: string;
+  info?: ReactNode;
+  accent?: string;
 }) {
   const missing = value == null || value === '';
   return (
-    <div className={`hx-stat ${missing ? 'is-empty' : ''}`}>
+    <div className={`hx-stat ${missing ? 'is-empty' : ''}`} style={accent ? { ['--tile' as string]: accent } : undefined}>
       <div className="hx-stat-head">
-        <span className="hx-stat-label">{label}</span>
+        <span className="hx-stat-label">
+          {label}
+          {info && <Info>{info}</Info>}
+        </span>
         {chip}
       </div>
       <div className="hx-stat-value">
-        <span className="hx-stat-num">{missing ? '—' : value}</span>
+        <span className="hx-stat-num" style={!missing && accent ? { color: accent } : undefined}>{missing ? '—' : value}</span>
         {!missing && unit && <span className="hx-stat-unit">{unit}</span>}
       </div>
       <span className="hx-stat-sub">{missing ? (empty ?? 'Nothing recorded yet') : sub}</span>

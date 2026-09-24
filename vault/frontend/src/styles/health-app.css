@@ -324,3 +324,62 @@
   color: var(--text) !important;
 }
 .hx table { color: var(--text); }
+
+/* ── The i, and what it opens ────────────────────────────────────────────────
+   Explanations are worth reading once and in the way every morning after. */
+
+.hx-info-wrap { position: relative; display: inline-flex; margin-left: 0.35rem; }
+
+.hx-info {
+  width: 15px; height: 15px; line-height: 1;
+  border-radius: 50%;
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text3);
+  font-size: 0.62rem; font-weight: 700; font-style: italic;
+  cursor: pointer; padding: 0;
+  display: grid; place-items: center;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.hx-info:hover, .hx-info.open { color: var(--surface); background: var(--text2); border-color: var(--text2); }
+
+.hx-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: -0.5rem;
+  z-index: 20;
+  width: max-content;
+  max-width: 280px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px -12px rgba(19,32,27,0.3);
+  padding: 0.65rem 1.6rem 0.7rem 0.8rem;
+  font-size: 0.76rem;
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--text2);
+  white-space: normal;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.hx-pop.flip { left: auto; right: -0.5rem; }
+
+.hx-pop-close {
+  position: absolute; top: 4px; right: 6px;
+  background: none; border: none; cursor: pointer;
+  color: var(--text3); font-size: 0.9rem; line-height: 1; padding: 2px;
+}
+.hx-pop-close:hover { color: var(--text); }
+
+/* Tiles carry a hairline of their series colour, so a grid of measurements reads as a
+   set rather than a spreadsheet. Decoration only -- meaning never rides on it. */
+.hx-stat { position: relative; }
+.hx-stat::before {
+  content: '';
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px;
+  border-radius: var(--hx-r) 0 0 var(--hx-r);
+  background: var(--tile, transparent);
+}
+.hx-stat.is-empty::before { opacity: 0.35; }
