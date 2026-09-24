@@ -116,7 +116,7 @@ public class OuraParsingTests
         Assert.Equal("r-1", r.Id);
         Assert.Equal(78, r.Score);
         Assert.Equal(72, r.HrvBalance);
-        Assert.Equal(64, r.RestingHeartRate);
+        Assert.Equal(64, r.RestingHrContributor);
         Assert.Equal(81, r.SleepBalance);
     }
 
@@ -128,7 +128,7 @@ public class OuraParsingTests
 
         Assert.Equal(78, r.Score);
         Assert.Null(r.HrvBalance);
-        Assert.Null(r.RestingHeartRate);
+        Assert.Null(r.RestingHrContributor);
     }
 
     [Theory]

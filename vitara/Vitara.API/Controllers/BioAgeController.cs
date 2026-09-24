@@ -47,7 +47,13 @@ public class BioAgeController(IVitaraRepository repo) : ControllerBase
         double? hrvDelta = hrvScore.HasValue ? -(hrvScore.Value - 40.0) / 5.0 : null;
 
         // RHR: healthy adult avg ~65bpm. Lower = younger.
-        var rhrValues = readiness.Where(r => r.RestingHeartRate.HasValue).Select(r => (double)r.RestingHeartRate!.Value).ToList();
+        //
+        // From the night's lowest heart rate. This used to read Oura's readiness
+        // contributor, a 0-100 score, and push it through a formula calibrated for bpm --
+        // so a perfect score of 100 was treated as a resting pulse of 100 and added
+        // (100-65)/3 = nearly twelve years to the estimate, with the sign inverted: the
+        // better the resting heart rate, the older this said you were.
+        var rhrValues = sleep.Where(s => s.LowestHr.HasValue).Select(s => s.LowestHr!.Value).ToList();
         double? rhrScore = rhrValues.Count > 0 ? rhrValues.Average() : null;
         double? rhrDelta = rhrScore.HasValue ? (rhrScore.Value - 65.0) / 3.0 : null;
 

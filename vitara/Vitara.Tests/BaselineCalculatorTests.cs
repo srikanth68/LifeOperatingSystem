@@ -47,7 +47,7 @@ public class ObservationProjectorTests
         // collide on the unique index or silently double-count in a baseline.
         var fromSleep = ObservationProjector.FromSleep([Night()]).Count(o => o.Metric == MetricKeys.RestingHeartRate);
         var fromReadiness = ObservationProjector
-            .FromReadiness(new DailyReadiness { Id = "r1", Day = new DateOnly(2026, 9, 1), Score = 74, RestingHeartRate = 51 })
+            .FromReadiness(new DailyReadiness { Id = "r1", Day = new DateOnly(2026, 9, 1), Score = 74, RestingHrContributor = 51 })
             .Count(o => o.Metric == MetricKeys.RestingHeartRate);
 
         Assert.Equal(1, fromSleep);

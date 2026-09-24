@@ -588,7 +588,7 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
             rows.Add(new Prediction.DayRow(
                 day,
                 Readiness: r?.Score,
-                RestingHr: r?.RestingHeartRate,
+                RestingHr: night?.LowestHr,
                 Hrv: night?.AvgHrv,
                 SleepMinutes: night?.TotalSleepMinutes,
                 ActiveCalories: a?.ActiveCalories));

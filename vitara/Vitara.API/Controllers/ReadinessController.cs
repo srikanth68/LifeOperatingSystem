@@ -12,7 +12,31 @@ public class ReadinessController(IVitaraRepository repo) : ControllerBase
         var to   = DateOnly.FromDateTime(DateTime.UtcNow);
         var from = to.AddDays(-days);
         var data = await repo.GetReadinessAsync(from, to);
-        return Ok(data);
+
+        // Projected rather than returned raw, so the resting heart rate in this payload is
+        // a heart rate. Oura's own readiness rows carry only a contributor score; the bpm
+        // lives on the night, and the tab that draws this asks for bpm.
+        var nights = (await repo.GetSleepAsync(from, to))
+            .GroupBy(s => s.Day)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.TotalSleepMinutes).First());
+
+        return Ok(data.Select(r => new
+        {
+            r.Id,
+            day = r.Day.ToString("yyyy-MM-dd"),
+            r.Score,
+            r.Level,
+            restingHeartRate = nights.TryGetValue(r.Day, out var night) && night.LowestHr is { } bpm
+                ? Math.Round(bpm, 0)
+                : (double?)null,
+            r.RestingHrContributor,
+            r.HrvBalance,
+            r.RecoveryIndex,
+            r.ActivityBalance,
+            r.SleepBalance,
+            temperatureDeviation = nights.TryGetValue(r.Day, out var sameNight) ? sameNight.SkinTempDeviation : null,
+            r.TemperatureContributor,
+        }));
     }
 
     [HttpGet("summary")]
@@ -37,7 +61,9 @@ public class ReadinessController(IVitaraRepository repo) : ControllerBase
 
             avgScore     = data.Where(r => r.Score.HasValue).Select(r => r.Score!.Value).DefaultIfEmpty(0).Average(),
             avgHrvBal    = data.Where(r => r.HrvBalance.HasValue).Select(r => r.HrvBalance!.Value).DefaultIfEmpty(0).Average(),
-            avgRhr       = data.Where(r => r.RestingHeartRate.HasValue).Select(r => r.RestingHeartRate!.Value).DefaultIfEmpty(0).Average(),
+            // Named for what it is. An average of 0-100 contributor scores reported as
+            // avgRhr is a number San would quote as a pulse.
+            avgRhrContributor = data.Where(r => r.RestingHrContributor.HasValue).Select(r => r.RestingHrContributor!.Value).DefaultIfEmpty(0).Average(),
             levelCounts  = data.GroupBy(r => r.Level ?? "unknown").ToDictionary(g => g.Key, g => g.Count()),
         });
     }

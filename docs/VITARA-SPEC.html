@@ -1661,6 +1661,10 @@ GET /api/health/simulate       what if I had slept more, and what cannot be answ
               <td>Dedicated location block, 2g limit, request buffering off, 30-minute timeouts.</td>
             </tr>
             <tr>
+              <td><b>A resting heart rate of 100 bpm, on a morning the real figure was 52.</b> Oura's readiness payload has a <code>contributors.resting_heart_rate</code>, and it is a score out of 100, not a pulse — 100 means that input helped today's readiness as much as it could, which happens when the rate is <em>low</em>. It was stored as <code>RestingHeartRate</code>, served as <code>restingHr</code>, labelled bpm on two tabs, and pushed through the biological-age formula as a pulse, where <code>(100 − 65) / 3</code> added nearly twelve years <em>for being in good shape</em>. The sign was inverted: the better the heart, the older the answer.</td>
+              <td>The field is <code>RestingHrContributor</code> and every surface that says bpm now reads <code>SleepSession.LowestHr</code> — which is what the analysis layer had always projected, so the baselines and findings were never wrong, only the display and the bio-age model. Same fix one field along for <code>TemperatureDeviation</code>, an int holding a contributor where a fraction of a degree was meant. Guarded <code>RENAME COLUMN</code> on existing databases.</td>
+            </tr>
+            <tr>
               <td><b>The Insight tab returned 502 from the day it shipped.</b> <code>vitara-insight</code> shares <code>vitara.env</code> with <code>vitara</code>, which sets <code>BIND_URL</code> to 5100 &mdash; so Insight listened on 5100 while nginx, San and the MCP gateway all called 5110. The findings worker silently read nothing.</td>
               <td>A service-level <code>environment: BIND_URL</code> in <code>docker-compose.yml</code>, which wins over <code>env_file</code>: one shared secrets file, one port per process.</td>
             </tr>

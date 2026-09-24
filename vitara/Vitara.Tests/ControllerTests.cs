@@ -471,9 +471,9 @@ public class ReadinessControllerTests
         var repo = new FakeRepo();
         repo.ReadinessData.AddRange(new[]
         {
-            new DailyReadiness { Id = "rs1", Day = today, Score = 85, Level = "optimal", HrvBalance = 90, RestingHeartRate = 60 },
-            new DailyReadiness { Id = "rs2", Day = today.AddDays(-1), Score = 70, Level = "good", HrvBalance = 80, RestingHeartRate = 65 },
-            new DailyReadiness { Id = "rs3", Day = today.AddDays(-2), Score = 88, Level = "optimal", HrvBalance = 95, RestingHeartRate = 58 },
+            new DailyReadiness { Id = "rs1", Day = today, Score = 85, Level = "optimal", HrvBalance = 90, RestingHrContributor = 60 },
+            new DailyReadiness { Id = "rs2", Day = today.AddDays(-1), Score = 70, Level = "good", HrvBalance = 80, RestingHrContributor = 65 },
+            new DailyReadiness { Id = "rs3", Day = today.AddDays(-2), Score = 88, Level = "optimal", HrvBalance = 95, RestingHrContributor = 58 },
         });
 
         var ok = Assert.IsType<OkObjectResult>(await new ReadinessController(repo).Summary(7));
@@ -523,7 +523,7 @@ public class BioAgeControllerTests
             });
             repo.ReadinessData.Add(new DailyReadiness
             {
-                Id = $"ba-r{i}", Day = day, Score = 80, RestingHeartRate = 65, HrvBalance = 85
+                Id = $"ba-r{i}", Day = day, Score = 80, RestingHrContributor = 65, HrvBalance = 85
             });
         }
 
@@ -553,7 +553,7 @@ public class BioAgeControllerTests
                 TotalSleepMinutes = 420, DeepMinutes = 70, RemMinutes = 90, LightMinutes = 180, AwakeMinutes = 30,
                 Score = 85, AvgHrv = 45.0,
             });
-            repo.ReadinessData.Add(new DailyReadiness { Id = $"cv-r{i}", Day = day, Score = 85, RestingHeartRate = 60, HrvBalance = 90 });
+            repo.ReadinessData.Add(new DailyReadiness { Id = $"cv-r{i}", Day = day, Score = 85, RestingHrContributor = 60, HrvBalance = 90 });
         }
         repo.CvAgeData.Add(new DailyCardiovascularAge { Id = "cv1", Day = today, VascularAge = 35.0 });
 
@@ -580,7 +580,7 @@ public class BioAgeControllerTests
                 TotalSleepMinutes = 420, DeepMinutes = 70, RemMinutes = 90, LightMinutes = 180, AwakeMinutes = 30,
                 Score = 10, AvgHrv = 5.0,
             });
-            repo.ReadinessData.Add(new DailyReadiness { Id = $"cl-r{i}", Day = day, Score = 10, RestingHeartRate = 120 });
+            repo.ReadinessData.Add(new DailyReadiness { Id = $"cl-r{i}", Day = day, Score = 10, RestingHrContributor = 120 });
         }
 
         var ok = Assert.IsType<OkObjectResult>(await new BioAgeController(repo).Get());
@@ -642,7 +642,7 @@ public class BioAgeControllerTests
                 TotalSleepMinutes = 420, DeepMinutes = 70, RemMinutes = 90, LightMinutes = 180, AwakeMinutes = 30,
                 Score = 80 + i % 3, AvgHrv = 42.0 + i,
             });
-            repo.ReadinessData.Add(new DailyReadiness { Id = $"lbl-r{i}", Day = day, Score = 78 + i % 4, RestingHeartRate = 62 });
+            repo.ReadinessData.Add(new DailyReadiness { Id = $"lbl-r{i}", Day = day, Score = 78 + i % 4, RestingHrContributor = 62 });
         }
         if (cvAge is { } v) repo.CvAgeData.Add(new DailyCardiovascularAge { Id = "lbl-cv", Day = today, VascularAge = v });
 

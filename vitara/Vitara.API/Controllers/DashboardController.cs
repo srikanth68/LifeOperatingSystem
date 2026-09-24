@@ -73,12 +73,19 @@ public class DashboardController(IVitaraRepository repo) : ControllerBase
                 daysAgo = today.DayNumber - todayRead.Day.DayNumber,
                 score = todayRead.Score,
                 level = todayRead.Level,
-                restingHr = todayRead.RestingHeartRate,
+                // From the night, not from the readiness contributors. The two used to be
+                // confused here, which is how a perfect contributor score of 100 reached
+                // the dashboard as a resting pulse of 100 bpm.
+                restingHr = todaySleep?.LowestHr is { } bpm ? Math.Round(bpm, 0) : (double?)null,
+                restingHrContributor = todayRead.RestingHrContributor,
                 hrvBalance = todayRead.HrvBalance,
                 recoveryIndex = todayRead.RecoveryIndex,
                 activityBalance = todayRead.ActivityBalance,
                 sleepBalance = todayRead.SleepBalance,
-                tempDeviation = todayRead.TemperatureDeviation,
+                // The night's reading in degrees, not the readiness contributor. Same
+                // mistake as restingHr, one field along.
+                tempDeviation = todaySleep?.SkinTempDeviation,
+                tempContributor = todayRead.TemperatureContributor,
             },
             activity = todayAct is null ? null : new
             {
@@ -122,7 +129,7 @@ public class DashboardController(IVitaraRepository repo) : ControllerBase
             weeklyAvg = new
             {
                 hrv = Math.Round(sleep.Where(s => s.AvgHrv.HasValue).Select(s => s.AvgHrv!.Value).DefaultIfEmpty(0).Average(), 0),
-                rhr = Math.Round(readiness.Where(r => r.RestingHeartRate.HasValue).Select(r => (double)r.RestingHeartRate!.Value).DefaultIfEmpty(0).Average(), 0),
+                rhr = Math.Round(sleep.Where(s => s.LowestHr.HasValue).Select(s => s.LowestHr!.Value).DefaultIfEmpty(0).Average(), 0),
                 sleepScore = Math.Round(sleep.Where(s => s.Score.HasValue).Select(s => (double)s.Score!.Value).DefaultIfEmpty(0).Average(), 0),
                 readinessScore = Math.Round(readiness.Where(r => r.Score.HasValue).Select(r => (double)r.Score!.Value).DefaultIfEmpty(0).Average(), 0),
                 steps = Math.Round(activity.Select(a => (double)a.Steps).DefaultIfEmpty(0).Average(), 0),

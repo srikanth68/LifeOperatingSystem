@@ -363,10 +363,12 @@ public class OuraClient : IOuraClient
                 Level = item.TryGetNullable<int>("score") switch { >= 85 => "optimal", >= 70 => "good", _ => "pay_attention" },
                 HrvBalance           = contributors?.TryGetNullable<int>("hrv_balance"),
                 RecoveryIndex        = contributors?.TryGetNullable<int>("recovery_index"),
-                RestingHeartRate     = contributors?.TryGetNullable<int>("resting_heart_rate"),
+                // A 0-100 contributor score, despite the name Oura gives it. See
+                // DailyReadiness.RestingHrContributor.
+                RestingHrContributor = contributors?.TryGetNullable<int>("resting_heart_rate"),
                 ActivityBalance      = contributors?.TryGetNullable<int>("activity_balance"),
                 SleepBalance         = contributors?.TryGetNullable<int>("sleep_balance"),
-                TemperatureDeviation = contributors?.TryGetNullable<int>("temperature_deviation"),
+                TemperatureContributor = contributors?.TryGetNullable<int>("temperature_deviation"),
             };
     }
 

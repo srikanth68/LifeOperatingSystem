@@ -271,6 +271,13 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
 
         await AddColumnIfMissingAsync(db, "Meals", "Source", "TEXT NOT NULL DEFAULT 'manual'");
 
+        // Renamed rather than added: the column holds Oura's 0-100 readiness contributor
+        // and was called RestingHeartRate, which is how it ended up served as bpm and fed
+        // to the bio-age model as a pulse. The data is kept -- it is a real score -- and
+        // only the name that caused the misreading changes.
+        await RenameColumnIfPresentAsync(db, "Readiness", "RestingHeartRate", "RestingHrContributor");
+        await RenameColumnIfPresentAsync(db, "Readiness", "TemperatureDeviation", "TemperatureContributor");
+
         // ── Health intelligence tables ──
         //
         // EnsureCreated builds these from the model on a fresh database and does
@@ -466,6 +473,23 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
                 LastError TEXT
             );
             """);
+    }
+
+    // SQLite has had RENAME COLUMN since 3.25. Guarded at both ends so a box that has
+    // already been renamed, and a fresh database built straight from the model, both do
+    // nothing rather than throwing on startup.
+    private static async Task RenameColumnIfPresentAsync(VitaraDbContext db, string table, string from, string to)
+    {
+        var conn = db.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync();
+
+        await using var check = conn.CreateCommand();
+        check.CommandText =
+            $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = '{from}' " +
+            $"AND (SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = '{to}') = 0";
+
+        if (Convert.ToInt64(await check.ExecuteScalarAsync()) > 0)
+            await db.Database.ExecuteSqlRawAsync($"ALTER TABLE {table} RENAME COLUMN {from} TO {to}");
     }
 
     private static async Task AddColumnIfMissingAsync(VitaraDbContext db, string table, string column, string type)
