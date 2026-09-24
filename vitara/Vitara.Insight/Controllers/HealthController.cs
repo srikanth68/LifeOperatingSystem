@@ -258,6 +258,175 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         });
     }
 
+    // Who this person is, physiologically, and what tomorrow looks like.
+    //
+    // The bio signature: a portable description of how one body runs -- when it sleeps,
+    // which days go badly, what it responds to, how long it takes to come back -- and,
+    // separately, a forecast that has had to earn the right to be shown.
+    //
+    // Nothing here is compared with a population. The claim is never "you are above
+    // average", it is "this is how you run, and here is how confidently we can say it",
+    // and every part reports its own confidence or says it has nothing yet.
+    [HttpGet("signature")]
+    public async Task<IActionResult> BioSignature([FromQuery] int days = 400)
+    {
+        var to = LocalTime.Today;
+        var from = to.AddDays(-Math.Clamp(days, 60, 1825));
+
+        var rows = await DayRows(from, to);
+        var nights = await repo.GetSleepAsync(from, to);
+        var correlations = await repo.GetLatestCorrelationsAsync();
+        var baselineDay = await repo.GetLatestBaselineDayAsync();
+        var baselines = baselineDay is null ? [] : await repo.GetBaselinesAsync(baselineDay.Value);
+
+        var chronotype = Signature.WhenTheySleep(nights);
+        var week = Signature.TheirWeek(rows);
+        var recovery = Signature.HowTheyRecover(rows);
+        var confidence = Signature.HowSure(baselines, rows.Count);
+
+        return Ok(new
+        {
+            version = 1,
+            generatedOn = to.ToString("yyyy-MM-dd"),
+
+            // First, so anything reading this knows how much weight it can bear.
+            confidence = new
+            {
+                confidence.Settled,
+                confidence.Learning,
+                confidence.DaysOfHistory,
+                confidence.Note,
+            },
+
+            sleepClock = chronotype is null
+                ? null
+                : new
+                {
+                    bedtime = Clock(chronotype.BedMinutes),
+                    wake = Clock(chronotype.WakeMinutes),
+                    bedtimeVariabilityMinutes = Math.Round(chronotype.BedVariabilityMinutes),
+                    socialJetlagMinutes = Math.Round(chronotype.SocialJetlagMinutes),
+                    chronotype.Nights,
+                    chronotype.Note,
+                },
+
+            week = week is null
+                ? null
+                : new
+                {
+                    byDay = week.ByDay.ToDictionary(kv => kv.Key.ToString(), kv => Math.Round(kv.Value, 1)),
+                    best = week.Best.ToString(),
+                    worst = week.Worst.ToString(),
+                    spread = Math.Round(week.Spread, 1),
+                    week.Weeks,
+                    week.Note,
+                },
+
+            recovery = new { days = recovery.Days, recovery.Episodes, recovery.Note },
+
+            respondsTo = Signature.WhatMovesThem(correlations).Select(r => new
+            {
+                driver = MetricCatalogue.Find(r.Driver)?.Label ?? r.Driver,
+                outcome = MetricCatalogue.Find(r.Outcome)?.Label ?? r.Outcome,
+                r.LagDays,
+                r.Rho,
+                r.N,
+            }),
+
+            // The caveat travels with the numbers, as everywhere else.
+            respondsToCaveat = "These moved together in your own data over the window. Moving together is " +
+                               "not causing, and some of them will be coincidence.",
+
+            // Everything above describes the past. This is the part that can be wrong.
+            tomorrow = new
+            {
+                readiness = Shape(Prediction.Next(rows, Prediction.Target.Readiness)),
+                restingHeartRate = Shape(Prediction.Next(rows, Prediction.Target.RestingHr)),
+            },
+        });
+    }
+
+    // Tomorrow, on its own, for anything that wants the forecast without the portrait.
+    [HttpGet("forecast")]
+    public async Task<IActionResult> Forecast([FromQuery] int days = 400)
+    {
+        var to = LocalTime.Today;
+        var rows = await DayRows(to.AddDays(-Math.Clamp(days, 60, 1825)), to);
+
+        return Ok(new
+        {
+            readiness = Shape(Prediction.Next(rows, Prediction.Target.Readiness)),
+            restingHeartRate = Shape(Prediction.Next(rows, Prediction.Target.RestingHr)),
+            features = Prediction.FeatureNames,
+            minTrainingDays = Prediction.MinTrainingDays,
+        });
+    }
+
+    // The forecast is shown with its own record attached, always. A prediction whose
+    // track record is available but not shown is a prediction being flattered.
+    private static object? Shape(Prediction.Forecast? f) => f is null
+        ? null
+        : new
+        {
+            day = f.Day.ToString("yyyy-MM-dd"),
+            value = Math.Round(f.Value, 1),
+            low = Math.Round(f.Low, 1),
+            high = Math.Round(f.High, 1),
+            f.Method,
+            f.Basis,
+            evidence = new
+            {
+                modelMae = f.Evidence.Model is null ? (double?)null : Math.Round(f.Evidence.Model.Mae, 2),
+                persistenceMae = Math.Round(f.Evidence.Persistence.Mae, 2),
+                averageMae = Math.Round(f.Evidence.Mean.Mae, 2),
+                skill = f.Evidence.Skill is null ? (double?)null : Math.Round(f.Evidence.Skill.Value, 3),
+                testedOnDays = f.Evidence.Model?.Predictions ?? f.Evidence.Persistence.Predictions,
+                f.Evidence.ModelWins,
+                f.Evidence.Verdict,
+            },
+        };
+
+    private static string Clock(double minutesFromMidnight)
+    {
+        var minutes = ((int)Math.Round(minutesFromMidnight) % 1440 + 1440) % 1440;
+        return $"{minutes / 60:00}:{minutes % 60:00}";
+    }
+
+    // One row per day, assembled from the tables that own each piece. Built here rather
+    // than in the forecast so that the model sees exactly what the rest of the module
+    // sees, with the same day boundaries.
+    private async Task<List<Prediction.DayRow>> DayRows(DateOnly from, DateOnly to)
+    {
+        var readiness = await repo.GetReadinessAsync(from, to);
+        var activity = await repo.GetActivityAsync(from, to);
+        var sleep = await repo.GetSleepAsync(from, to);
+
+        var byDay = readiness.ToDictionary(r => r.Day);
+        var activityByDay = activity.GroupBy(a => a.Day).ToDictionary(g => g.Key, g => g.Last());
+        var sleepByDay = sleep.GroupBy(x => x.Day).ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.TotalSleepMinutes).First());
+
+        var rows = new List<Prediction.DayRow>();
+
+        for (var day = from; day <= to; day = day.AddDays(1))
+        {
+            byDay.TryGetValue(day, out var r);
+            activityByDay.TryGetValue(day, out var a);
+            sleepByDay.TryGetValue(day, out var night);
+
+            // A day with nothing at all is still a row. Dropping it would close the gap
+            // and let a fortnight without the ring look like a continuous fortnight.
+            rows.Add(new Prediction.DayRow(
+                day,
+                Readiness: r?.Score,
+                RestingHr: r?.RestingHeartRate,
+                Hrv: night?.AvgHrv,
+                SleepMinutes: night?.TotalSleepMinutes,
+                ActiveCalories: a?.ActiveCalories));
+        }
+
+        return rows;
+    }
+
     // Did the early-illness signal actually work?
     //
     // The one detector here with ground truth available: the user marks the days they
