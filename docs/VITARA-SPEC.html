@@ -1567,6 +1567,7 @@ GET /api/health/simulate       what if I had slept more, and what cannot be answ
             <tr><td class="m">health_findings</td><td>What Vitara has concluded, with the status sentence</td></tr>
             <tr><td class="m">health_baselines</td><td>What is normal for this user, so "high" means high for them</td></tr>
             <tr><td class="m">food_log · weight_log · workout_log</td><td>Write paths</td></tr>
+            <tr><td class="muted">health_forecast · health_signature</td><td class="muted">Not built. See &sect;18 — the endpoints exist, the tools do not.</td></tr>
           </tbody>
         </table>
       </div>
@@ -1834,6 +1835,7 @@ GET /api/health/simulate       what if I had slept more, and what cannot be answ
             <tr><td><b>Lab reference ranges</b></td><td><code>LabPanels</code> and <code>ReferenceRanges</code> exist, <code>lab_anchor</code> is a defined finding type, nothing populates or reads them. Lab values can be entered manually; they are stored but not interpreted.</td></tr>
             <tr><td><b>Validated clinical models</b></td><td>None implemented. No PREVENT, ASCVD, FINDRISC, PhenoAge, eGFR/CKD-EPI or metabolic syndrome. All need lab data that has not been ingested.</td></tr>
 
+            <tr><td><b>Tomorrow, in San</b></td><td>The MCP gateway exposes <code>vitara_health</code>, <code>health_findings</code> and <code>health_baselines</code> only. The signature, the forecast, the what-ifs and the illness evaluation are reachable over HTTP and not as tools, so San can say how last night went and nothing about tomorrow. Whatever wraps them has to carry the forecast's <code>method</code> field and its verdict, or the naive answer gets reported as a prediction; and the what-if refusals, which are the answer rather than an error.</td></tr>
             <tr><td><b>Model summarisation</b></td><td>Findings are shown to the model as evidence; there is no prompt that turns a set of findings into prose.</td></tr>
             <tr><td><b>Nutrition analysis</b></td><td>Meals and daily totals are stored. No adequacy, balance or exposure algorithms.</td></tr>
           </tbody>
