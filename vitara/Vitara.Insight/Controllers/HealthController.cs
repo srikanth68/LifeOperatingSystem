@@ -357,8 +357,178 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         {
             readiness = Shape(Prediction.Next(rows, Prediction.Target.Readiness)),
             restingHeartRate = Shape(Prediction.Next(rows, Prediction.Target.RestingHr)),
-            features = Prediction.FeatureNames,
+            hrv = Shape(Prediction.Next(rows, Prediction.Target.Hrv)),
+            timeAsleep = Shape(Prediction.Next(rows, Prediction.Target.SleepMinutes)),
             minTrainingDays = Prediction.MinTrainingDays,
+        });
+    }
+
+    // What if I had slept more?
+    //
+    // The step from a forecast to something worth calling a clone. It refuses in two
+    // cases rather than guessing: when no model beat the dull answer there is no lever
+    // to pull, and when the scenario is outside what this person has actually done
+    // their data cannot answer it. Both refusals are the answer, not an error.
+    [HttpGet("simulate")]
+    public async Task<IActionResult> Simulate([FromQuery] string target = "readiness", [FromQuery] int days = 400)
+    {
+        var to = LocalTime.Today;
+        var rows = await DayRows(to.AddDays(-Math.Clamp(days, 60, 1825)), to);
+
+        var which = target.ToLowerInvariant() switch
+        {
+            "resting_hr" or "restinghr" => Prediction.Target.RestingHr,
+            "hrv" => Prediction.Target.Hrv,
+            "sleep" or "time_asleep" => Prediction.Target.SleepMinutes,
+            _ => Prediction.Target.Readiness,
+        };
+
+        // A fixed set rather than free input. These are the two things a person can
+        // actually decide tonight, at sizes they might plausibly decide on.
+        (string, double)[] asks =
+        [
+            ("sleep", 60), ("sleep", 30), ("sleep", -60),
+            ("effort", 250), ("effort", -250),
+        ];
+
+        var scenarios = Prediction.WhatIf(rows, which, asks);
+
+        return Ok(new
+        {
+            target = Prediction.Describe(which),
+            unit = Prediction.UnitOf(which),
+
+            // First and unavoidably. Everything below is an association inside one
+            // person's history, and the sentence that says so travels with the numbers
+            // rather than sitting in a footnote nobody reads.
+            caveat = "These come from what your own days did together, not from an experiment. " +
+                     "An evening with more sleep in it usually differs in other ways too, and the " +
+                     "model is carrying all of them.",
+
+            scenarios = scenarios.Select(x => new
+            {
+                x.Lever,
+                x.Delta,
+                x.Question,
+                x.From,
+                x.To,
+                x.Change,
+                x.Supported,
+                x.Answer,
+            }),
+        });
+    }
+
+    // The signature as a file: everything needed to read this person's shape, and to
+    // run their forecast, without their raw readings.
+    //
+    // This is the portable half of the idea. What leaves is derived statistics and a
+    // handful of fitted weights -- no sleep sessions, no heart-rate samples, no days.
+    // Someone holding this file can say what tomorrow looks like and cannot say what
+    // last Tuesday was.
+    [HttpGet("signature/export")]
+    public async Task<IActionResult> Export([FromQuery] int days = 400)
+    {
+        var to = LocalTime.Today;
+        var from = to.AddDays(-Math.Clamp(days, 60, 1825));
+
+        var rows = await DayRows(from, to);
+        var nights = await repo.GetSleepAsync(from, to);
+        var correlations = await repo.GetLatestCorrelationsAsync();
+        var baselineDay = await repo.GetLatestBaselineDayAsync();
+        var baselines = baselineDay is null ? [] : await repo.GetBaselinesAsync(baselineDay.Value);
+
+        var chronotype = Signature.WhenTheySleep(nights);
+        var week = Signature.TheirWeek(rows);
+        var recovery = Signature.HowTheyRecover(rows);
+        var confidence = Signature.HowSure(baselines, rows.Count);
+
+        Prediction.Target[] targets =
+        [
+            Prediction.Target.Readiness, Prediction.Target.RestingHr,
+            Prediction.Target.Hrv, Prediction.Target.SleepMinutes,
+        ];
+
+        var models = targets.Select(t =>
+        {
+            var evidence = Prediction.Run(rows, t);
+            var model = evidence.ModelWins ? Prediction.Fit(rows, t, rows.Count - 1) : null;
+
+            return new
+            {
+                target = Prediction.Describe(t),
+                unit = Prediction.UnitOf(t),
+                features = Prediction.FeatureNames(t),
+
+                // Only exported when it earned its place. A model that lost to "tomorrow
+                // is like today" would travel as a set of weights with no warning
+                // attached, and be run by whoever received it.
+                weights = model?.InOriginalUnits().Select(w => Math.Round(w, 6)),
+                intercept = model is null ? (double?)null : Math.Round(model.Intercept, 4),
+                centres = model?.Mean.Select(m => Math.Round(m, 4)),
+                trainedOnDays = model?.TrainedOn,
+                method = evidence.ModelWins ? "model" : "today",
+                evidence.Verdict,
+            };
+        }).ToList();
+
+        return Ok(new
+        {
+            schema = "maaya.vitara.signature",
+            version = 2,
+            generatedOn = to.ToString("yyyy-MM-dd"),
+
+            contains = "Derived statistics and fitted weights only. No individual readings, no dates " +
+                       "of any specific day, no raw sleep or heart-rate data.",
+            disclaimer = "Built from consumer wearable data for one person. Not a medical record and " +
+                         "not a diagnostic instrument.",
+
+            confidence = new { confidence.Settled, confidence.Learning, confidence.DaysOfHistory, confidence.Note },
+
+            // The levels, without the days that made them.
+            normals = baselines.Select(b => new
+            {
+                metric = b.Metric,
+                label = MetricCatalogue.Find(b.Metric)?.Label ?? b.Metric,
+                signature = b.BaselineSignature,
+                median = Math.Round(b.Median, 3),
+                p25 = Math.Round(b.P25, 3),
+                p75 = Math.Round(b.P75, 3),
+                spread = Math.Round(b.StdDev, 3),
+                b.N,
+                b.IsValid,
+                b.WindowDays,
+            }),
+
+            sleepClock = chronotype is null ? null : new
+            {
+                bedtime = Clock(chronotype.BedMinutes),
+                wake = Clock(chronotype.WakeMinutes),
+                bedtimeVariabilityMinutes = Math.Round(chronotype.BedVariabilityMinutes),
+                socialJetlagMinutes = Math.Round(chronotype.SocialJetlagMinutes),
+                chronotype.Nights,
+            },
+
+            week = week is null ? null : new
+            {
+                byDay = week.ByDay.ToDictionary(kv => kv.Key.ToString(), kv => Math.Round(kv.Value, 1)),
+                best = week.Best.ToString(),
+                worst = week.Worst.ToString(),
+                spread = Math.Round(week.Spread, 1),
+            },
+
+            recovery = new { days = recovery.Days, recovery.Episodes },
+
+            respondsTo = Signature.WhatMovesThem(correlations, 10).Select(r => new
+            {
+                driver = MetricCatalogue.Find(r.Driver)?.Label ?? r.Driver,
+                outcome = MetricCatalogue.Find(r.Outcome)?.Label ?? r.Outcome,
+                r.LagDays,
+                r.Rho,
+                r.N,
+            }),
+
+            forecasts = models,
         });
     }
 

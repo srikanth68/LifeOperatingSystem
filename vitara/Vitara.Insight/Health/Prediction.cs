@@ -32,7 +32,36 @@ public static class Prediction
         double? SleepMinutes = null,
         double? ActiveCalories = null);
 
-    public enum Target { Readiness, RestingHr }
+    // What can be predicted. All four are things a person asks about their tomorrow;
+    // nothing here predicts a diagnosis, and nothing predicts anything about anyone else.
+    public enum Target { Readiness, RestingHr, Hrv, SleepMinutes }
+
+    public static string Describe(Target target) => target switch
+    {
+        Target.Readiness => "readiness",
+        Target.RestingHr => "resting heart rate",
+        Target.Hrv => "HRV",
+        _ => "time asleep",
+    };
+
+    public static string UnitOf(Target target) => target switch
+    {
+        Target.Readiness => "points",
+        Target.RestingHr => "bpm",
+        Target.Hrv => "ms",
+        _ => "minutes",
+    };
+
+    // The range a prediction is allowed to land in. A linear model extrapolates happily
+    // past the end of the world; readiness of 118 is not a bold forecast, it is a bug
+    // shown to someone as a number.
+    private static (double Low, double High) Plausible(Target target) => target switch
+    {
+        Target.Readiness => (0, 100),
+        Target.RestingHr => (30, 120),
+        Target.Hrv => (5, 250),
+        _ => (0, 900),
+    };
 
     // Enough days that a fit is not describing a fortnight's weather. Below this the
     // model is not attempted at all.
@@ -47,7 +76,7 @@ public static class Prediction
     // already generous; the temptation with a year of wearable data is forty features
     // and a model that fits the noise beautifully. Each of these is something a person
     // would name if asked why they expect tomorrow to go badly.
-    public static readonly string[] FeatureNames =
+    private static readonly string[] AllFeatures =
     [
         "today",              // the persistence anchor
         "week mean",          // where the level has been sitting
@@ -57,6 +86,41 @@ public static class Prediction
         "HRV today",
         "weekend",            // tomorrow, not today
     ];
+
+    // Predicting HRV from "HRV today" twice, or sleep from "sleep last night" twice, is
+    // the same column entered under two names. Ridge tolerates it and the coefficients
+    // then split arbitrarily between the pair, which makes the model unreadable for no
+    // gain. The duplicate is dropped per target instead.
+    private static int Duplicate(Target target) => target switch
+    {
+        Target.SleepMinutes => 3,
+        Target.Hrv => 5,
+        _ => -1,
+    };
+
+    public static string[] FeatureNames(Target target)
+    {
+        var skip = Duplicate(target);
+        return AllFeatures.Where((_, i) => i != skip).ToArray();
+    }
+
+    // Which feature a "what if" can move. Levers only exist where the model kept the
+    // column -- you cannot ask what an extra hour of sleep does to your sleep.
+    public static int? LeverIndex(Target target, string lever)
+    {
+        var name = lever switch
+        {
+            "sleep" => "sleep last night",
+            "effort" => "yesterday's effort",
+            _ => null,
+        };
+
+        if (name is null) return null;
+
+        var names = FeatureNames(target);
+        var index = Array.IndexOf(names, name);
+        return index < 0 ? null : index;
+    }
 
     // Row i is the day the prediction is made FROM; `forDay` is the day being predicted.
     // Passed in rather than read from row i + 1, because the one prediction that matters
@@ -79,7 +143,7 @@ public static class Prediction
         // A missing input is carried as the week's own level rather than as zero: zero
         // is a real and terrible value for every one of these, and a model trained with
         // zeros for missing nights learns that not wearing the ring predicts collapse.
-        return
+        double[] all =
         [
             today.Value,
             weekMean,
@@ -89,6 +153,9 @@ public static class Prediction
             hrv ?? MeanOf(rows, i, r => r.Hrv),
             forDay.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday ? 1 : 0,
         ];
+
+        var skip = Duplicate(target);
+        return skip < 0 ? all : all.Where((_, index) => index != skip).ToArray();
     }
 
     private static double MeanOf(IReadOnlyList<DayRow> rows, int i, Func<DayRow, double?> pick)
@@ -97,8 +164,13 @@ public static class Prediction
         return window.Count == 0 ? 0 : window.Average();
     }
 
-    private static double? Value(DayRow row, Target target) =>
-        target == Target.Readiness ? row.Readiness : row.RestingHr;
+    private static double? Value(DayRow row, Target target) => target switch
+    {
+        Target.Readiness => row.Readiness,
+        Target.RestingHr => row.RestingHr,
+        Target.Hrv => row.Hrv,
+        _ => row.SleepMinutes,
+    };
 
     // ── The model ───────────────────────────────────────────────────────────────
 
@@ -112,6 +184,12 @@ public static class Prediction
 
             return sum;
         }
+
+        // The weights, in the units a person uses, so an exported model can be read as
+        // well as run: "each extra hour of sleep is worth about this much". Standardised
+        // coefficients divided back through their own scale.
+        public IReadOnlyList<double> InOriginalUnits() =>
+            Coefficients.Select((c, i) => c / Scale[i]).ToList();
     }
 
     // Ridge rather than plain least squares. With sixty rows, seven correlated features
@@ -280,8 +358,8 @@ public static class Prediction
 
     private static string Verdict(Score? model, Score persistence, Score mean, double? skill, bool wins, Target target)
     {
-        var what = target == Target.Readiness ? "readiness" : "resting heart rate";
-        var unit = target == Target.Readiness ? "points" : "bpm";
+        var what = Describe(target);
+        var unit = UnitOf(target);
 
         if (model is null)
             return $"No forecast for {what} yet: there is not enough history to fit one and test it honestly. " +
@@ -296,6 +374,149 @@ public static class Prediction
             : $"{scored} The forecast is off by {model.Mae:0.0} {unit} on average and assuming tomorrow is like " +
               $"today is off by {persistence.Mae:0.0}, so the forecast is not earning its keep. Tomorrow is " +
               "reported as today, said plainly, until it does.";
+    }
+
+
+    // ── What if ─────────────────────────────────────────────────────────────────
+    //
+    // The step from a forecast to something worth calling a clone: not "tomorrow will
+    // be 74", but "on days that looked like today, when you had slept an hour more,
+    // tomorrow was typically three points better".
+    //
+    // Two rules keep this from becoming a lie, and both refuse rather than guess.
+    //
+    //   1. NOT CAUSAL. The model was fitted on what this person happened to do, so a
+    //      lever moves an association, not a cause. An hour more sleep on the days
+    //      someone slept more may have come with a quiet evening, no alcohol and no
+    //      late session, and the model is carrying all of that. Every scenario says so.
+    //   2. NO EXTRAPOLATION. If the person has never slept nine hours, their data
+    //      cannot answer what nine hours does. A scenario outside the middle of what
+    //      they have actually done is refused by name rather than answered confidently.
+    public record Scenario(
+        string Lever,
+        double Delta,
+        string Question,
+        double? From,
+        double? To,
+        double? Change,
+        bool Supported,
+        string Answer);
+
+    // Where the lever's own history sits. Used to decide whether a scenario is inside
+    // what this person has actually done.
+    private static (double Low, double High)? LeverRange(
+        IReadOnlyList<DayRow> rows, Target target, string lever)
+    {
+        var values = rows
+            .Select(r => lever == "sleep" ? r.SleepMinutes : r.ActiveCalories)
+            .Where(v => v is not null)
+            .Select(v => v!.Value)
+            .OrderBy(v => v)
+            .ToList();
+
+        if (values.Count < 30) return null;
+
+        // The middle ninety per cent. The tails of a wearable series are mostly the days
+        // the device was confused, and a counterfactual anchored on those is a
+        // counterfactual about a sensor fault.
+        return (Statistics.Percentile(values, 0.05), Statistics.Percentile(values, 0.95));
+    }
+
+    public static IReadOnlyList<Scenario> WhatIf(
+        IReadOnlyList<DayRow> rows, Target target, IReadOnlyList<(string Lever, double Delta)> asks)
+    {
+        var ordered = rows.OrderBy(r => r.Day).ToList();
+        var results = new List<Scenario>();
+        if (ordered.Count == 0) return results;
+
+        var evidence = Run(ordered, target, MaxEvalDays);
+        var model = evidence.ModelWins ? Fit(ordered, target, ordered.Count - 1) : null;
+        var tomorrow = ordered[^1].Day.AddDays(1);
+        var baseFeatures = Features(ordered, ordered.Count - 1, target, tomorrow);
+
+        foreach (var (lever, delta) in asks)
+        {
+            var question = Question(lever, delta, target);
+
+            // The honest refusal, and the common one. Without a model that beat the dull
+            // answer there is no lever to pull: "tomorrow is like today" has no opinion
+            // about sleep.
+            if (model is null || baseFeatures is null)
+            {
+                results.Add(new Scenario(lever, delta, question, null, null, null, false,
+                    "Nothing can be said about this yet. Tomorrow is still best guessed as a copy of today, " +
+                    "and a guess like that has no opinion about what you do differently."));
+                continue;
+            }
+
+            var index = LeverIndex(target, lever);
+            if (index is null)
+            {
+                results.Add(new Scenario(lever, delta, question, null, null, null, false,
+                    $"This forecast does not use {lever} as an input, so moving it would change nothing."));
+                continue;
+            }
+
+            var current = baseFeatures[index.Value];
+            var proposed = current + delta;
+            var range = LeverRange(ordered, target, lever);
+
+            if (range is null || proposed < range.Value.Low || proposed > range.Value.High)
+            {
+                results.Add(new Scenario(lever, delta, question, null, null, null, false,
+                    range is null
+                        ? $"Not enough days with {lever} recorded to answer this from your own history."
+                        : $"You have almost never done that. Your own {lever} sits between " +
+                          $"{range.Value.Low:0} and {range.Value.High:0} on nine days in ten, and nothing " +
+                          "outside that can be answered from your data rather than invented."));
+                continue;
+            }
+
+            var moved = baseFeatures.ToArray();
+            moved[index.Value] = proposed;
+
+            var from = Clamp(model.Predict(baseFeatures), target);
+            var to = Clamp(model.Predict(moved), target);
+            var change = to - from;
+
+            results.Add(new Scenario(lever, delta, question,
+                Math.Round(from, 1), Math.Round(to, 1), Math.Round(change, 1), true, Answer(change, target)));
+        }
+
+        return results;
+    }
+
+    private static string Question(string lever, double delta, Target target)
+    {
+        var direction = delta >= 0 ? "more" : "less";
+        var size = Math.Abs(delta);
+
+        var what = lever switch
+        {
+            "sleep" when size >= 60 => $"{size / 60:0.#} {(Math.Abs(size - 60) < 0.5 ? "hour" : "hours")} {direction} sleep",
+            "sleep" => $"{size:0} minutes {direction} sleep",
+            "effort" => $"{size:0} kcal {direction} activity",
+            _ => $"{size:0} {direction} {lever}",
+        };
+
+        return $"What if I had {what}?";
+    }
+
+    private static string Answer(double change, Target target)
+    {
+        var unit = UnitOf(target);
+        var what = Describe(target);
+
+        // Below a tenth of a unit the model is saying nothing, and dressing that up as a
+        // small effect would be the most misleading thing on the page.
+        if (Math.Abs(change) < 0.1)
+            return $"Your own days show no meaningful difference in tomorrow's {what}.";
+
+        var direction = change > 0 ? "higher" : "lower";
+
+        return $"On days like today, that went with tomorrow's {what} being about " +
+               $"{Math.Abs(change):0.#} {unit} {direction}. That is what your days did together, " +
+               "not proof that one caused the other.";
     }
 
     // ── What actually gets shown ────────────────────────────────────────────────
@@ -334,13 +555,19 @@ public static class Prediction
 
             if (model is not null && features is not null)
             {
-                var value = model.Predict(features);
-                return new Forecast(tomorrow, value, value - spread, value + spread, "model",
+                var value = Clamp(model.Predict(features), target);
+                return new Forecast(tomorrow, value, Clamp(value - spread, target), Clamp(value + spread, target), "model",
                     $"Fitted on your own {model.TrainedOn} days and tested against the alternatives.", evidence);
             }
         }
 
-        return new Forecast(tomorrow, today.Value, today.Value - spread, today.Value + spread, "today",
+        return new Forecast(tomorrow, today.Value, Clamp(today.Value - spread, target), Clamp(today.Value + spread, target), "today",
             "Tomorrow is reported as today, which nothing here has beaten yet.", evidence);
+    }
+
+    private static double Clamp(double value, Target target)
+    {
+        var (low, high) = Plausible(target);
+        return Math.Clamp(value, low, high);
     }
 }
