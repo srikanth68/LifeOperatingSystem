@@ -343,8 +343,8 @@
     <div class="masthead-meta">
       <span><b>Modules</b> vitara · vitara-worker · vitara-insight</span>
       <span><b>Store</b> one SQLite file, 28 tables</span>
-      <span><b>Tests</b> 283</span>
-      <span><b>Read from</b> c16f434</span>
+      <span><b>Tests</b> 363</span>
+      <span><b>Read from</b> 77d4404</span>
     </div>
   </header>
 
@@ -366,7 +366,8 @@
       <li><a href="#api"><span class="n">14</span><span>API surface</span></a></li>
       <li><a href="#schedule"><span class="n">15</span><span>Scheduling</span></a></li>
       <li><a href="#failures"><span class="n">16</span><span>Failures that shaped this</span></a></li>
-      <li><a href="#gaps"><span class="n">17</span><span>What is not built</span></a></li>
+      <li><a href="#restraint"><span class="n">17</span><span>Restraint and proof</span></a></li>
+      <li><a href="#gaps"><span class="n">18</span><span>What is not built</span></a></li>
     </ol>
   </nav>
 
@@ -1480,6 +1481,9 @@ UNIQUE (Driver, Outcome, LagDays, ComputedOnLocal)</code></pre>
             <tr><td class="m">VITARA_ILLNESS_HRV_Z</td><td class="num">−1.5</td><td>HRV component</td></tr>
             <tr><td class="m">VITARA_ILLNESS_TEMP_Z</td><td class="num">1.5</td><td>Skin temperature component</td></tr>
             <tr><td class="m">VITARA_ILLNESS_DAYS</td><td class="num">2</td><td>Consecutive days required</td></tr>
+            <tr><td class="m">VITARA_ILLNESS_TEMP_FLOOR_C</td><td class="num">0.15</td><td>Degrees below which an unusual temperature does not count &mdash; see &sect;17</td></tr>
+            <tr><td class="m">VITARA_ILLNESS_TEMP_OVERRIDE_C</td><td class="num">0.50</td><td>Degrees at which it counts whatever the z-score says</td></tr>
+            <tr><td class="m">VITARA_SURFACED_MAX</td><td class="num">3</td><td>How many findings lead at once; severe ones ignore it</td></tr>
             <tr><td class="m">VITARA_REGIME_SHIFT_Z</td><td class="num">1.5</td><td>Step size to qualify</td></tr>
             <tr><td class="m">VITARA_REGIME_DWELL_DAYS</td><td class="num">14</td><td>How long the new level must hold</td></tr>
             <tr><td class="m">VITARA_DRIFT_MIN_DAYS</td><td class="num">14</td><td>Points before a trend is reportable</td></tr>
@@ -1505,7 +1509,7 @@ UNIQUE (Driver, Outcome, LagDays, ComputedOnLocal)</code></pre>
 GET    /api/sleep | /readiness | /activity | /stress
 GET    /api/spo2 | /heartrate | /vo2max | /resilience
 GET    /api/workouts | /weighins | /nutrition | /meals
-GET    /api/bioage                 see §17 — unvalidated
+GET    /api/bioage                 see §18 — labelled, not validated
 GET    /api/profile                age, sex, height, weight
 GET    /api/oura/status            linked? expired?
 GET    /api/oura/auth              start OAuth
@@ -1528,7 +1532,11 @@ DELETE /api/healthimport/xml/{token}</code></pre>
 GET /api/health/findings       full detail, optionally including resolved
 GET /api/health/baselines      what is normal, invalid ones included
 GET /api/health/derived        z-scores, ratios, slopes, with inputs
-GET /api/health/correlations   with the caveat and the method</code></pre>
+GET /api/health/correlations   with the caveat and the method
+GET /api/health/metrics        one row per metric, including the empty ones
+GET /api/health/illness-eval   the illness detector scored against marked illness
+GET /api/health/signature      the bio signature: clock, week, recovery, responses
+GET /api/health/forecast       tomorrow, with the record that earned the method</code></pre>
 
       <div class="why">
         <span class="tag">The status sentence</span>
@@ -1658,8 +1666,117 @@ GET /api/health/correlations   with the caveat and the method</code></pre>
     </section>
 
     <!-- 17 ───────────────────────────────────────────── -->
-    <section id="gaps">
+    <section id="restraint">
       <span class="sect-num">17</span>
+      <h2>Restraint and proof</h2>
+
+      <p>
+        A review of this spec by another model raised five things. Four are now in the
+        code and are described here so they stop reading as open questions; the fifth
+        is in <a href="#gaps">what is not built</a>. All four are about the same
+        underlying risk: a system that detects correctly, says too much, and is muted
+        inside a fortnight.
+      </p>
+
+      <h3>At most three findings lead</h3>
+      <p>
+        Detection and surfacing are separate jobs. Every active finding stays active and
+        stays in <code>/api/health/findings</code>; <code>Surfacing</code> decides only
+        which few lead today. Severity first, then <b>newest first at equal
+        severity</b> &mdash; a finding on its fortieth day has been said thirty-nine
+        times, and duration is what makes a finding certain, not what makes it news.
+        Anything <code>high</code> always leads, past the cap if necessary, since a cap
+        that hides a serious finding does the opposite of its job on the morning it
+        matters. The rest are returned under <code>standing</code> with a count, so a
+        caller can never shorten the list silently.
+      </p>
+      <p class="muted">
+        Cap: <code>VITARA_SURFACED_MAX</code>, default 3.
+      </p>
+
+      <h3>What has no normal yet is said out loud</h3>
+      <p>
+        "Nothing is outside your normal range" is true and misleading when half the
+        metrics have no normal to be outside of &mdash; four readings and ninety
+        readings look identical once they are inside range. <code>/api/health/summary</code>
+        now carries a <code>coverage</code> block: how many measurements have earned a
+        baseline, how many are still learning, which ones, and an instruction to say
+        "not enough data yet" rather than implying those are fine.
+      </p>
+
+      <h3>Skin temperature is bracketed in degrees</h3>
+      <p>
+        The ring reports a <b>deviation</b> from its own long-run reference, and Vitara
+        baselines that deviation again. That is deliberate: it cancels a standing offset,
+        so someone who always sleeps a fifth of a degree warm is not called feverish every
+        night. But a z-score of a deviation fails in two silent ways. A tight distribution
+        makes noise significant &mdash; five hundredths of a degree, inside the sensor's
+        resolution, clears 1.5&nbsp;SD. A drifting reference does the reverse: if the
+        ring's baseline creeps up with the user, the reported deviation stays near zero
+        while the person genuinely warms.
+      </p>
+      <p>
+        So the z-score is bracketed. Below <code>VITARA_ILLNESS_TEMP_FLOOR_C</code>
+        (0.15&nbsp;&deg;C) an unusual reading does not count at all; at or above
+        <code>VITARA_ILLNESS_TEMP_OVERRIDE_C</code> (0.50&nbsp;&deg;C) it counts whatever
+        the z-score says. Applied in the illness detector <em>and</em> to the standalone
+        deviation finding, or the wobble rejected by one arrives through the other. The
+        floor guards the warm side only &mdash; running colder than usual is a real
+        reading and is still reported.
+      </p>
+
+      <h3>The illness detector is scored against the days you were ill</h3>
+      <p>
+        The one detector here with ground truth available. Illness periods are already
+        marked so they stay out of baselines; those marks are the labels.
+        <code>/api/health/illness-eval</code> replays the shipped detector &mdash; not a
+        copy of its rule &mdash; day by day, groups the days it would have spoken into
+        runs, and reports three numbers:
+      </p>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Measure</th><th>What it means</th></tr></thead>
+          <tbody>
+            <tr><td><b>caught</b></td><td>An illness with a signal running into it or through it. A signal more than 7 days early is not credited, or any noisy detector looks prescient.</td></tr>
+            <tr><td><b>lead</b></td><td>Days between the signal starting and the illness being marked. Positive is a warning; zero or negative is <em>confirmation</em>, reported separately because averaging the two hides which one this detector gives.</td></tr>
+            <tr><td><b>false alarms</b></td><td>Runs of signal with no illness near them. The number that decides whether the detector survives a real user. A signal still running two days past the marked end is the same episode, not a new alarm.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        The verdict is a sentence and is deliberately unflattering: two episodes produces
+        "too few to conclude anything, treat this as an anecdote" rather than a percentage
+        that reads like a result. It is shown in the Insight tab, because a detector that
+        has never caught anything should say so where the reader can see it.
+      </p>
+
+      <h3>The forecast has to beat the dull answer</h3>
+      <p>
+        The bio signature has two halves. <code>Signature</code> is the portrait &mdash;
+        when this person sleeps (bedtimes averaged around midnight, or someone who sleeps
+        at 23:00 and 01:00 lands at noon), how far free nights drift from working ones,
+        which weekday is weakest, how long a hard day costs, what their own data responds
+        to. Each part refuses to speak without enough behind it.
+      </p>
+      <p>
+        <code>Prediction</code> is the half that can be wrong in public: tomorrow's
+        readiness and resting heart rate, from seven legible features, ridge-fitted on
+        this person alone. It is scored by <b>rolling origin</b> &mdash; fitted only on
+        days before the one being predicted &mdash; against two rivals: assuming tomorrow
+        is like today, and assuming an average day. "Tomorrow is like today" is a
+        genuinely strong forecast for physiology, and a model that cannot beat it by a
+        real margin is the same answer dressed up as insight. <b>When it loses, the naive
+        answer ships, labelled.</b> Losing is not an error state and is not hidden.
+      </p>
+      <p class="muted">
+        <code>/api/health/signature</code>, <code>/api/health/forecast</code>. Computed on
+        demand; no table, no migration.
+      </p>
+    </section>
+
+    <!-- 18 ───────────────────────────────────────────── -->
+    <section id="gaps">
+      <span class="sect-num">18</span>
       <h2>What is not built</h2>
 
       <div class="tw">
@@ -1668,25 +1785,28 @@ GET /api/health/correlations   with the caveat and the method</code></pre>
           <tbody>
             <tr><td><b>Lab reference ranges</b></td><td><code>LabPanels</code> and <code>ReferenceRanges</code> exist, <code>lab_anchor</code> is a defined finding type, nothing populates or reads them. Lab values can be entered manually; they are stored but not interpreted.</td></tr>
             <tr><td><b>Validated clinical models</b></td><td>None implemented. No PREVENT, ASCVD, FINDRISC, PhenoAge, eGFR/CKD-EPI or metabolic syndrome. All need lab data that has not been ingested.</td></tr>
-            <tr><td><b>Regime attribution</b></td><td>Reports only that another metric shifted nearby. Real attribution — a device change, a travel period, a season — is designed for and not implemented.</td></tr>
+
             <tr><td><b>Model summarisation</b></td><td>Findings are shown to the model as evidence; there is no prompt that turns a set of findings into prose.</td></tr>
             <tr><td><b>Nutrition analysis</b></td><td>Meals and daily totals are stored. No adequacy, balance or exposure algorithms.</td></tr>
           </tbody>
         </table>
       </div>
 
-      <div class="why trap">
-        <span class="tag">One thing to decide about</span>
+      <div class="why">
+        <span class="tag">Decided: labelled, not dropped</span>
         <p>
-          <code>/api/bioage</code> reports a <b>biological age</b>, and it is not
-          PhenoAge or any validated model — it is a homegrown weighted average of Oura's
-          own HRV, resting HR, sleep and readiness scores with hand-picked weights.
+          <code>/api/bioage</code> reports a <b>biological age</b> that is not PhenoAge or
+          any validated model — it is a weighted average of Oura's own HRV, resting HR,
+          sleep and readiness scores with hand-picked weights, and under the evidence
+          scale this system otherwise uses it would grade <b>D or lower</b>.
         </p>
         <p>
-          Under the evidence scale this system otherwise uses it would grade
-          <b>D or lower</b>. PhenoAge at least has published coefficients and a
-          mortality-validated derivation; it needs nine lab markers that are not
-          available. The number should be labelled, gated, or dropped.
+          It was labelled rather than removed. The payload now carries its own
+          <code>label</code>, <code>method</code> and <code>disclaimer</code>, and a
+          per-factor <code>contributions</code> breakdown in years that sums to the
+          reported delta — so the number cannot be shown without the sentence saying what
+          it is, and a reader can see exactly which measurement moved it. PhenoAge remains
+          the thing to replace it with; it needs nine lab markers that are not ingested.
         </p>
       </div>
     </section>
@@ -1695,8 +1815,8 @@ GET /api/health/correlations   with the caveat and the method</code></pre>
 
   <footer>
     <span>docs · Vitara + Insight</span>
-    <span>read from c16f434 · 2026-09-12</span>
-    <span>283 Vitara tests</span>
+    <span>read from 77d4404 · 2026-09-24</span>
+    <span>363 Vitara tests</span>
   </footer>
 
 </div>
