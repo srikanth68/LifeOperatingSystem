@@ -103,8 +103,6 @@ const send = async <T = unknown,>(url: string, method: string, body?: unknown): 
 
 const dayLabel = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 const shortDay = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
-const scoreColor = (s?: number | null) =>
-  s == null ? '#3d5880' : s >= 85 ? '#06c8a0' : s >= 70 ? '#f59e0b' : '#ef4444';
 const avg = (arr: (number | undefined | null)[]) => {
   const vals = arr.filter((v): v is number => v != null);
   return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : undefined;
@@ -209,7 +207,7 @@ function headline(d: Dashboard): { line: string; sub: string } {
   if (d.activity?.steps != null) parts.push(d.activity.steps.toLocaleString() + ' steps so far');
 
   return {
-    line: r == null ? 'Today' : mood + ' \u2014 readiness ' + Math.round(r),
+    line: r == null ? 'Today' : mood + ' — readiness ' + Math.round(r),
     sub: parts.length ? parts.join(', ') + '.' : 'No detail behind it yet today.',
   };
 }
@@ -273,7 +271,7 @@ function TodayPage({ status }: { status: OuraStatus }) {
               {d.sleep?.daysAgo ? <Chip tone="warn">{d.sleep.daysAgo}d old</Chip> : null}
             </div>
             <div className="hx-stat-value">
-              <span className="hx-stat-num">{d.sleep ? fmtMin(d.sleep.totalMinutes) : '\u2014'}</span>
+              <span className="hx-stat-num">{d.sleep ? fmtMin(d.sleep.totalMinutes) : '—'}</span>
             </div>
             <span className="hx-stat-sub">{d.sleep?.score != null ? `score ${d.sleep.score}` : 'No night recorded yet'}</span>
           </div>
@@ -330,8 +328,8 @@ function TodayPage({ status }: { status: OuraStatus }) {
         <Stat
           label="Skin temperature"
           value={d.sleep?.skinTemp != null ? `${d.sleep.skinTemp > 0 ? '+' : ''}${d.sleep.skinTemp.toFixed(2)}` : null}
-          unit="\u00b0C"
-          sub="Against your own usual \u2014 an early illness signal"
+          unit="°C"
+          sub="Against your own usual — an early illness signal"
           empty="Not measured last night"
         />
         <Stat
@@ -354,7 +352,7 @@ function TodayPage({ status }: { status: OuraStatus }) {
           empty="Needs more wear to estimate"
         />
         <Stat
-          label="VO\u2082 max"
+          label="VO₂ max"
           value={d.vo2Max != null ? d.vo2Max.toFixed(1) : null}
           unit="ml/kg/min"
           sub="Aerobic fitness; moves over months, not days"
@@ -365,7 +363,7 @@ function TodayPage({ status }: { status: OuraStatus }) {
       {/* Last night, as one bar. */}
       <SectionHead
         title="Last night"
-        note={d.sleep ? `${fmtMin(d.sleep.totalMinutes)} asleep \u00b7 ${d.sleep.efficiency}% efficient` : undefined}
+        note={d.sleep ? `${fmtMin(d.sleep.totalMinutes)} asleep · ${d.sleep.efficiency}% efficient` : undefined}
       />
       {d.sleep ? (
         <div className="hx-chart">
@@ -403,7 +401,7 @@ function TodayPage({ status }: { status: OuraStatus }) {
       {/* 24h heart rate. */}
       <SectionHead
         title="Heart rate today"
-        note={samples.length > 0 ? `${Math.min(...samples.map(h => h.bpm))}\u2013${Math.max(...samples.map(h => h.bpm))} bpm` : undefined}
+        note={samples.length > 0 ? `${Math.min(...samples.map(h => h.bpm))}–${Math.max(...samples.map(h => h.bpm))} bpm` : undefined}
       />
       {samples.length > 0 ? (
         <div className="hx-chart">
@@ -445,7 +443,7 @@ function TodayPage({ status }: { status: OuraStatus }) {
                   w.calories != null ? `${w.calories} cal` : null,
                   w.distance ? `${(w.distance / 1000).toFixed(1)} km` : null,
                   w.startTime ? relTime(w.startTime) : null,
-                ].filter(Boolean).join(' \u00b7 ') || 'No detail recorded'}
+                ].filter(Boolean).join(' · ') || 'No detail recorded'}
               </span>
             </div>
           ))}
@@ -456,7 +454,7 @@ function TodayPage({ status }: { status: OuraStatus }) {
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
         <button className="hx-btn hx-btn-ghost" onClick={() => sync.mutate()} disabled={sync.isPending}>
-          {sync.isPending ? 'Syncing\u2026' : sync.isError ? 'Sync failed \u2014 try again' : 'Sync with Oura'}
+          {sync.isPending ? 'Syncing…' : sync.isError ? 'Sync failed — try again' : 'Sync with Oura'}
         </button>
       </div>
     </div>
@@ -517,11 +515,11 @@ function SleepPage() {
         <Card className="hx-hero-main">
           <Ring score={lastNight?.score} label="sleep score" tone={toneFor(lastNight?.score)}/>
           <div className="hx-hero-copy">
-            <p className="hx-eyebrow">Last night \u00b7 {lastNight ? dayLabel(lastNight.day) : ''}</p>
-            <h2 className="hx-headline">{lastNight ? fmtMin(lastNight.totalSleepMinutes) : '\u2014'} asleep</h2>
+            <p className="hx-eyebrow">Last night · {lastNight ? dayLabel(lastNight.day) : ''}</p>
+            <h2 className="hx-headline">{lastNight ? fmtMin(lastNight.totalSleepMinutes) : '—'} asleep</h2>
             <p className="hx-sub">
               {lastNight
-                ? `${fmtClock(lastNight.bedtimeStart)} to ${fmtClock(lastNight.bedtimeEnd)} \u00b7 ${Math.round(lastNight.efficiency * 100)}% of your time in bed`
+                ? `${fmtClock(lastNight.bedtimeStart)} to ${fmtClock(lastNight.bedtimeEnd)} · ${Math.round(lastNight.efficiency * 100)}% of your time in bed`
                 : 'No night recorded.'}
             </p>
             {lastNight && (
@@ -624,12 +622,11 @@ function BodyPage() {
   const { data: bio } = useQuery<{ bioAge?: number; chronologicalAge: number; delta?: number; cardiovascularAge?: number; vo2Max?: number; factors: { hrvScore?: number; restingHrScore?: number; sleepScore?: number; readinessScore?: number; recoveryTrend?: number }; dataQuality: string; ageSource: string; label?: string; disclaimer?: string }>({
     queryKey: ['bioage'], queryFn: () => get(`${API}/api/bioage`),
   });
-  const { data: sleep } = useQuery<Sleep[]>({ queryKey: ['sleep', 30], queryFn: () => get(`${API}/api/sleep?days=30`) });
   const { data: profile } = useQuery<{ synced: boolean; height?: number }>({ queryKey: ['profile'], queryFn: () => get(`${API}/api/profile`) });
   const { data: weighIns } = useQuery<WeighInItem[]>({ queryKey: ['weighins'], queryFn: () => get(`${API}/api/weighins?days=180`) });
   const { data: ageHist } = useQuery<AgeHistory>({ queryKey: ['age-history'], queryFn: () => get(`${API}/api/bioage/history?days=90`) });
 
-  // Weight is entered and shown in POUNDS, but stored as kilograms — kg stays the
+  // Weight is entered and shown in POUNDS, but stored as kilograms -- kg stays the
   // canonical unit so BMI math and the iPhone HealthKit sync keep working unchanged.
   const [weight, setWeight] = useState('');
   const logWeight = useMutation({
@@ -638,120 +635,124 @@ function BodyPage() {
   });
 
   const younger = (bio?.delta ?? 0) < 0;
-  const hrvTrend = sleep?.filter(s => s.avgHrv != null).map(s => ({ day: dayLabel(s.day), hrv: s.avgHrv!, rhr: s.lowestHr ?? 0 })) ?? [];
-
   const heightM = profile?.height;
   const bmiOf = (kg: number) => heightM && heightM > 0 ? kg / (heightM * heightM) : null;
-  const weightChart = (weighIns ?? []).map(w => ({ day: dayLabel(w.day), weight: +kgToLb(w.weightKg).toFixed(1), bmi: bmiOf(w.weightKg) != null ? +bmiOf(w.weightKg)!.toFixed(1) : undefined }));
+  const weightChart = (weighIns ?? []).map(w => ({ day: dayLabel(w.day), weight: +kgToLb(w.weightKg).toFixed(1) }));
   const latestWeight = weighIns && weighIns.length > 0 ? weighIns[weighIns.length - 1] : null;
   const latestBmi = latestWeight ? bmiOf(latestWeight.weightKg) : null;
 
-  // Merge cardio-age + vo2max histories by day for a dual-line chart.
-  const ageDays = Array.from(new Set([...(ageHist?.cardiovascularAge ?? []).map(c => c.day), ...(ageHist?.vo2Max ?? []).map(v => v.day)])).sort();
-  const ageChart = ageDays.map(d => ({
-    day: dayLabel(d),
-    cardio: ageHist?.cardiovascularAge.find(c => c.day === d)?.value,
-    vo2: ageHist?.vo2Max.find(v => v.day === d)?.value,
-  }));
+  const vo2Series = (ageHist?.vo2Max ?? []).map(v => ({ day: dayLabel(v.day), value: v.value }));
+  const cardioSeries = (ageHist?.cardiovascularAge ?? []).map(c => ({ day: dayLabel(c.day), value: c.value }));
 
   return (
     <div>
-      {/* Bio Age Hero */}
-      <div className="v-bioage">
-        {/* Labelled wherever it is shown: the words come from the API so this tab, the
-            Insight tab and San all say the same thing about what the number is. */}
-        <div className="v-bioage-eyebrow">Biological Age · {bio?.label ?? 'Estimate'}</div>
-        {bio?.bioAge != null ? (
-          <>
-            <div className="v-bioage-val" style={{ color: younger ? 'var(--vitara)' : '#ef4444' }}>{bio.bioAge.toFixed(1)}</div>
-            <div className={`v-bioage-delta ${younger ? 'good' : 'bad'}`}>
-              {younger ? 'v' : '^'} {Math.abs(bio.delta!).toFixed(1)} years {younger ? 'younger' : 'older'} than chronological age {bio.chronologicalAge}
-            </div>
-            <div className="v-bioage-source">age source: {bio.ageSource} | data: {bio.dataQuality}</div>
-            {bio.disclaimer && <div className="v-bioage-source">{bio.disclaimer}</div>}
-          </>
-        ) : <div style={{ color: 'var(--text3)', padding: '1rem' }}>{bio?.dataQuality === 'insufficient' ? 'Need 3+ days of data' : 'Computing...'}</div>}
-      </div>
-
-      {/* Key body metrics */}
-      <div className="v-metrics">
-        <Metric label="Cardiovascular Age" value={bio?.cardiovascularAge != null ? Math.round(bio.cardiovascularAge).toString() : undefined} color={bio?.cardiovascularAge != null && bio.chronologicalAge > 0 && bio.cardiovascularAge < bio.chronologicalAge ? 'var(--vitara)' : '#ef4444'} sub={bio?.chronologicalAge ? `chrono ${bio.chronologicalAge}` : undefined}/>
-        <Metric label="VO2 Max" value={bio?.vo2Max?.toFixed(1)} unit="mL/kg/min" color={bio?.vo2Max != null && bio.vo2Max >= 40 ? 'var(--vitara)' : 'var(--gold)'}/>
-        <Metric label="Avg HRV" value={bio?.factors.hrvScore?.toFixed(0)} unit="ms" color="#818cf8"/>
-        <Metric label="Resting HR" value={bio?.factors.restingHrScore?.toFixed(0)} unit="bpm" color="var(--heart)"/>
-        <Metric label="Sleep Score" value={bio?.factors.sleepScore?.toFixed(0)} unit="/ 100" color={scoreColor(bio?.factors.sleepScore)}/>
-        <Metric label="Readiness" value={bio?.factors.readinessScore?.toFixed(0)} unit="/ 100" color={scoreColor(bio?.factors.readinessScore)}/>
-      </div>
-
-      {/* HRV trend chart */}
-      {hrvTrend.length > 3 && (
-        <>
-          <div className="v-section">HRV Trend (30d)<span className="v-section-line"/></div>
-          <div className="v-chart">
-            <ResponsiveContainer width="100%" height={160}>
-              <AreaChart data={hrvTrend} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                <defs>
-                  <linearGradient id="hrvGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#818cf8" stopOpacity={0.3}/>
-                    <stop offset="100%" stopColor="#818cf8" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid {...GRID}/>
-                <XAxis dataKey="day" tick={AX} tickLine={false} axisLine={false} interval={Math.floor(hrvTrend.length / 6)}/>
-                <YAxis tick={AX} tickLine={false} axisLine={false} width={30}/>
-                <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle}/>
-                <Area type="monotone" dataKey="hrv" stroke="#818cf8" fill="url(#hrvGrad)" strokeWidth={2} dot={false}/>
-              </AreaChart>
-            </ResponsiveContainer>
+      {/* The estimate, labelled, with the disclaimer the API itself carries. */}
+      <div className="hx-hero">
+        <Card className="hx-hero-main">
+          <div className="hx-hero-copy">
+            <p className="hx-eyebrow">Biological age · {bio?.label ?? 'Estimate'}</p>
+            {bio?.bioAge != null ? (
+              <>
+                <h2 className="hx-headline" style={{ fontSize: '2.4rem', lineHeight: 1.05 }}>{bio.bioAge.toFixed(1)}</h2>
+                <p className="hx-sub">
+                  <b style={{ color: younger ? 'var(--hx-good)' : 'var(--hx-bad)' }}>
+                    {Math.abs(bio.delta!).toFixed(1)} years {younger ? 'younger' : 'older'}
+                  </b>{' '}
+                  than your age, {bio.chronologicalAge}.
+                </p>
+                {bio.disclaimer && <p className="hx-sub" style={{ marginTop: '0.6rem', fontSize: '0.78rem', color: 'var(--text3)' }}>{bio.disclaimer}</p>}
+              </>
+            ) : (
+              <p className="hx-sub">
+                {bio?.dataQuality === 'insufficient'
+                  ? 'Needs at least three days of sleep and readiness data before it can be estimated.'
+                  : 'Working it out…'}
+              </p>
+            )}
           </div>
-        </>
-      )}
+        </Card>
 
-      {/* Weight & BMI */}
-      <div className="v-section">Weight &amp; BMI<span className="v-section-line"/></div>
-      <div className="v-weighin">
-        <div className="v-metrics" style={{ flex: 1 }}>
-          <Metric label="Latest Weight" value={latestWeight ? kgToLb(latestWeight.weightKg).toFixed(1) : undefined} unit="lb"/>
-          <Metric label="BMI" value={latestBmi != null ? latestBmi.toFixed(1) : undefined} color={latestBmi != null && latestBmi >= 18.5 && latestBmi < 25 ? 'var(--vitara)' : 'var(--gold)'} sub={heightM ? undefined : 'set height in profile'}/>
-        </div>
-        <div className="v-weighin-form">
-          <input type="number" step="0.1" placeholder="lb" value={weight} onChange={e => setWeight(e.target.value)} onKeyDown={e => e.key === 'Enter' && weight && logWeight.mutate()}/>
-          <button className="v-log-save" disabled={!weight || logWeight.isPending} onClick={() => logWeight.mutate()}>{logWeight.isPending ? '…' : 'Log'}</button>
+        <div className="hx-grid hx-grid-4">
+          <Stat label="Cardiovascular age" value={bio?.cardiovascularAge != null ? Math.round(bio.cardiovascularAge) : null} unit="yrs"
+                sub={bio?.chronologicalAge ? `you are ${bio.chronologicalAge}` : undefined} empty="Needs more wear"/>
+          <Stat label="VO₂ max" value={bio?.vo2Max?.toFixed(1)} unit="ml/kg/min" sub="Aerobic fitness" empty="Not estimated yet"/>
+          <Stat label="Weight" value={latestWeight ? kgToLb(latestWeight.weightKg).toFixed(1) : null} unit="lb"
+                sub={latestWeight ? `recorded ${dayLabel(latestWeight.day)}` : undefined} empty="Nothing recorded yet"/>
+          <Stat label="BMI" value={latestBmi != null ? latestBmi.toFixed(1) : null}
+                sub={heightM ? 'Waist-to-height is the better guide' : 'Set your height on the Record tab'} empty="Needs weight and height"/>
         </div>
       </div>
-      {weightChart.length > 1 && (
-        <div className="v-chart">
-          <ResponsiveContainer width="100%" height={160}>
-            <LineChart data={weightChart} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-              <CartesianGrid {...GRID}/>
+
+      <SectionHead title="Record a weight" note="Shown in pounds; stored in kilograms so the phone sync and BMI stay consistent."/>
+      <Card>
+        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <input type="number" step="0.1" placeholder="lb" value={weight}
+                 onChange={e => setWeight(e.target.value)}
+                 onKeyDown={e => e.key === 'Enter' && weight && logWeight.mutate()}
+                 style={{ maxWidth: 140, borderRadius: 10, padding: '0.5rem 0.7rem' }}/>
+          <button className="hx-btn" disabled={!weight || logWeight.isPending} onClick={() => logWeight.mutate()}>
+            {logWeight.isPending ? 'Saving…' : 'Save'}
+          </button>
+          {logWeight.isError && <span className="hx-delta bad">Couldn't save — try again</span>}
+        </div>
+      </Card>
+
+      <SectionHead title="Weight" note="The last six months."/>
+      {weightChart.length > 1 ? (
+        <div className="hx-chart">
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={weightChart} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+              <CartesianGrid vertical={false} {...GRID}/>
               <XAxis dataKey="day" tick={AX} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(weightChart.length / 6))}/>
-              <YAxis tick={AX} tickLine={false} axisLine={false} width={36} domain={['dataMin - 2', 'dataMax + 2']}/>
+              <YAxis tick={AX} tickLine={false} axisLine={false} width={40} domain={['dataMin - 2', 'dataMax + 2']} unit=" lb"/>
               <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle}/>
-              <Line type="monotone" dataKey="weight" stroke="var(--vitara)" strokeWidth={2} dot={false} name="Weight (lb)"/>
+              <Line type="monotone" dataKey="weight" stroke="var(--hx-1)" strokeWidth={2} dot={false} isAnimationActive={false}/>
             </LineChart>
           </ResponsiveContainer>
         </div>
+      ) : (
+        <Empty title="Not enough weigh-ins to draw a line.">Record a second one and the trend starts here.</Empty>
       )}
 
-      {/* VO2max & Cardiovascular Age history */}
-      {ageChart.length > 1 && (
-        <>
-          <div className="v-section">VO2max &amp; Cardiovascular Age (90d)<span className="v-section-line"/></div>
-          <div className="v-chart">
-            <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={ageChart} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                <CartesianGrid {...GRID}/>
-                <XAxis dataKey="day" tick={AX} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(ageChart.length / 6))}/>
-                <YAxis yAxisId="left" tick={AX} tickLine={false} axisLine={false} width={32}/>
-                <YAxis yAxisId="right" orientation="right" tick={AX} tickLine={false} axisLine={false} width={32}/>
+      {/* Two charts, not one with two axes: VO2 max and cardiovascular age are measured
+          in different things, and stacking them on one plot invents a relationship by
+          choosing where the scales line up. */}
+      <SectionHead title="Fitness over ninety days"/>
+      <div className="hx-grid hx-grid-3">
+        <div className="hx-chart">
+          <div className="hx-chart-head"><span className="hx-chart-title">VO₂ max</span><span className="hx-chart-note">ml/kg/min</span></div>
+          {vo2Series.length > 1 ? (
+            <ResponsiveContainer width="100%" height={150}>
+              <LineChart data={vo2Series} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid vertical={false} {...GRID}/>
+                <XAxis dataKey="day" tick={AX} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(vo2Series.length / 4))}/>
+                <YAxis tick={AX} tickLine={false} axisLine={false} width={34} domain={['dataMin - 1', 'dataMax + 1']}/>
                 <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle}/>
-                <Line yAxisId="left" type="monotone" dataKey="vo2" stroke="var(--vitara)" strokeWidth={2} dot={false} name="VO2max" connectNulls/>
-                <Line yAxisId="right" type="monotone" dataKey="cardio" stroke="var(--gold)" strokeWidth={2} dot={false} name="Cardio Age" connectNulls/>
+                <Line type="monotone" dataKey="value" stroke="var(--hx-1)" strokeWidth={2} dot={false} isAnimationActive={false} connectNulls/>
               </LineChart>
             </ResponsiveContainer>
-          </div>
-        </>
-      )}
+          ) : <p className="hx-chart-note">Not enough estimates yet.</p>}
+        </div>
+
+        <div className="hx-chart">
+          <div className="hx-chart-head"><span className="hx-chart-title">Cardiovascular age</span><span className="hx-chart-note">years</span></div>
+          {cardioSeries.length > 1 ? (
+            <ResponsiveContainer width="100%" height={150}>
+              <LineChart data={cardioSeries} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid vertical={false} {...GRID}/>
+                <XAxis dataKey="day" tick={AX} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(cardioSeries.length / 4))}/>
+                <YAxis tick={AX} tickLine={false} axisLine={false} width={34} domain={['dataMin - 1', 'dataMax + 1']}/>
+                <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle}/>
+                {ageHist?.chronologicalAge != null && <ReferenceLine y={ageHist.chronologicalAge} stroke="var(--text3)" strokeWidth={1}/>}
+                <Line type="monotone" dataKey="value" stroke="var(--hx-3)" strokeWidth={2} dot={false} isAnimationActive={false} connectNulls/>
+              </LineChart>
+            </ResponsiveContainer>
+          ) : <p className="hx-chart-note">Not enough estimates yet.</p>}
+          {ageHist?.chronologicalAge != null && cardioSeries.length > 1 && (
+            <p className="hx-chart-note" style={{ marginTop: '0.4rem' }}>The line is your actual age, {ageHist.chronologicalAge}.</p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -796,73 +797,106 @@ function LogWorkoutForm() {
 }
 
 function ActivityPage() {
-  const { data, isPending } = useQuery<Activity[]>({ queryKey: ['activity', 14], queryFn: () => get(`${API}/api/activity?days=14`) });
+  const { data, isPending, isError, error } = useQuery<Activity[]>({ queryKey: ['activity', 14], queryFn: () => get(`${API}/api/activity?days=14`) });
   const { data: workouts } = useQuery<WorkoutItem[]>({ queryKey: ['workouts'], queryFn: () => get(`${API}/api/workouts?days=30`) });
 
   if (isPending) return <Skel h={200}/>;
-  if (!data?.length) return <div className="v-empty"><LogWorkoutForm/><div style={{ marginTop: '1rem' }}>No activity data yet — log a workout above.</div></div>;
+  if (isError) return <Empty title="Couldn't load your activity.">{String(error)}</Empty>;
 
-  const a = { steps: avg(data.map(d => d.steps)), cal: avg(data.map(d => d.activeCalories)), score: avg(data.map(d => d.score)), highMin: avg(data.map(d => d.highActivityMinutes)) };
-  const today = latest(data);   // endpoints return oldest-first
-  const stepsChart = data.map(d => ({ day: shortDay(d.day), steps: d.steps, cal: d.activeCalories }));
+  const a = {
+    steps: avg(data?.map(d => d.steps) ?? []), cal: avg(data?.map(d => d.activeCalories) ?? []),
+    score: avg(data?.map(d => d.score) ?? []), highMin: avg(data?.map(d => d.highActivityMinutes) ?? []),
+  };
+  const today = data?.length ? latest(data) : undefined;   // endpoints return oldest-first
+  const stepsChart = (data ?? []).map(d => ({ day: shortDay(d.day), steps: d.steps, cal: d.activeCalories }));
 
   return (
     <div>
-      <LogWorkoutForm/>
+      <div className="hx-hero">
+        <Card className="hx-hero-main">
+          <Ring score={today?.score} label="activity" tone={toneFor(today?.score)}/>
+          <div className="hx-hero-copy">
+            <p className="hx-eyebrow">{today ? dayLabel(today.day) : 'Today'}</p>
+            <h2 className="hx-headline">
+              {today ? `${today.steps.toLocaleString()} steps` : 'Nothing counted yet'}
+            </h2>
+            <p className="hx-sub">
+              {today
+                ? `${Math.round(today.activeCalories)} kcal beyond resting · ${today.highActivityMinutes} min at high intensity`
+                : 'Wear the ring, or log a workout below, and the day starts filling in.'}
+            </p>
+          </div>
+        </Card>
 
-      <div className="v-metrics">
-        <Metric label="Steps" value={today?.steps.toLocaleString()} subNode={<Delta current={today?.steps} baseline={a.steps} goodWhen="higher"/>}/>
-        <Metric label="Active Cal" value={today?.activeCalories.toFixed(0)} unit="kcal" subNode={<Delta current={today?.activeCalories} baseline={a.cal} goodWhen="higher"/>}/>
-        <Metric label="Score" value={today?.score?.toFixed(0)} unit="/ 100" color={scoreColor(today?.score)} subNode={<Delta current={today?.score} baseline={a.score} goodWhen="higher"/>}/>
-        <Metric label="High-Int Min" value={today?.highActivityMinutes?.toFixed(0)} unit="min" subNode={<Delta current={today?.highActivityMinutes} baseline={a.highMin} goodWhen="higher" unit="m"/>}/>
+        <div className="hx-grid hx-grid-4">
+          <Stat label="Steps" value={today?.steps?.toLocaleString()}
+                sub={<HxDelta value={today?.steps} reference={a.steps} goodWhen="higher"/>} empty="Nothing counted today"/>
+          <Stat label="Active calories" value={today?.activeCalories != null ? Math.round(today.activeCalories) : null} unit="kcal"
+                sub={<HxDelta value={today?.activeCalories} reference={a.cal} goodWhen="higher" unit=" kcal"/>} empty="Nothing counted today"/>
+          <Stat label="High intensity" value={today?.highActivityMinutes} unit="min"
+                sub={<HxDelta value={today?.highActivityMinutes} reference={a.highMin} goodWhen="higher" unit=" min"/>} empty="None today"/>
+          <Stat label="Distance" value={today?.steps != null ? ((today.steps * 0.00075).toFixed(1)) : null} unit="km"
+                sub="Estimated from your steps" empty="Nothing counted today"/>
+        </div>
       </div>
+
+      <SectionHead title="Log a workout" note="Anything the ring won't see: weights, classes, a walk without it."/>
+      <Card><LogWorkoutForm/></Card>
+
+      {data?.length ? (
+        <>
+          <SectionHead title="Fourteen days" note={a.steps != null ? `usually ${Math.round(a.steps).toLocaleString()} steps` : undefined}/>
+          <div className="hx-chart">
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={stepsChart} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid vertical={false} {...GRID}/>
+                <XAxis dataKey="day" tick={AX} tickLine={false} axisLine={false}/>
+                <YAxis tick={AX} tickLine={false} axisLine={false} width={44}/>
+                <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle}/>
+                {/* One series, one colour. Colouring each bar by whether it cleared a
+                    round number re-states the bar's own height in the only free channel,
+                    and 8,000 is somebody else's target anyway -- the reference line is
+                    YOUR average. */}
+                {a.steps != null && <ReferenceLine y={Math.round(a.steps)} stroke="var(--text3)" strokeWidth={1}/>}
+                <Bar dataKey="steps" radius={[5, 5, 0, 0]} fill="var(--hx-1)" isAnimationActive={false}/>
+              </BarChart>
+            </ResponsiveContainer>
+            <p className="hx-chart-note" style={{ marginTop: '0.5rem' }}>The line is your own 14-day average.</p>
+          </div>
+        </>
+      ) : (
+        <Empty title="No days recorded yet.">Activity arrives with the ring's daily sync.</Empty>
+      )}
 
       <WorkoutImpactPanel/>
 
-      <div className="v-section">Daily Steps<span className="v-section-line"/></div>
-      <div className="v-chart">
-        <ResponsiveContainer width="100%" height={160}>
-          <BarChart data={stepsChart} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-            <CartesianGrid {...GRID}/>
-            <XAxis dataKey="day" tick={AX} tickLine={false} axisLine={false}/>
-            <YAxis tick={AX} tickLine={false} axisLine={false} width={40}/>
-            <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle}/>
-            <Bar dataKey="steps" radius={4} isAnimationActive={false}>
-              {stepsChart.map((d, i) => <Cell key={i} fill={d.steps >= 8000 ? '#06c8a0' : d.steps >= 5000 ? '#f59e0b' : '#ef4444'}/>)}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Workouts */}
-      {workouts && workouts.length > 0 && (
-        <>
-          <div className="v-section">Workouts<span className="v-section-line"/></div>
-          <div className="v-workout-list">
-            {workouts.slice(0, 10).map(w => (
-              <div key={w.id} className="v-workout-card">
-                <div className="v-workout-icon" style={{ background: 'rgba(6,200,160,0.08)' }}>
-                  {w.activity === 'running' ? '🏃' : w.activity === 'cycling' ? '🚴' : w.activity === 'walking' ? '🚶' : w.activity === 'swimming' ? '🏊' : '💪'}
-                </div>
-                <div className="v-workout-body">
-                  <div className="v-workout-name">{w.label || w.activity}</div>
-                  <div className="v-workout-meta">
-                    <span>{dayLabel(w.day)}</span>
-                    {w.calories != null && <span>{w.calories} cal</span>}
-                    {w.distance != null && w.distance > 0 && <span>{(w.distance / 1000).toFixed(1)} km</span>}
-                    {w.intensity && <span style={{ textTransform: 'capitalize' }}>{w.intensity}</span>}
-                  </div>
-                </div>
+      <SectionHead title="Workouts" note="The last thirty days."/>
+      {workouts && workouts.length > 0 ? (
+        <div className="hx-grid hx-grid-3">
+          {workouts.slice(0, 12).map(w => (
+            <div key={w.id} className="hx-stat">
+              <div className="hx-stat-head">
+                <span className="hx-stat-label" style={{ textTransform: 'capitalize' }}>{w.label || w.activity}</span>
+                {w.intensity && <Chip>{w.intensity}</Chip>}
               </div>
-            ))}
-          </div>
-        </>
+              <div className="hx-stat-value">
+                <span className="hx-stat-num">{w.calories != null ? Math.round(w.calories) : '—'}</span>
+                {w.calories != null && <span className="hx-stat-unit">kcal</span>}
+              </div>
+              <span className="hx-stat-sub">
+                {[dayLabel(w.day), w.distance ? `${(w.distance / 1000).toFixed(1)} km` : null].filter(Boolean).join(' · ')}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <Empty title="No workouts in the last month.">Sessions the ring detects, and ones you log above, both appear here.</Empty>
       )}
     </div>
   );
 }
 
-// ── READINESS ─────────────────────────────────────────────────────────────────
+// ── RECOVERY ─────────────────────────────────────────────────
 
 function ReadinessPage() {
   const { data, isPending, isError, error } = useQuery<Readiness[]>({ queryKey: ['readiness', 14], queryFn: () => get(`${API}/api/readiness?days=14`) });
@@ -898,7 +932,7 @@ function ReadinessPage() {
             </h2>
             <p className="hx-sub">
               How recovered you are, from your overnight heart rate, heart-rate variability and
-              temperature \u2014 measured against your own recent nights, not against anyone else.
+              temperature — measured against your own recent nights, not against anyone else.
             </p>
             <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.7rem', flexWrap: 'wrap' }}>
               {(['optimal', 'good', 'pay_attention'] as const).map(l => (
@@ -922,7 +956,7 @@ function ReadinessPage() {
                 sub={<HxDelta value={today?.recoveryIndex} reference={a.recov} goodWhen="higher"/>}
                 empty="Needs more nights"/>
           <Stat label="Temperature" value={today?.temperatureDeviation != null ? `${today.temperatureDeviation > 0 ? '+' : ''}${today.temperatureDeviation.toFixed(2)}` : null}
-                unit="\u00b0C" sub="Against your own usual" empty="Not measured"/>
+                unit="°C" sub="Against your own usual" empty="Not measured"/>
         </div>
       </div>
 
@@ -955,11 +989,11 @@ function ReadinessPage() {
               {r.level && <Chip tone={r.level === 'optimal' ? 'good' : r.level === 'good' ? 'neutral' : 'warn'}>{r.level.replace('_', ' ')}</Chip>}
             </div>
             <div className="hx-stat-value">
-              <span className="hx-stat-num" style={{ color: toneFor(r.score) }}>{r.score ?? '\u2014'}</span>
+              <span className="hx-stat-num" style={{ color: toneFor(r.score) }}>{r.score ?? '—'}</span>
             </div>
             <span className="hx-stat-sub">
               {[r.restingHeartRate ? `${r.restingHeartRate} bpm` : null, r.hrvBalance != null ? `HRV ${r.hrvBalance}` : null]
-                .filter(Boolean).join(' \u00b7 ') || 'No detail recorded'}
+                .filter(Boolean).join(' · ') || 'No detail recorded'}
             </span>
           </div>
         ))}
@@ -1008,28 +1042,6 @@ function ProtocolsPage() {
 // returns (all repository queries OrderBy(day) ascending).
 const latest = <T,>(arr?: T[]): T | undefined => arr?.[arr.length - 1];
 
-// "62ms, 14d avg 54" makes you do the arithmetic; "62ms, +8 vs 14d avg" is the thing
-// you actually wanted to know. Direction is colour-coded by whether up is GOOD for that
-// metric, which differs — a rising HRV is good news, a rising resting heart rate is not.
-//
-// Deliberately silent when the change is negligible: day-to-day noise dressed up as a
-// green arrow trains you to ignore the arrows that mean something.
-function Delta({ current, baseline, goodWhen, unit }: {
-  current?: number; baseline?: number; goodWhen: 'higher' | 'lower'; unit?: string;
-}) {
-  if (current == null || baseline == null || baseline === 0) return null;
-  const diff = current - baseline;
-  if (Math.abs(diff) < Math.abs(baseline) * 0.02) return <span className="v-delta v-delta--flat">≈ 14d avg</span>;
-
-  const better = goodWhen === 'higher' ? diff > 0 : diff < 0;
-  const rounded = Math.abs(diff) >= 10 ? Math.round(Math.abs(diff)) : Math.round(Math.abs(diff) * 10) / 10;
-  return (
-    <span className={`v-delta ${better ? 'v-delta--good' : 'v-delta--bad'}`}>
-      {diff > 0 ? '▲' : '▼'} {rounded}{unit ?? ''} vs 14d avg
-    </span>
-  );
-}
-
 // Readiness the morning after each kind of session, against the morning after a rest
 // day. The server refuses to report thin or negligible effects, so an empty panel here
 // means "not enough evidence yet" rather than "no effect" — said out loud, because the
@@ -1071,21 +1083,6 @@ function WorkoutImpactPanel() {
         </>
       )}
     </>
-  );
-}
-
-function Metric({ label, value, unit, color, sub, subNode }: {
-  label: string; value?: string; unit?: string; color?: string; sub?: string; subNode?: React.ReactNode;
-}) {
-  return (
-    <div className="v-metric">
-      <div className="v-metric-label">{label}</div>
-      <div className="v-metric-val" style={{ color: value != null ? (color ?? 'var(--vitara)') : '#3d5880' }}>
-        {value ?? '--'}
-        {value != null && unit && <span className="v-metric-unit"> {unit}</span>}
-      </div>
-      {subNode ? <div className="v-metric-sub">{subNode}</div> : sub && <div className="v-metric-sub">{sub}</div>}
-    </div>
   );
 }
 
@@ -2044,7 +2041,9 @@ function VitaraInner() {
           {!status.linked && <NotLinked/>}
           {status.linked && status.expired && <OuraExpiredBanner/>}
 
-          <PanelBoundary name={PAGES.find(p => p.id === page)?.label ?? 'This page'}>
+          {/* Keyed by page: without it a caught error stays caught, and every other tab
+              shows the failure of the one that actually broke. */}
+          <PanelBoundary key={page} name={PAGES.find(p => p.id === page)?.label ?? 'This page'}>
             {page === 'today'     && <TodayPage status={status}/>}
             {page === 'all'       && <VitaraMetricsCatalogue/>}
             {page === 'sleep'     && <SleepPage/>}
