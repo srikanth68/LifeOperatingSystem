@@ -456,3 +456,39 @@
 .insight-sig, .insight-regime { display: block; font-size: 0.66rem; color: var(--text3); margin-top: 2px; }
 .insight-ok   { color: var(--text2); font-size: 0.72rem; }
 .insight-thin { color: var(--text3); font-size: 0.72rem; }
+
+/* ── On paper ────────────────────────────────────────────────────────────────
+ *
+ * Insight moved inside the health skin, which re-points --surface, --text and the
+ * rest for the whole subtree. What is left here is what the skin cannot infer: the
+ * severity amber has to deepen to stay inside the lightness band on white, the two
+ * washes were mixed for a dark surface, and a glow that reads as depth on charcoal
+ * reads as a smudge on paper. */
+
+.hx .insight-page {
+  --insight-notable: #c2901a;
+  --insight-wash:    rgba(47, 159, 208, 0.14);
+  --insight-hair:    rgba(61, 88, 128, 0.18);
+  --insight:         #3f5bd9;
+}
+
+.hx .insight-card {
+  border-radius: var(--hx-r);
+  box-shadow: var(--hx-shadow);
+}
+
+/* The verdict's pulse: keep the ripple, drop the bloom. */
+.hx .insight-pulse::after { box-shadow: none; }
+
+.hx .insight-section { margin-top: 1.9rem; }
+.hx .insight-h2 { display: flex; align-items: center; gap: 0.1rem; }
+
+/* Tiles, findings and correlation rows all sit on white now, so the one-step-darker
+   fill the dark theme used has to come back the other way. */
+.hx .insight-finding,
+.hx .insight-tile,
+.hx .insight-table-wrap {
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: var(--hx-shadow);
+}

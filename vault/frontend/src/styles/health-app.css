@@ -99,8 +99,8 @@
   width: 42px; height: 42px; flex: none;
   display: grid; place-items: center;
   border-radius: 13px;
-  background: var(--vitara-dim);
-  color: var(--vitara);
+  background: var(--mark-wash, var(--vitara-dim));
+  color: var(--mark, var(--vitara));
 }
 .hx-mark svg { width: 22px; height: 22px; }
 

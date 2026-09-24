@@ -11,16 +11,23 @@ import '../../styles/health-app.css';
 
 export const HX_SERIES = ['var(--hx-1)', 'var(--hx-2)', 'var(--hx-3)', 'var(--hx-4)', 'var(--hx-5)', 'var(--hx-6)'];
 
-export function Shell({ title, subtitle, icon, right, tabs, children }: {
+// `accent` is for the second tab: Insight reads the same data as Vitara and belongs in
+// the same skin, so it takes the same shell and repaints only its mark.
+export function Shell({ title, subtitle, icon, right, tabs, accent, accentWash, children }: {
   title: string;
   subtitle: string;
   icon: ReactNode;
   right?: ReactNode;
   tabs?: ReactNode;
+  accent?: string;
+  accentWash?: string;
   children: ReactNode;
 }) {
+  const tone = accent
+    ? { ['--mark' as string]: accent, ['--mark-wash' as string]: accentWash ?? 'rgba(63,91,217,0.09)' }
+    : undefined;
   return (
-    <div className="hx">
+    <div className="hx" style={tone}>
       <header className="hx-top">
         <div className="hx-mark">{icon}</div>
         <div className="hx-titles">

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { makeModuleQueryClient } from '../services/moduleQuery';
+import { Shell, Info } from '../components/health/HealthKit';
 import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
 import '../styles/modules.css';
@@ -405,7 +406,14 @@ function Findings() {
 
   return (
     <section className="insight-section">
-      <h2 className="insight-h2">What's being flagged</h2>
+      <h2 className="insight-h2">
+        What&apos;s being flagged
+        <Info label="How something gets flagged">
+          A finding appears when a measurement stays away from your own usual range for long enough
+          that chance is an unlikely explanation. The dots under each one are how many days it has
+          been running, which is the difference between one odd morning and something worth acting on.
+        </Info>
+      </h2>
       <ul className="insight-findings">
         {sorted.map(f => (
           <li key={f.key} className={`insight-finding sev-${f.severity}`}>
@@ -476,11 +484,13 @@ function TodayVsNormal() {
 
   return (
     <section className="insight-section">
-      <h2 className="insight-h2">Today against your normal</h2>
-      <p className="insight-muted insight-lede">
-        The shaded band is your usual range — where two-thirds of your last sixty days fell. The line
-        underneath is the last two weeks. Furthest from normal first.
-      </p>
+      <h2 className="insight-h2">
+        Today against your normal
+        <Info label="How to read these tiles">
+          The shaded band is your usual range — where two-thirds of your last sixty days fell. The
+          line underneath is the last two weeks. Whatever sits furthest from normal comes first.
+        </Info>
+      </h2>
 
       {tiles.length === 0 ? (
         <p className="insight-muted">No metric has enough history yet. Each needs 21 readings before its normal means anything.</p>
@@ -571,10 +581,12 @@ function Correlations() {
 
   return (
     <section className="insight-section">
-      <h2 className="insight-h2">What moves with what</h2>
-      {/* The caveat comes from the API rather than being written here, so every
-          surface that shows these numbers carries the same words. */}
-      <p className="insight-muted insight-lede">{data.caveat}</p>
+      <h2 className="insight-h2">
+        What moves with what
+        {/* The caveat comes from the API rather than being written here, so every
+            surface that shows these numbers carries the same words. */}
+        <Info label="What these relationships are and are not">{data.caveat}</Info>
+      </h2>
 
       {rows.length === 0 ? (
         <p className="insight-muted">
@@ -679,24 +691,38 @@ function BaselineTable() {
 
 function InsightPage() {
   return (
-    <div className="module-page insight-page">
-      <header className="insight-header">
-        <h1 className="module-h1">Insight</h1>
-        <p className="insight-muted">
-          What your health data means, measured against your own history — not a population average.
-        </p>
-      </header>
+    <Shell
+      title="Insight"
+      subtitle="What the numbers mean, against your own history"
+      accent="var(--hx-2)"
+      icon={
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 13h3l3 7 4-16 3 9h5"/>
+        </svg>
+      }
+      right={
+        <span className="hx-pill">
+          Compared with you
+          <Info label="What this page compares against">
+            Every number here is measured against your own last sixty days, not against a population
+            average. That is why a value can be flagged while still being perfectly normal for someone
+            else — and why it takes a few weeks of wear before any of it means anything.
+          </Info>
+        </span>
+      }
+    >
+      <div className="insight-page">
+        <div className="insight-top">
+          <Verdict />
+          <BioAgeCard />
+        </div>
 
-      <div className="insight-top">
-        <Verdict />
-        <BioAgeCard />
+        <Findings />
+        <TodayVsNormal />
+        <Correlations />
+        <BaselineTable />
       </div>
-
-      <Findings />
-      <TodayVsNormal />
-      <Correlations />
-      <BaselineTable />
-    </div>
+    </Shell>
   );
 }
 
