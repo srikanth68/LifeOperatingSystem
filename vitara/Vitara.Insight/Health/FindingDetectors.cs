@@ -5,7 +5,18 @@ using Vitara.Domain.Health;
 namespace Vitara.Insight.Health;
 
 // One day's z-scores for the three metrics the illness signal reads.
-public record DailyVitals(DateOnly Day, double? RestingHrZ, double? HrvZ, double? SkinTempZ);
+//
+// Skin temperature carries its raw value too, in degrees. It is the only one of the
+// three that arrives already baselined by the ring, and a z-score of a deviation can
+// be large when the movement is trivial or small when the movement is real -- see
+// HealthThresholds.IllnessTempFloorC for both failure modes. The degrees are what
+// bracket it.
+public record DailyVitals(
+    DateOnly Day,
+    double? RestingHrZ,
+    double? HrvZ,
+    double? SkinTempZ,
+    double? SkinTempC = null);
 
 // The deterministic half of the system: what was detected, computed in code.
 //
@@ -78,7 +89,7 @@ public static class FindingDetectors
             v.Day,
             Hits = (v.RestingHrZ >= t.IllnessRestingHrZ ? 1 : 0)
                  + (v.HrvZ <= t.IllnessHrvZ ? 1 : 0)
-                 + (v.SkinTempZ >= t.IllnessTempZ ? 1 : 0),
+                 + (TemperatureCounts(v.SkinTempZ, v.SkinTempC, t) ? 1 : 0),
         }).ToList();
 
         if (perDay.Any(d => d.Hits < 2)) return null;
@@ -107,6 +118,11 @@ public static class FindingDetectors
                     restingHrZ = Round(v.RestingHrZ),
                     hrvZ = Round(v.HrvZ),
                     skinTempZ = Round(v.SkinTempZ),
+
+                    // In degrees as well as in standard deviations, because the two can
+                    // disagree and the reader deserves to see which one fired.
+                    skinTempC = Round(v.SkinTempC),
+                    skinTempCounted = TemperatureCounts(v.SkinTempZ, v.SkinTempC, t),
                 }),
             }),
             FirstDetectedLocal = window[^1].Day,
@@ -260,6 +276,20 @@ public static class FindingDetectors
         };
     }
 
+    // Whether the temperature component counts toward the illness signal today.
+    //
+    // Unusual AND actually warm, or warm enough that unusual stops mattering. A ring
+    // that reports no degrees at all falls back to the z-score alone -- an imported
+    // history without raw values should still be readable, and refusing to score it
+    // would silently drop the component rather than say anything.
+    public static bool TemperatureCounts(double? z, double? degrees, HealthThresholdSet t)
+    {
+        if (degrees is { } warm && warm >= t.IllnessTempOverrideC) return true;
+        if (z is not { } score || score < t.IllnessTempZ) return false;
+
+        return degrees is null || degrees.Value >= t.IllnessTempFloorC;
+    }
+
     private static double? Round(double? v) => v is null ? null : Math.Round(v.Value, 2);
 }
 
@@ -269,10 +299,17 @@ public static class FindingDetectors
 public record HealthThresholdSet(
     double IllnessRestingHrZ,
     double IllnessHrvZ,
-    double IllnessTempZ)
+    double IllnessTempZ,
+    // The two absolutes that bracket the skin-temperature z-score, in degrees. Given
+    // defaults so a test that only cares about the three z-scores can still state them
+    // and nothing else.
+    double IllnessTempFloorC = 0.15,
+    double IllnessTempOverrideC = 0.50)
 {
     public static HealthThresholdSet FromConfiguration() => new(
         HealthThresholds.IllnessRestingHrZ,
         HealthThresholds.IllnessHrvZ,
-        HealthThresholds.IllnessTempZ);
+        HealthThresholds.IllnessTempZ,
+        HealthThresholds.IllnessTempFloorC,
+        HealthThresholds.IllnessTempOverrideC);
 }

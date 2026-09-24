@@ -108,6 +108,29 @@ public static class HealthThresholds
     public static double IllnessTempZ => Env("VITARA_ILLNESS_TEMP_Z", 1.5);
     public static int IllnessSustainedDays => EnvInt("VITARA_ILLNESS_DAYS", 2);
 
+    // Skin temperature is the one metric here that arrives already baselined.
+    //
+    // The ring does not report a temperature; it reports a DEVIATION from its own
+    // long-run reference for this finger. Vitara then baselines that deviation again
+    // and scores it, which is a baseline of a baseline -- deliberate, because it
+    // removes any standing offset (a sleeper who always runs +0.2 is not warm, that is
+    // simply their normal) and because the ring's reference adapts on a different
+    // schedule from ours. But it leaves two failure modes that a pure z-score cannot
+    // see, and both of them are silent:
+    //
+    //   1. A tight distribution makes noise significant. Someone whose deviation
+    //      barely moves has a small standard deviation, so a 0.05 C wobble -- inside
+    //      the sensor's own resolution -- can clear 1.5 SD and read as a fever signal.
+    //   2. A drifting reference absorbs a real rise. If the ring's own baseline is
+    //      creeping up alongside the user, the reported deviation stays near zero
+    //      while the person genuinely warms, and the z-score has nothing to see.
+    //
+    // So the z-score is bracketed by two absolutes, in degrees. Below the floor, an
+    // unusual reading is not counted at all. At or above the override, a reading is
+    // counted whatever its z-score says.
+    public static double IllnessTempFloorC => Env("VITARA_ILLNESS_TEMP_FLOOR_C", 0.15);
+    public static double IllnessTempOverrideC => Env("VITARA_ILLNESS_TEMP_OVERRIDE_C", 0.50);
+
     // Acute-to-chronic workload ratio, 7-day mean over 28-day mean.
     public static double AcwrLow => Env("VITARA_ACWR_LOW", 0.8);
     public static double AcwrHigh => Env("VITARA_ACWR_HIGH", 1.3);

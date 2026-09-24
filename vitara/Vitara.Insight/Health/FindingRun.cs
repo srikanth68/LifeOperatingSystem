@@ -95,7 +95,7 @@ public static class FindingRun
 
         // ── Early illness, first, because it can suppress its own components ──────
         var illnessFinding = FindingDetectors.EarlyIllness(
-            BuildVitals(input.Derived), illness, HealthThresholds.IllnessSustainedDays);
+            BuildVitals(input.Derived, input.Observations), illness, HealthThresholds.IllnessSustainedDays);
 
         if (illnessFinding is not null) findings.Add(illnessFinding);
 
@@ -119,6 +119,13 @@ public static class FindingRun
 
             var found = FindingDetectors.Deviation(
                 metric, series, HealthThresholds.DeviationZ, HealthThresholds.DeviationSustainedDays);
+
+            // Skin temperature again: a z-score of a deviation can be large while the
+            // movement behind it is smaller than the ring can resolve. The illness
+            // detector brackets it in degrees and so does this, or the same trivial
+            // wobble that was rejected there arrives here as its own finding.
+            if (found is not null && metric == MetricKeys.SkinTempDeviation && !WarmEnough(input.Observations, asOf))
+                continue;
 
             if (found is not null) findings.Add(found);
         }
@@ -209,11 +216,13 @@ public static class FindingRun
     // The three z-scores the illness signal reads, aligned by day. A day missing any
     // of them still counts -- the detector requires two of three, so an absent skin
     // temperature does not silence a clear resting-HR and HRV signal.
-    private static List<DailyVitals> BuildVitals(IReadOnlyList<DerivedMetric> derived)
+    private static List<DailyVitals> BuildVitals(
+        IReadOnlyList<DerivedMetric> derived, IReadOnlyList<Observation> observations)
     {
         var rhr = ZByDay(derived, MetricKeys.RestingHeartRate);
         var hrv = ZByDay(derived, MetricKeys.HrvRmssd);
         var temp = ZByDay(derived, MetricKeys.SkinTempDeviation);
+        var tempC = RawByDay(observations, MetricKeys.SkinTempDeviation);
 
         return rhr.Keys.Union(hrv.Keys).Union(temp.Keys)
             .OrderBy(d => d)
@@ -221,8 +230,29 @@ public static class FindingRun
                 d,
                 rhr.TryGetValue(d, out var r) ? r : null,
                 hrv.TryGetValue(d, out var h) ? h : null,
-                temp.TryGetValue(d, out var t) ? t : null))
+                temp.TryGetValue(d, out var t) ? t : null,
+                tempC.TryGetValue(d, out var c) ? c : null))
             .ToList();
+    }
+
+    private static Dictionary<DateOnly, double> RawByDay(IReadOnlyList<Observation> observations, string metric) =>
+        observations.Where(o => o.Metric == metric)
+            .GroupBy(o => o.ObservedDateLocal)
+            .ToDictionary(g => g.Key, g => g.Average(o => o.Value));
+
+    // Only ever asked about a rise. A skin temperature BELOW your own usual is a real
+    // reading and is still reported -- it is the high side that the floor exists for,
+    // because that is the side the illness signal shares.
+    private static bool WarmEnough(IReadOnlyList<Observation> observations, DateOnly asOf)
+    {
+        var today = observations
+            .Where(o => o.Metric == MetricKeys.SkinTempDeviation && o.ObservedDateLocal == asOf)
+            .Select(o => (double?)o.Value)
+            .FirstOrDefault();
+
+        if (today is null) return true;               // no degrees to judge by
+        if (today.Value < 0) return true;             // a cold reading is not what the floor guards
+        return today.Value >= HealthThresholds.IllnessTempFloorC;
     }
 
     private static Dictionary<DateOnly, double> ZByDay(IReadOnlyList<DerivedMetric> derived, string metric) =>

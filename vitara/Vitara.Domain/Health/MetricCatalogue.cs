@@ -65,7 +65,7 @@ public static class MetricCatalogue
         new(MetricKeys.HrvRmssd, "Heart rate variability", "ms", GroupRecovery, Tiers.Dense, "ring",
             "The variation between heartbeats overnight. Higher usually means better recovered; it is personal, so only your own range matters.", 1),
         new(MetricKeys.SkinTempDeviation, "Skin temperature", "°C", GroupRecovery, Tiers.Dense, "ring",
-            "How far your overnight skin temperature sat from your own usual. One of the earliest signs of coming illness.", 2),
+            "How far your overnight skin temperature sat from your own usual — the ring reports a difference, not a temperature. One of the earliest signs of coming illness, and only a sustained rise of at least a tenth of a degree is treated as one.", 2),
         new(MetricKeys.BreathingRate, "Breathing rate", "/min", GroupRecovery, Tiers.Dense, "ring",
             "Breaths per minute while asleep. Very stable normally, which is what makes a change worth noticing.", 1),
         new(MetricKeys.Spo2Average, "Blood oxygen", "%", GroupRecovery, Tiers.Dense, "ring",
