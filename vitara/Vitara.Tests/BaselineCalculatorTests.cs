@@ -106,8 +106,9 @@ public class BaselineCalculatorTests
             regimeShiftZ: 1.5, regimeDwellDays: 14);
 
     private static BaselineInputs Inputs(List<Observation> obs,
-        List<ExcludedPeriod>? excluded = null, List<TravelPeriod>? travel = null, List<Device>? devices = null)
-        => new(obs, excluded ?? [], travel ?? [], devices ?? []);
+        List<ExcludedPeriod>? excluded = null, List<TravelPeriod>? travel = null, List<Device>? devices = null,
+        List<Intervention>? interventions = null)
+        => new(obs, excluded ?? [], travel ?? [], devices ?? [], interventions ?? []);
 
     [Fact]
     public void AThinWindowIsMarkedInvalidRatherThanReportedAsFact()
@@ -204,15 +205,62 @@ public class BaselineCalculatorTests
     }
 
     [Fact]
-    public void ASustainedStepResetsTheWindowToTheNewLevel()
+    public void AnExplainedStepResetsTheWindowToTheNewLevel()
     {
-        // Thirty days at 52, then twenty at 57. The baseline should describe 57 -- and
-        // record where the change was, so it can be explained.
+        // Thirty days at 52, then twenty at 57, with a medication started when it moved.
+        // The baseline should describe 57 and record where the change was.
         var observations = Series(20, 57).Concat(Series(30, 52, AsOf.AddDays(-20))).ToList();
-        var baseline = Compute(Inputs(observations), minN: 5);
+        var started = new List<Intervention>
+        {
+            new() { Kind = "medication", Name = "beta blocker", StartedOnLocal = AsOf.AddDays(-19) },
+        };
+
+        var baseline = Compute(Inputs(observations, interventions: started), minN: 5);
 
         Assert.NotNull(baseline.RegimeStartLocal);
         Assert.InRange(baseline.Mean, 56.5, 57.5);
+    }
+
+    [Fact]
+    public void AStepTheHarmlessWayIsAdoptedWithoutNeedingAnExplanation()
+    {
+        // Resting heart rate DROPPING is not the failure mode this guards against:
+        // nothing is hidden by calling a better number normal.
+        var observations = Series(20, 47).Concat(Series(30, 52, AsOf.AddDays(-20))).ToList();
+        var baseline = Compute(Inputs(observations), minN: 5);
+
+        Assert.NotNull(baseline.RegimeStartLocal);
+        Assert.InRange(baseline.Mean, 46.5, 47.5);
+    }
+
+    [Fact]
+    public void AnUnexplainedStepTheWrongWayIsNotAdoptedAsNormal()
+    {
+        // The review's sharpest point, and the reason adoption is now arbitrated: a
+        // slow decline is a sustained step change, and rebuilding the baseline around
+        // it makes every later deviation check agree that nothing is wrong.
+        var observations = Series(20, 57).Concat(Series(30, 52, AsOf.AddDays(-20))).ToList();
+
+        var baseline = Compute(Inputs(observations), minN: 5);
+
+        Assert.Null(baseline.RegimeStartLocal);
+        Assert.Contains("unadopted_regime_shift", baseline.ExclusionsJson);
+        // Still describing the person before the shift, so 57 keeps reading as high.
+        Assert.InRange(baseline.Median, 51.5, 54.5);
+    }
+
+    [Fact]
+    public void AnUnknownMetricsStepIsAdopted_BecauseNobodyKnowsWhichWayIsBad()
+    {
+        // A lab analyte nobody enumerated has no polarity. Guessing at one would be
+        // worse than treating the change as ordinary.
+        var observations = Series(20, 57).Concat(Series(30, 52, AsOf.AddDays(-20))).ToList();
+        foreach (var o in observations) o.Metric = "some_new_analyte";
+
+        var baseline = BaselineCalculator.Compute("some_new_analyte", "", AsOf, Inputs(observations),
+            windowDays: 60, minN: 5, regimeShiftZ: 1.5, regimeDwellDays: 14);
+
+        Assert.NotNull(baseline.RegimeStartLocal);
     }
 
     [Fact]

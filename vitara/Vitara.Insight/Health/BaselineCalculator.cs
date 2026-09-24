@@ -9,7 +9,10 @@ public record BaselineInputs(
     IReadOnlyList<Observation> Observations,
     IReadOnlyList<ExcludedPeriod> Excluded,
     IReadOnlyList<TravelPeriod> Travel,
-    IReadOnlyList<Device> Devices);
+    IReadOnlyList<Device> Devices,
+    // What was deliberately started or stopped. Only used to decide whether a step
+    // change has an explanation; optional so callers that keep none still work.
+    IReadOnlyList<Intervention>? Interventions = null);
 
 // What normal looks like, and what was left out of deciding that.
 //
@@ -75,12 +78,29 @@ public static class BaselineCalculator
         // A sustained step to a new level resets the window rather than contaminating
         // it. Detected on what survives the exclusions above, so a fortnight of illness
         // is not mistaken for a new normal.
+        //
+        // But only when the step is explained or harmless -- see RegimeDecision. An
+        // unexplained step the wrong way is left UNADOPTED: the baseline stays where it
+        // was, so deviation keeps measuring against the person this metric used to
+        // describe rather than quietly agreeing that worse is now normal.
         DateOnly? regimeStart = null;
         var series = eligible.Select(o => (o.ObservedDateLocal, o.Value)).ToList();
         if (RegimeDetector.Detect(series, regimeShiftZ, regimeDwellDays) is { } change)
         {
-            regimeStart = change.ChangePointLocal;
-            eligible = Drop(eligible, o => o.ObservedDateLocal < change.ChangePointLocal, dropped, "before_regime_change");
+            var explanation = RegimeDecision.Explain(
+                change.ChangePointLocal, inputs.Interventions, inputs.Excluded, inputs.Travel, inputs.Devices);
+
+            if (RegimeDecision.ShouldAdopt(metric, change.Direction, explanation))
+            {
+                regimeStart = change.ChangePointLocal;
+                eligible = Drop(eligible, o => o.ObservedDateLocal < change.ChangePointLocal, dropped, "before_regime_change");
+            }
+            else
+            {
+                // Counted like a drop so the baseline can still explain itself: the row
+                // says a shift was seen and deliberately not taken as the new normal.
+                dropped["unadopted_regime_shift"] = change.DaysHeld;
+            }
         }
 
         var values = eligible.Select(o => o.Value).ToList();

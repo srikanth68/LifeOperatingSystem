@@ -140,6 +140,10 @@ public interface IVitaraRepository
     Task<List<TravelPeriod>> GetTravelPeriodsAsync();
     Task<List<Device>> GetDevicesAsync();
 
+    // What was deliberately started or stopped. Read when deciding whether a step
+    // change in a metric has an explanation behind it.
+    Task<List<Intervention>> GetInterventionsAsync();
+
     // Sync health for sources with no token of their own.
     Task<SyncState?> GetSyncStateAsync(string source);
     Task SaveSyncStateAsync(SyncState state);

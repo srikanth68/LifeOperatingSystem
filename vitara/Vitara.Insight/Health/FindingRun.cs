@@ -9,7 +9,14 @@ public record FindingRunInputs(
     IReadOnlyList<Observation> Observations,
     IReadOnlyList<Baseline> Baselines,
     IReadOnlyList<DerivedMetric> Derived,
-    DateOnly AsOf);
+    DateOnly AsOf,
+    // The recorded context a step change is weighed against: what was started, what was
+    // excluded, where the user was, and what measured them. Optional, because a pass
+    // with none of it still detects everything else.
+    IReadOnlyList<Intervention>? Interventions = null,
+    IReadOnlyList<ExcludedPeriod>? Excluded = null,
+    IReadOnlyList<TravelPeriod>? Travel = null,
+    IReadOnlyList<Device>? Devices = null);
 
 // Running every detector over one day's worth of computed state.
 //
@@ -138,7 +145,13 @@ public static class FindingRun
             // things are, and announcing it now would be announcing history.
             if (change.ChangePointLocal < asOf.AddDays(-HealthThresholds.RegimeDwellDays * 3)) continue;
 
-            findings.Add(FindingDetectors.FromRegimeChange(metric, change, Attribute(input, change), asOf));
+            // The same call the baseline made, so the finding and the baseline cannot
+            // disagree about whether this step was explained or adopted.
+            var explanation = RegimeDecision.Explain(
+                change.ChangePointLocal, input.Interventions, input.Excluded, input.Travel, input.Devices);
+            var adopted = RegimeDecision.ShouldAdopt(metric, change.Direction, explanation);
+
+            findings.Add(FindingDetectors.FromRegimeChange(metric, change, explanation, asOf, adopted));
         }
 
         // ── Strain and sleep debt ─────────────────────────────────────────────────
@@ -225,20 +238,6 @@ public static class FindingRun
 
     private static DerivedMetric? Latest(IReadOnlyList<DerivedMetric> derived, string metric, DateOnly asOf) =>
         derived.FirstOrDefault(d => d.Metric == metric && d.ObservedDateLocal == asOf);
-
-    // What else changed around the same time, offered as a possible explanation and
-    // never as a cause. A device swap on the day a metric steps is worth knowing about;
-    // asserting it did it is a claim the data cannot support.
-    private static string? Attribute(FindingRunInputs input, RegimeChange change)
-    {
-        var window = 7;
-
-        var travel = input.Observations.Count > 0 &&
-            input.Baselines.Any(b => b.RegimeStartLocal is { } s
-                && Math.Abs(s.DayNumber - change.ChangePointLocal.DayNumber) <= window);
-
-        return travel ? "another metric shifted around the same time" : null;
-    }
 
     private static string? ReadString(string? json, string property)
     {

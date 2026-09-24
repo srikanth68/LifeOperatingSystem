@@ -227,6 +227,8 @@ public class FakeRepo : IVitaraRepository
     public Task<List<ExcludedPeriod>> GetExcludedPeriodsAsync() => Task.FromResult(ExcludedData);
     public Task<List<TravelPeriod>> GetTravelPeriodsAsync() => Task.FromResult(TravelData);
     public Task<List<Device>> GetDevicesAsync() => Task.FromResult(DeviceData);
+    public List<Intervention> InterventionData { get; } = [];
+    public Task<List<Intervention>> GetInterventionsAsync() => Task.FromResult(InterventionData);
     public Task SaveSyncStateAsync(SyncState state) { SyncStateData = state; return Task.CompletedTask; }
     public Task<int> ReplaceMealsForDayAsync(DateOnly day, string source, IEnumerable<MealEntry> meals)
     {

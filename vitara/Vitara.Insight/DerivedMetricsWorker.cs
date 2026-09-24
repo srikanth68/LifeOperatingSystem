@@ -127,11 +127,12 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
         var observations = await repo.GetObservationsAsync(asOf.AddDays(-(windowDays + 120)), asOf);
         if (observations.Count == 0) return;
 
-        var inputs = new BaselineInputs(
-            observations,
-            await repo.GetExcludedPeriodsAsync(),
-            await repo.GetTravelPeriodsAsync(),
-            await repo.GetDevicesAsync());
+        var excluded = await repo.GetExcludedPeriodsAsync();
+        var travel = await repo.GetTravelPeriodsAsync();
+        var devices = await repo.GetDevicesAsync();
+        var interventions = await repo.GetInterventionsAsync();
+
+        var inputs = new BaselineInputs(observations, excluded, travel, devices, interventions);
 
         var baselines = new List<Baseline>();
         var derived = new List<DerivedMetric>();
@@ -225,7 +226,15 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
     {
         var derived = await repo.GetDerivedMetricsAsync(asOf.AddDays(-120), asOf);
 
-        var findings = FindingRun.Detect(new FindingRunInputs(observations, baselines, derived, asOf));
+        // Re-read rather than passed down: the detector must weigh a step change against
+        // the same recorded context the baseline did, and reading it here keeps this
+        // method's inputs to "what is stored", like the rest of the pass.
+        var findings = FindingRun.Detect(new FindingRunInputs(
+            observations, baselines, derived, asOf,
+            await repo.GetInterventionsAsync(),
+            await repo.GetExcludedPeriodsAsync(),
+            await repo.GetTravelPeriodsAsync(),
+            await repo.GetDevicesAsync()));
         var sync = await repo.SyncFindingsAsync(findings, asOf);
 
         // Opened and resolved are events; continued is a condition that is still true

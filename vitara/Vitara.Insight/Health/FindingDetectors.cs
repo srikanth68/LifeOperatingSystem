@@ -117,27 +117,42 @@ public static class FindingDetectors
     // ── Regime change ───────────────────────────────────────────────────────────
     // A finding either way. An unexplained step change is the MORE interesting one --
     // an explained one has already been accounted for by the thing that explains it.
-    public static Finding FromRegimeChange(string metric, RegimeChange change, string? attribution, DateOnly today) => new()
+    // adopted says whether the baseline was rebuilt around the new level. An
+    // unexplained step in the harmful direction is NOT adopted (see RegimeDecision),
+    // and that is the loudest version of this finding: the level moved the wrong way,
+    // nothing accounts for it, and the system is still holding the old normal.
+    public static Finding FromRegimeChange(
+        string metric, RegimeChange change, string? attribution, DateOnly today, bool adopted = true)
     {
-        Key = Key(FindingTypes.RegimeChange, metric, change.Direction),
-        Type = FindingTypes.RegimeChange,
-        Metric = metric,
-        Direction = change.Direction,
-        Severity = attribution is null ? "notable" : "info",
-        Summary = attribution is null
-            ? $"{metric} settled at a new level around {change.ChangePointLocal:d MMM} and has held there for {change.DaysHeld} days. Nothing recorded explains it."
-            : $"{metric} settled at a new level around {change.ChangePointLocal:d MMM}, which lines up with: {attribution}.",
-        EvidenceJson = JsonSerializer.Serialize(new
+        var moved = $"{metric} settled at a new level around {change.ChangePointLocal:d MMM} " +
+                    $"({Math.Round(change.Before, 1)} → {Math.Round(change.After, 1)}), held for {change.DaysHeld} days";
+
+        return new Finding
         {
-            before = Math.Round(change.Before, 2),
-            after = Math.Round(change.After, 2),
-            shiftInSigmas = Math.Round(change.ShiftInSigmas, 2),
-            change.DaysHeld,
-            attribution,
-        }),
-        FirstDetectedLocal = change.ChangePointLocal,
-        LastDetectedLocal = today,
-    };
+            Key = Key(FindingTypes.RegimeChange, metric, change.Direction),
+            Type = FindingTypes.RegimeChange,
+            Metric = metric,
+            Direction = change.Direction,
+            Severity = attribution is not null ? "info" : adopted ? "notable" : "high",
+            Summary = attribution is not null
+                ? $"{moved}, which lines up with: {attribution}."
+                : adopted
+                    ? $"{moved}. Nothing recorded explains it."
+                    : $"{moved}, the wrong way, and nothing recorded explains it. Your normal has been left where " +
+                      $"it was rather than rebuilt around the new level, so this stays visible until something accounts for it.",
+            EvidenceJson = JsonSerializer.Serialize(new
+            {
+                before = Math.Round(change.Before, 2),
+                after = Math.Round(change.After, 2),
+                shiftInSigmas = Math.Round(change.ShiftInSigmas, 2),
+                change.DaysHeld,
+                attribution,
+                adopted,
+            }),
+            FirstDetectedLocal = change.ChangePointLocal,
+            LastDetectedLocal = today,
+        };
+    }
 
     // ── Strain ──────────────────────────────────────────────────────────────────
     public static Finding? Strain(double? acwr, double lowBound, double highBound, DateOnly today)

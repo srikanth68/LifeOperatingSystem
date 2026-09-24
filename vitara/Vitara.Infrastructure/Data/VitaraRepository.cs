@@ -317,6 +317,9 @@ public class VitaraRepository(VitaraDbContext db) : IVitaraRepository
     public Task<List<TravelPeriod>> GetTravelPeriodsAsync() => db.TravelPeriods.ToListAsync();
     public Task<List<Device>> GetDevicesAsync() => db.Devices.OrderBy(d => d.ActiveFromLocal).ToListAsync();
 
+    public Task<List<Intervention>> GetInterventionsAsync() =>
+        db.Interventions.OrderBy(i => i.StartedOnLocal).ToListAsync();
+
     public Task<SyncState?> GetSyncStateAsync(string source) =>
         db.SyncStates.FirstOrDefaultAsync(s => s.Source == source);
 
