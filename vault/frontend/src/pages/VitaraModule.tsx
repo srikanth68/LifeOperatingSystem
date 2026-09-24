@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { makeModuleQueryClient } from '../services/moduleQuery';
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
@@ -117,11 +117,17 @@ const timelineAnchor = (d: Date) => { const a = new Date(d); a.setHours(TIMELINE
 const timelineOffset = (anchor: Date, d: Date) => (d.getTime() - anchor.getTime()) / 3_600_000;
 const timelineTickLabel = (h: number) => { const actual = ((TIMELINE_ANCHOR_HOUR + h) % 24 + 24) % 24; const h12 = actual % 12 === 0 ? 12 : actual % 12; return `${h12}${actual < 12 ? 'AM' : 'PM'}`; };
 
-const AX = { fill: '#3d5880', fontSize: 10 };
-const GRID = { stroke: 'rgba(255,255,255,0.04)' };
+// Chart chrome, on paper: hairline grid one step off the surface, recessive axis
+// text, and a tooltip that reads as a small card rather than a dark tooltip bubble.
+const AX = { fill: 'var(--text3)', fontSize: 11 };
+const GRID = { stroke: 'var(--border)' };
 const TT = {
-  contentStyle: { background: '#0c1830', border: '1px solid #1a2f52', borderRadius: 8, fontSize: 11, color: '#dce8ff', padding: '6px 10px' },
-  labelStyle: { color: '#7a96c0', marginBottom: 2 },
+  contentStyle: {
+    background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
+    fontSize: 12, color: 'var(--text)', padding: '8px 12px',
+    boxShadow: '0 8px 24px -12px rgba(19,32,27,0.25)',
+  },
+  labelStyle: { color: 'var(--text3)', marginBottom: 4 },
 };
 
 function Skel({ h = 180 }: { h?: number }) { return <div className="v-chart-skel" style={{ height: h }}/>; }
@@ -457,92 +463,131 @@ function TodayPage({ status }: { status: OuraStatus }) {
   );
 }
 
-// ── Sleep Stages Bar ─────────────────────────────────────────────────────────
-
-function SleepStagesBar({ deep, rem, light }: { deep: number; rem: number; light: number }) {
-  const total = deep + rem + light || 1;
-  return (
-    <div style={{ marginBottom: '1rem' }}>
-      <div className="v-sleep-stages">
-        <div className="v-sleep-seg" style={{ width: `${deep / total * 100}%`, background: 'var(--sleep-deep)' }}/>
-        <div className="v-sleep-seg" style={{ width: `${rem / total * 100}%`, background: 'var(--sleep-rem)' }}/>
-        <div className="v-sleep-seg" style={{ width: `${light / total * 100}%`, background: 'var(--sleep-light)' }}/>
-      </div>
-      <div className="v-sleep-legend">
-        <span><span className="v-sleep-legend-dot" style={{ background: 'var(--sleep-deep)' }}/> Deep {fmtMin(deep)}</span>
-        <span><span className="v-sleep-legend-dot" style={{ background: 'var(--sleep-rem)' }}/> REM {fmtMin(rem)}</span>
-        <span><span className="v-sleep-legend-dot" style={{ background: 'var(--sleep-light)' }}/> Light {fmtMin(light)}</span>
-      </div>
-    </div>
-  );
-}
-
 // ── SLEEP ─────────────────────────────────────────────────────────────────────
 
 function SleepPage() {
-  const { data, isPending, isError } = useQuery<Sleep[]>({ queryKey: ['sleep', 14], queryFn: () => get(`${API}/api/sleep?days=14`) });
-  if (isPending) return <Skel h={300}/>;
-  if (isError || !data?.length) return <div className="v-empty">No sleep data yet</div>;
+  const { data, isPending, isError, error } = useQuery<Sleep[]>({ queryKey: ['sleep', 14], queryFn: () => get(`${API}/api/sleep?days=14`) });
 
-  const a = { score: avg(data.map(s => s.score)), hrv: avg(data.map(s => s.avgHrv)), deep: avg(data.map(s => s.deepMinutes)), rem: avg(data.map(s => s.remMinutes)), total: avg(data.map(s => s.totalSleepMinutes)), eff: avg(data.map(s => s.efficiency)) };
+  if (isPending) return <Skel h={300}/>;
+  if (isError) return <Empty title="Couldn't load your sleep.">{String(error)}</Empty>;
+  if (!data?.length) {
+    return (
+      <Empty title="No nights recorded yet.">
+        Wear the ring overnight; the night appears here after your next sync. Nights imported
+        from Apple Health show up here too.
+      </Empty>
+    );
+  }
+
+  const a = {
+    score: avg(data.map(s => s.score)), hrv: avg(data.map(s => s.avgHrv)),
+    deep: avg(data.map(s => s.deepMinutes)), rem: avg(data.map(s => s.remMinutes)),
+    total: avg(data.map(s => s.totalSleepMinutes)), eff: avg(data.map(s => s.efficiency)),
+  };
 
   const byDay = new Map<string, Sleep>();
   for (const s of data) { const ex = byDay.get(s.day); if (!ex || s.totalSleepMinutes > ex.totalSleepMinutes) byDay.set(s.day, s); }
   const nights = [...byDay.values()].sort((x, y) => y.day.localeCompare(x.day));
-
   const lastNight = nights[0];
 
   const rows = nights.map(s => {
-    const start = new Date(s.bedtimeStart), end = new Date(s.bedtimeEnd);
-    const anchor = timelineAnchor(start);
-    const offset = timelineOffset(anchor, start);
-    const duration = timelineOffset(anchor, end) - offset;
-    return { key: s.id, day: dayLabel(s.day), offset, duration, efficiency: s.efficiency, bedLabel: fmtClock(s.bedtimeStart), wakeLabel: fmtClock(s.bedtimeEnd), totalLabel: fmtMin(s.totalSleepMinutes), deepLabel: fmtMin(s.deepMinutes), remLabel: fmtMin(s.remMinutes), lightLabel: fmtMin(s.lightMinutes), awakeLabel: fmtMin(s.awakeMinutes) };
+    const start2 = new Date(s.bedtimeStart), end2 = new Date(s.bedtimeEnd);
+    const anchor = timelineAnchor(start2);
+    const offset = timelineOffset(anchor, start2);
+    const duration = timelineOffset(anchor, end2) - offset;
+    return {
+      key: s.id, day: dayLabel(s.day), offset, duration, efficiency: s.efficiency,
+      bedLabel: fmtClock(s.bedtimeStart), wakeLabel: fmtClock(s.bedtimeEnd),
+      totalLabel: fmtMin(s.totalSleepMinutes), deepLabel: fmtMin(s.deepMinutes),
+      remLabel: fmtMin(s.remMinutes), lightLabel: fmtMin(s.lightMinutes), awakeLabel: fmtMin(s.awakeMinutes),
+    };
   });
   const rawMin = Math.min(...rows.map(r => r.offset)), rawMax = Math.max(...rows.map(r => r.offset + r.duration));
   const domainMin = Math.floor(rawMin / 3) * 3, domainMax = Math.ceil(rawMax / 3) * 3;
   const ticks: number[] = []; for (let h = domainMin; h <= domainMax; h += 3) ticks.push(h);
 
+  const stageTotal = lastNight ? (lastNight.deepMinutes + lastNight.remMinutes + lastNight.lightMinutes) || 1 : 1;
+
   return (
     <div>
-      {/* Last night first, the 14-day average underneath as context. A fortnight's
-          mean is the wrong headline for a health metric you check each morning: it
-          barely moves, so it can't answer "how did I sleep?" — and it hid a bad night
-          entirely by averaging it away. */}
-      <div className="v-metrics">
-        <Metric label="Last Night" value={lastNight?.score?.toFixed(0)} unit="/ 100" color={scoreColor(lastNight?.score)} subNode={<Delta current={lastNight?.score} baseline={a.score} goodWhen="higher"/>}/>
-        <Metric label="HRV" value={lastNight?.avgHrv?.toFixed(0)} unit="ms" subNode={<Delta current={lastNight?.avgHrv} baseline={a.hrv} goodWhen="higher" unit="ms"/>}/>
-        <Metric label="Deep Sleep" value={lastNight?.deepMinutes?.toFixed(0)} unit="min" subNode={<Delta current={lastNight?.deepMinutes} baseline={a.deep} goodWhen="higher" unit="m"/>}/>
-        <Metric label="REM Sleep" value={lastNight?.remMinutes?.toFixed(0)} unit="min" subNode={<Delta current={lastNight?.remMinutes} baseline={a.rem} goodWhen="higher" unit="m"/>}/>
-        <Metric label="Total Sleep" value={lastNight ? fmtMin(lastNight.totalSleepMinutes) : undefined} sub={a.total != null ? `14d avg ${fmtMin(Math.round(a.total))}` : undefined}/>
-        <Metric label="Efficiency" value={lastNight != null ? (lastNight.efficiency * 100).toFixed(0) : undefined} unit="%" sub={a.eff != null ? `14d avg ${(a.eff * 100).toFixed(0)}%` : undefined}/>
+      {/* Last night first; the fortnight's average is context underneath. A 14-day mean
+          is the wrong headline for something you check each morning -- it barely moves,
+          so it cannot answer "how did I sleep", and it averages a bad night away. */}
+      <div className="hx-hero">
+        <Card className="hx-hero-main">
+          <Ring score={lastNight?.score} label="sleep score" tone={toneFor(lastNight?.score)}/>
+          <div className="hx-hero-copy">
+            <p className="hx-eyebrow">Last night \u00b7 {lastNight ? dayLabel(lastNight.day) : ''}</p>
+            <h2 className="hx-headline">{lastNight ? fmtMin(lastNight.totalSleepMinutes) : '\u2014'} asleep</h2>
+            <p className="hx-sub">
+              {lastNight
+                ? `${fmtClock(lastNight.bedtimeStart)} to ${fmtClock(lastNight.bedtimeEnd)} \u00b7 ${Math.round(lastNight.efficiency * 100)}% of your time in bed`
+                : 'No night recorded.'}
+            </p>
+            {lastNight && (
+              <>
+                <div className="hx-stages" style={{ marginTop: '0.75rem' }}>
+                  <span style={{ width: `${lastNight.deepMinutes / stageTotal * 100}%`, background: 'var(--hx-2)' }} title={`Deep ${fmtMin(lastNight.deepMinutes)}`}/>
+                  <span style={{ width: `${lastNight.remMinutes / stageTotal * 100}%`, background: 'var(--hx-4)' }} title={`REM ${fmtMin(lastNight.remMinutes)}`}/>
+                  <span style={{ width: `${lastNight.lightMinutes / stageTotal * 100}%`, background: 'var(--hx-6)' }} title={`Light ${fmtMin(lastNight.lightMinutes)}`}/>
+                </div>
+                <span className="hx-legend" style={{ marginTop: '0.5rem' }}>
+                  <span><i style={{ background: 'var(--hx-2)' }}/>Deep {fmtMin(lastNight.deepMinutes)}</span>
+                  <span><i style={{ background: 'var(--hx-4)' }}/>REM {fmtMin(lastNight.remMinutes)}</span>
+                  <span><i style={{ background: 'var(--hx-6)' }}/>Light {fmtMin(lastNight.lightMinutes)}</span>
+                  <span><i style={{ background: 'var(--border2)' }}/>Awake {fmtMin(lastNight.awakeMinutes)}</span>
+                </span>
+              </>
+            )}
+          </div>
+        </Card>
+
+        <div className="hx-grid hx-grid-4">
+          <Stat label="Deep" value={lastNight ? fmtMin(lastNight.deepMinutes) : null}
+                sub={<HxDelta value={lastNight?.deepMinutes} reference={a.deep} goodWhen="higher" unit=" min"/>}
+                empty="Not measured"/>
+          <Stat label="REM" value={lastNight ? fmtMin(lastNight.remMinutes) : null}
+                sub={<HxDelta value={lastNight?.remMinutes} reference={a.rem} goodWhen="higher" unit=" min"/>}
+                empty="Not measured"/>
+          <Stat label="HRV" value={lastNight?.avgHrv != null ? Math.round(lastNight.avgHrv) : null} unit="ms"
+                sub={<HxDelta value={lastNight?.avgHrv} reference={a.hrv} goodWhen="higher" unit=" ms"/>}
+                empty="Not measured"/>
+          <Stat label="Efficiency" value={lastNight != null ? Math.round(lastNight.efficiency * 100) : null} unit="%"
+                sub={a.eff != null ? `usually ${Math.round(a.eff * 100)}%` : 'no average yet'}
+                empty="Not measured"/>
+        </div>
       </div>
 
-      <div className="v-section">Sleep Timeline<span className="v-section-line"/></div>
-      <div className="v-chart">
-        <ResponsiveContainer width="100%" height={rows.length * 32 + 40}>
-          <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 0 }} barCategoryGap="30%">
+      <SectionHead title="When you slept" note="Each bar is one night, from lights out to waking." />
+      <div className="hx-chart">
+        <ResponsiveContainer width="100%" height={rows.length * 30 + 44}>
+          <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 0 }} barCategoryGap="34%">
             <CartesianGrid horizontal={false} {...GRID}/>
             <XAxis type="number" domain={[domainMin, domainMax]} ticks={ticks} tickFormatter={timelineTickLabel} tick={AX} tickLine={false} axisLine={false}/>
-            <YAxis type="category" dataKey="day" tick={AX} tickLine={false} axisLine={false} width={52}/>
-            <Tooltip content={<SleepTooltip/>} cursor={{ fill: 'rgba(255,255,255,0.03)' }}/>
+            <YAxis type="category" dataKey="day" tick={AX} tickLine={false} axisLine={false} width={56}/>
+            <Tooltip content={<SleepTooltip/>} cursor={{ fill: 'rgba(15,138,114,0.06)' }}/>
             <Bar dataKey="offset" stackId="t" fill="transparent" isAnimationActive={false}/>
-            <Bar dataKey="duration" stackId="t" radius={6} isAnimationActive={false}>
-              {rows.map(r => <Cell key={r.key} fill={scoreColor(r.efficiency * 100)}/>)}
-            </Bar>
+            {/* One series, one colour: the bar's LENGTH is the story, and colouring each
+                night by its own score would double-encode it in the only free channel. */}
+            <Bar dataKey="duration" stackId="t" radius={5} fill="var(--hx-1)" isAnimationActive={false}/>
           </BarChart>
         </ResponsiveContainer>
       </div>
 
-      <div className="v-section">7-Day Scores<span className="v-section-line"/></div>
-      <div className="v-trail">
-        {data.map(s => (
-          <div key={s.id} className="v-trail-col">
-            <div className="v-trail-bar"><div className="v-trail-fill" style={{ height: `${s.score ?? 0}%`, background: scoreColor(s.score) }}/></div>
-            <div className="v-trail-score" style={{ color: scoreColor(s.score) }}>{s.score ?? '--'}</div>
-            <div className="v-trail-day">{shortDay(s.day)}</div>
-          </div>
-        ))}
+      <SectionHead title="Fourteen nights" note={a.total != null ? `usually ${fmtMin(Math.round(a.total))} asleep` : undefined} />
+      <div className="hx-chart">
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={[...nights].reverse().map(s => ({ day: shortDay(s.day), hours: +(s.totalSleepMinutes / 60).toFixed(2), score: s.score ?? null }))}
+                    margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+            <CartesianGrid vertical={false} {...GRID}/>
+            <XAxis dataKey="day" tick={AX} tickLine={false} axisLine={false}/>
+            <YAxis width={30} tick={AX} tickLine={false} axisLine={false} unit="h"/>
+            <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle} formatter={(v: number) => [`${v} h`, 'asleep']}/>
+            {a.total != null && <ReferenceLine y={+(a.total / 60).toFixed(2)} stroke="var(--text3)" strokeWidth={1}/>}
+            <Bar dataKey="hours" radius={[5, 5, 0, 0]} fill="var(--hx-1)" isAnimationActive={false}/>
+          </BarChart>
+        </ResponsiveContainer>
+        <p className="hx-chart-note" style={{ marginTop: '0.5rem' }}>The line is your own 14-night average.</p>
       </div>
     </div>
   );
@@ -820,41 +865,102 @@ function ActivityPage() {
 // ── READINESS ─────────────────────────────────────────────────────────────────
 
 function ReadinessPage() {
-  const { data, isPending } = useQuery<Readiness[]>({ queryKey: ['readiness', 14], queryFn: () => get(`${API}/api/readiness?days=14`) });
-  if (isPending) return <Skel h={200}/>;
-  if (!data?.length) return <div className="v-empty">No readiness data</div>;
+  const { data, isPending, isError, error } = useQuery<Readiness[]>({ queryKey: ['readiness', 14], queryFn: () => get(`${API}/api/readiness?days=14`) });
 
-  const a = { score: avg(data.map(r => r.score)), rhr: avg(data.map(r => r.restingHeartRate)), hrv: avg(data.map(r => r.hrvBalance)), recov: avg(data.map(r => r.recoveryIndex)) };
+  if (isPending) return <Skel h={200}/>;
+  if (isError) return <Empty title="Couldn't load your recovery data.">{String(error)}</Empty>;
+  if (!data?.length) {
+    return (
+      <Empty title="No recovery readings yet.">
+        Your ring works this out from your overnight heart rate, HRV and temperature. It
+        appears after the first full night of wear.
+      </Empty>
+    );
+  }
+
+  const a = {
+    score: avg(data.map(r => r.score)), rhr: avg(data.map(r => r.restingHeartRate)),
+    hrv: avg(data.map(r => r.hrvBalance)), recov: avg(data.map(r => r.recoveryIndex)),
+  };
   const today = latest(data);
   const levels = data.reduce((acc, r) => { const l = r.level ?? 'unknown'; acc[l] = (acc[l] ?? 0) + 1; return acc; }, {} as Record<string, number>);
+  const trend = [...data].sort((x, y) => x.day.localeCompare(y.day)).map(r => ({ day: shortDay(r.day), score: r.score ?? null }));
 
   return (
     <div>
-      <div className="v-metrics">
-        <Metric label="Score" value={today?.score?.toFixed(0)} unit="/ 100" color={scoreColor(today?.score)} subNode={<Delta current={today?.score} baseline={a.score} goodWhen="higher"/>}/>
-        <Metric label="Resting HR" value={today?.restingHeartRate?.toFixed(0)} unit="bpm" subNode={<Delta current={today?.restingHeartRate} baseline={a.rhr} goodWhen="lower" unit="bpm"/>}/>
-        <Metric label="HRV Balance" value={today?.hrvBalance?.toFixed(0)} unit="/ 100" subNode={<Delta current={today?.hrvBalance} baseline={a.hrv} goodWhen="higher"/>}/>
-        <Metric label="Recovery" value={today?.recoveryIndex?.toFixed(0)} unit="/ 100" subNode={<Delta current={today?.recoveryIndex} baseline={a.recov} goodWhen="higher"/>}/>
-      </div>
-
-      <div className="v-levels">
-        {(['optimal', 'good', 'pay_attention'] as const).map(l => (
-          <div key={l} className={`v-level-pill v-level-${l.replace('_', '-')}`}>
-            <span className="v-level-count">{levels[l] ?? 0}</span>
-            <span className="v-level-label">{l.replace('_', ' ')}</span>
+      <div className="hx-hero">
+        <Card className="hx-hero-main">
+          <Ring score={today?.score} label="readiness" tone={toneFor(today?.score)}/>
+          <div className="hx-hero-copy">
+            <p className="hx-eyebrow">{today ? dayLabel(today.day) : 'Today'}</p>
+            <h2 className="hx-headline">
+              {today?.level ? today.level.replace('_', ' ') : today?.score != null ? 'Recovery' : 'Nothing today yet'}
+            </h2>
+            <p className="hx-sub">
+              How recovered you are, from your overnight heart rate, heart-rate variability and
+              temperature \u2014 measured against your own recent nights, not against anyone else.
+            </p>
+            <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.7rem', flexWrap: 'wrap' }}>
+              {(['optimal', 'good', 'pay_attention'] as const).map(l => (
+                <Chip key={l} tone={l === 'optimal' ? 'good' : l === 'good' ? 'neutral' : 'warn'}>
+                  {levels[l] ?? 0} {l.replace('_', ' ')}
+                </Chip>
+              ))}
+              <Chip>of the last {data.length} days</Chip>
+            </div>
           </div>
-        ))}
+        </Card>
+
+        <div className="hx-grid hx-grid-4">
+          <Stat label="Resting heart rate" value={today?.restingHeartRate} unit="bpm"
+                sub={<HxDelta value={today?.restingHeartRate} reference={a.rhr} goodWhen="lower" unit=" bpm"/>}
+                empty="No overnight reading"/>
+          <Stat label="HRV balance" value={today?.hrvBalance} unit="/100"
+                sub={<HxDelta value={today?.hrvBalance} reference={a.hrv} goodWhen="higher"/>}
+                empty="Needs more nights"/>
+          <Stat label="Recovery index" value={today?.recoveryIndex} unit="/100"
+                sub={<HxDelta value={today?.recoveryIndex} reference={a.recov} goodWhen="higher"/>}
+                empty="Needs more nights"/>
+          <Stat label="Temperature" value={today?.temperatureDeviation != null ? `${today.temperatureDeviation > 0 ? '+' : ''}${today.temperatureDeviation.toFixed(2)}` : null}
+                unit="\u00b0C" sub="Against your own usual" empty="Not measured"/>
+        </div>
       </div>
 
-      <div className="v-section">Daily Detail<span className="v-section-line"/></div>
-      <div className="v-day-grid">
+      <SectionHead title="Fourteen days" note={a.score != null ? `usually ${Math.round(a.score)}` : undefined}/>
+      <div className="hx-chart">
+        <ResponsiveContainer width="100%" height={190}>
+          <AreaChart data={trend} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="hxReady" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--hx-1)" stopOpacity={0.18}/>
+                <stop offset="100%" stopColor="var(--hx-1)" stopOpacity={0}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid vertical={false} {...GRID}/>
+            <XAxis dataKey="day" tick={AX} tickLine={false} axisLine={false} minTickGap={16}/>
+            <YAxis width={30} domain={[0, 100]} tick={AX} tickLine={false} axisLine={false}/>
+            <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle}/>
+            {a.score != null && <ReferenceLine y={Math.round(a.score)} stroke="var(--text3)" strokeWidth={1}/>}
+            <Area type="monotone" dataKey="score" stroke="var(--hx-1)" strokeWidth={2} fill="url(#hxReady)" dot={false} isAnimationActive={false} connectNulls/>
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      <SectionHead title="Day by day"/>
+      <div className="hx-grid hx-grid-4">
         {[...data].reverse().map(r => (
-          <div key={r.id} className="v-day-tile">
-            <div className="v-day-tile-date">{dayLabel(r.day)}</div>
-            <div className="v-day-tile-val" style={{ color: scoreColor(r.score) }}>{r.score ?? '--'}</div>
-            <div className="v-day-tile-row"><span>Level</span><span style={{ textTransform: 'capitalize' }}>{(r.level ?? '--').replace('_', ' ')}</span></div>
-            <div className="v-day-tile-row"><span>RHR</span><span>{r.restingHeartRate ? `${r.restingHeartRate} bpm` : '--'}</span></div>
-            <div className="v-day-tile-row"><span>HRV</span><span>{r.hrvBalance ?? '--'}</span></div>
+          <div key={r.id} className="hx-stat">
+            <div className="hx-stat-head">
+              <span className="hx-stat-label">{dayLabel(r.day)}</span>
+              {r.level && <Chip tone={r.level === 'optimal' ? 'good' : r.level === 'good' ? 'neutral' : 'warn'}>{r.level.replace('_', ' ')}</Chip>}
+            </div>
+            <div className="hx-stat-value">
+              <span className="hx-stat-num" style={{ color: toneFor(r.score) }}>{r.score ?? '\u2014'}</span>
+            </div>
+            <span className="hx-stat-sub">
+              {[r.restingHeartRate ? `${r.restingHeartRate} bpm` : null, r.hrvBalance != null ? `HRV ${r.hrvBalance}` : null]
+                .filter(Boolean).join(' \u00b7 ') || 'No detail recorded'}
+            </span>
           </div>
         ))}
       </div>
