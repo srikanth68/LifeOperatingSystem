@@ -105,6 +105,23 @@ public sealed class ModuleTools(ModuleGateway gw)
     [Description("What is NORMAL for this user per metric - mean, spread, sample size, and whether there is enough data to be valid. Use before calling a reading high or low, so \"high\" means high FOR THEM rather than against a population.")]
     public Task<string> HealthBaselines() => gw.GetAsync("insight", "/api/health/baselines");
 
+    // The only tool here that makes a claim about the future, and the only one whose
+    // answer can be a refusal. The method field is load-bearing: Vitara ships the naive
+    // answer whenever its fitted model failed to beat "tomorrow is like today", and a
+    // caller that reports that as a prediction is inventing a forecast the system
+    // explicitly declined to make.
+    [McpServerTool(Name = "health_forecast")]
+    [Description("Tomorrow's predicted readiness, resting heart rate, HRV and time asleep, each with the range it usually lands in. For \"how will I feel tomorrow\", \"should I train tomorrow\", \"is it worth setting an early alarm\". READ THE method FIELD PER METRIC: \"model\" is a fitted forecast that beat the alternatives on this user's own history; \"today\" means nothing beat assuming tomorrow is like today, so say it is expected to be much like today and do NOT present it as a prediction. The verdict field says how wrong each method has actually been. Last night's numbers -> vitara_health.")]
+    public Task<string> HealthForecast() => gw.GetAsync("insight", "/api/health/forecast");
+
+    // The portrait rather than the reading: standing properties of this body, measured
+    // over months. Nothing in it is compared with a population, and the relationships
+    // are associations in one person's history -- which the payload's own caveat says,
+    // and which must survive being summarised.
+    [McpServerTool(Name = "health_signature")]
+    [Description("How this user's body runs, from months of their own data: when they sleep and how far free nights drift, which weekday is weakest, how long they take to come back from a hard day, and what their numbers move with. For \"what kind of sleeper am I\", \"which day is my worst\", \"how long do I take to recover\", \"what affects my sleep\". Relationships here moved TOGETHER in their data - say so rather than implying cause. Each part is absent until there is enough history, and absent means not enough data, not zero. Today's readings -> vitara_health; what is off baseline -> health_findings.")]
+    public Task<string> HealthSignature() => gw.GetAsync("insight", "/api/health/signature");
+
     [McpServerTool(Name = "aasthi_properties")]
     [Description("Real-estate portfolio: properties, values, profit. For \"my properties\", \"how are rentals doing\". Specific repair/cost/vendor -> maaya_search.")]
     public Task<string> AasthiProperties() => gw.GetAsync("aasthi", "/api/properties");

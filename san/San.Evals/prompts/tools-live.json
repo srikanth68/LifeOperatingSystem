@@ -838,5 +838,15 @@
     "name": "health_baselines",
     "description": "What is NORMAL for this user per metric - mean, spread, sample size, and whether there is enough data to be valid. Use before calling a reading high or low, so \"high\" means high FOR THEM rather than against a population.",
     "parameters": []
+  },
+  {
+    "name": "health_forecast",
+    "description": "Tomorrow's predicted readiness, resting heart rate, HRV and time asleep, each with the range it usually lands in. For \"how will I feel tomorrow\", \"should I train tomorrow\", \"is it worth setting an early alarm\". READ THE method FIELD PER METRIC: \"model\" is a fitted forecast that beat the alternatives on this user's own history; \"today\" means nothing beat assuming tomorrow is like today, so say it is expected to be much like today and do NOT present it as a prediction. The verdict field says how wrong each method has actually been. Last night's numbers -> vitara_health.",
+    "parameters": []
+  },
+  {
+    "name": "health_signature",
+    "description": "How this user's body runs, from months of their own data: when they sleep and how far free nights drift, which weekday is weakest, how long they take to come back from a hard day, and what their numbers move with. For \"what kind of sleeper am I\", \"which day is my worst\", \"how long do I take to recover\", \"what affects my sleep\". Relationships here moved TOGETHER in their data - say so rather than implying cause. Each part is absent until there is enough history, and absent means not enough data, not zero. Today's readings -> vitara_health; what is off baseline -> health_findings.",
+    "parameters": []
   }
 ]

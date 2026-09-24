@@ -108,6 +108,10 @@ distinct root causes that had looked like one problem.
 The fixture is still useful (frozen, so runs stay comparable) but **it does not
 transfer**. Measure against `tools-live.json`.
 
+The catalogue grew to **52** on 2026-09-24 (`health_forecast`, `health_signature`), so a
+run from that date is not directly comparable with the 48-tool column above. If
+`complete_looks_first` slips, the two health tools are the first thing to try removing.
+
 `scripts/refresh-eval-tools.py` keeps that export honest:
 
 ```bash
