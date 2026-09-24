@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, Component } from 'react';
+import type { ReactNode } from 'react';
 import { QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { makeModuleQueryClient } from '../services/moduleQuery';
 import {
@@ -7,6 +8,7 @@ import {
 } from 'recharts';
 import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
+import { VitaraMetricsCatalogue } from '../components/VitaraMetricsCatalogue';
 import '../styles/modules.css';
 import '../styles/vitara.css';
 
@@ -36,7 +38,7 @@ interface Dashboard {
   spo2Data?: Dated & { average?: number; breathingDisturbance?: number };
   cardiovascularAge?: number;
   vo2Max?: number;
-  weeklyAvg: { hrv: number; rhr: number; sleepScore: number; readinessScore: number; steps: number; activityScore: number };
+  weeklyAvg?: { hrv: number; rhr: number; sleepScore: number; readinessScore: number; steps: number; activityScore: number };
   recentWorkouts?: { activity: string; calories?: number; distance?: number; intensity?: string; startTime?: string }[];
   latestHeartRate?: { timestamp: string; bpm: number };
   heartRateSamples?: { timestamp: string; bpm: number }[];
@@ -269,7 +271,9 @@ function TodayPage({ status }: { status: OuraStatus }) {
           <div className="v-metric-sub">
             {d.latestHeartRate
               ? `${relTime(d.latestHeartRate.timestamp)} · resting ${d.readiness?.restingHr ?? '--'}`
-              : `resting · avg ${d.weeklyAvg.rhr} bpm (7d)`}
+              : d.weeklyAvg?.rhr != null
+                ? `resting · avg ${d.weeklyAvg.rhr} bpm (7d)`
+                : 'no reading yet today'}
           </div>
         </div>
         <div className="v-metric">
@@ -277,7 +281,7 @@ function TodayPage({ status }: { status: OuraStatus }) {
           <div className="v-metric-val" style={{ color: '#818cf8' }}>
             {d.sleep?.hrv ?? '--'}<span className="v-metric-unit"> ms</span>
           </div>
-          <div className="v-metric-sub">avg {d.weeklyAvg.hrv} ms (7d)</div>
+          <div className="v-metric-sub">{d.weeklyAvg?.hrv != null ? `avg ${d.weeklyAvg.hrv} ms (7d)` : 'no weekly average yet'}</div>
         </div>
         <div className="v-metric">
           <div className="v-metric-label">Stress<Freshness daysAgo={d.stress?.daysAgo}/></div>
@@ -1804,19 +1808,42 @@ function ImportPanel() {
   );
 }
 
+// One panel throwing must not blank the tab.
+//
+// A dashboard payload missing a block took the whole module down to a white screen: no
+// message, nothing to retry, indistinguishable from the app being broken. React needs a
+// class for this; it is the only one in the codebase and it earns its place.
+class PanelBoundary extends Component<{ name: string; children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) { return { error }; }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="v-panel-error">
+        <p><b>{this.props.name} couldn't be drawn.</b> The rest of the tab still works, and nothing was lost — this is a display problem, not missing data.</p>
+        <p className="v-panel-error-detail">{this.state.error.message}</p>
+        <button className="btn-ghost" onClick={() => this.setState({ error: null })}>Try again</button>
+      </div>
+    );
+  }
+}
+
 // ── ROOT ──────────────────────────────────────────────────────────────────────
 
-type Page = 'today' | 'sleep' | 'body' | 'activity' | 'readiness' | 'protocols' | 'nutrition' | 'import' | 'measure';
+type Page = 'today' | 'all' | 'sleep' | 'body' | 'activity' | 'readiness' | 'protocols' | 'nutrition' | 'import' | 'measure';
 
 const PAGES: { id: Page; label: string }[] = [
   { id: 'today',     label: 'Today' },
+  { id: 'all',       label: 'Everything we track' },
   { id: 'sleep',     label: 'Sleep' },
-  { id: 'body',      label: 'Body' },
+  { id: 'readiness', label: 'Recovery' },
   { id: 'activity',  label: 'Activity' },
-  { id: 'readiness', label: 'Readiness' },
-  { id: 'nutrition', label: 'Nutrition' },
+  { id: 'body',      label: 'Body' },
+  { id: 'nutrition', label: 'Food' },
   { id: 'protocols', label: 'Protocols' },
-  { id: 'measure',   label: 'Record' },
+  { id: 'measure',   label: 'Record a reading' },
   { id: 'import',    label: 'Import' },
 ];
 
@@ -1835,7 +1862,7 @@ function VitaraInner() {
         </div>
         <div>
           <h1 className="module-title">Vitara</h1>
-          <div className="module-subtitle">Longevity Intelligence</div>
+          <div className="module-subtitle">Your health, measured — and compared only with you</div>
         </div>
       </div>
 
@@ -1844,31 +1871,32 @@ function VitaraInner() {
       {/* Import is shown whether or not Oura is linked. A manual upload is the
           fallback for having no ring connected, so gating it behind a working
           connection would hide it in the one case it exists for. */}
-      {!isPending && !isError && status && !status.linked && (
+      {!isPending && !isError && status && (
         <>
-          <NotLinked/>
-          <MeasurePanel/>
-          <XmlImportPanel/>
-          <ImportPanel/>
-        </>
-      )}
-      {!isPending && !isError && status?.linked && (
-        <>
-          {status.expired && <OuraExpiredBanner/>}
+          {/* Shown above the tabs rather than instead of them. Without a ring the old
+              screen was a dead end: no way to see what the system tracks, and the
+              manual and import routes -- the two things that work with no ring at all
+              -- were the only things on the page. */}
+          {!status.linked && <NotLinked/>}
+          {status.linked && status.expired && <OuraExpiredBanner/>}
+
           <nav className="module-subnav" style={MC}>
             {PAGES.map(p => (
               <button key={p.id} className={`module-tab ${page === p.id ? 'active' : ''}`} onClick={() => setPage(p.id)}>{p.label}</button>
             ))}
           </nav>
-          {page === 'today'     && <TodayPage status={status}/>}
-          {page === 'sleep'     && <SleepPage/>}
-          {page === 'body'      && <BodyPage/>}
-          {page === 'activity'  && <ActivityPage/>}
-          {page === 'readiness' && <ReadinessPage/>}
-          {page === 'nutrition' && <NutritionPage/>}
-          {page === 'protocols' && <ProtocolsPage/>}
-          {page === 'measure'   && <MeasurePanel/>}
-          {page === 'import'    && <><XmlImportPanel/><ImportPanel/></>}
+          <PanelBoundary name={PAGES.find(p => p.id === page)?.label ?? 'This page'}>
+            {page === 'today'     && <TodayPage status={status}/>}
+            {page === 'all'       && <VitaraMetricsCatalogue/>}
+            {page === 'sleep'     && <SleepPage/>}
+            {page === 'body'      && <BodyPage/>}
+            {page === 'activity'  && <ActivityPage/>}
+            {page === 'readiness' && <ReadinessPage/>}
+            {page === 'nutrition' && <NutritionPage/>}
+            {page === 'protocols' && <ProtocolsPage/>}
+            {page === 'measure'   && <MeasurePanel/>}
+            {page === 'import'    && <><XmlImportPanel/><ImportPanel/></>}
+          </PanelBoundary>
         </>
       )}
     </div>

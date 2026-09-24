@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Vitara.Insight.Health;
 using Vitara.Application.Interfaces;
+using Vitara.Domain.Entities;
 using Vitara.Domain.Health;
 
 namespace Vitara.Insight.Controllers;
@@ -145,6 +146,115 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
                 pValue = Math.Round(c.PValue, 5),
                 c.WindowDays,
             }),
+        });
+    }
+
+    // Everything the system can know about you, one row per metric, whether or not it
+    // has ever held a reading.
+    //
+    // The UI could previously only show metrics that happened to have data, so "we track
+    // nothing of the sort" and "we track that and you have not recorded any" looked
+    // identical -- and a zero looked the same as a gap. Every row here carries its own
+    // state and what would fill it: no silent absences, and nothing to guess at.
+    [HttpGet("metrics")]
+    public async Task<IActionResult> Metrics()
+    {
+        var today = LocalTime.Today;
+
+        // A year: enough to answer "when did you last see this" for a lab drawn twice a
+        // year, without loading the whole history for a page of current values.
+        var observations = await repo.GetObservationsAsync(today.AddDays(-400), today);
+        var derived = await repo.GetDerivedMetricsAsync(today.AddDays(-400), today);
+        var baselineDay = await repo.GetLatestBaselineDayAsync();
+        var baselines = baselineDay is null ? [] : await repo.GetBaselinesAsync(baselineDay.Value);
+
+        var rows = MetricCatalogue.All.Select(info =>
+        {
+            var latest = info.Computed
+                ? derived.Where(d => d.Metric == info.Key)
+                    .OrderBy(d => d.ObservedDateLocal)
+                    .Select(d => (Day: (DateOnly?)d.ObservedDateLocal, Value: (double?)d.Value))
+                    .LastOrDefault()
+                : observations.Where(o => o.Metric == info.Key)
+                    .OrderBy(o => o.ObservedDateLocal)
+                    .Select(o => (Day: (DateOnly?)o.ObservedDateLocal, Value: (double?)o.Value))
+                    .LastOrDefault();
+
+            var readings = info.Computed
+                ? derived.Count(d => d.Metric == info.Key)
+                : observations.Count(o => o.Metric == info.Key);
+
+            // The best-supported bucket when a metric is split by context -- blood
+            // pressure has one per position, and the page shows the one with the most
+            // behind it rather than an arbitrary first.
+            var baseline = baselines.Where(b => b.Metric == info.Key).OrderByDescending(b => b.N).FirstOrDefault();
+
+            var daysSince = latest.Day is { } day ? today.DayNumber - day.DayNumber : (int?)null;
+
+            // Four states, each said out loud rather than inferred from a missing field.
+            var state =
+                latest.Value is null ? "no_data"
+                : daysSince > info.StaleAfterDays ? "stale"
+                : "current";
+
+            var baselineState =
+                baseline is null ? "none"
+                : baseline.IsValid ? "ready"
+                : "learning";
+
+            return new
+            {
+                info.Key,
+                info.Label,
+                info.Unit,
+                info.Group,
+                info.Tier,
+                info.Source,
+                info.What,
+                info.Decimals,
+                info.Polarity,
+                state,
+                latest = latest.Value is null ? null : new
+                {
+                    value = Math.Round(latest.Value.Value, info.Decimals + 2),
+                    day = latest.Day!.Value.ToString("yyyy-MM-dd"),
+                    daysAgo = daysSince,
+                },
+                readings,
+                staleAfterDays = info.StaleAfterDays,
+                baseline = baseline is null ? null : new
+                {
+                    state = baselineState,
+                    signature = baseline.BaselineSignature,
+                    median = Math.Round(baseline.Median, info.Decimals + 2),
+                    p25 = Math.Round(baseline.P25, info.Decimals + 2),
+                    p75 = Math.Round(baseline.P75, info.Decimals + 2),
+                    baseline.N,
+                    needs = Math.Max(0, HealthThresholds.MinBaselineN - baseline.N),
+                    baseline.WindowDays,
+                    regimeStart = baseline.RegimeStartLocal?.ToString("yyyy-MM-dd"),
+                    exclusions = baseline.ExclusionsJson,
+                },
+                // Said per row, because "we cannot fill this for you" is the answer to
+                // most empty cells here and the user is the only one who can act on it.
+                fillWith = info.Source switch
+                {
+                    "ring" => "Connect your ring and let it sync overnight",
+                    "phone" => "Turn on the companion app's health sync",
+                    "manual" => "Record it on the Record tab",
+                    "lab" => "Add your latest blood test results",
+                    _ => "Computed once the readings behind it exist",
+                },
+            };
+        });
+
+        return Ok(new
+        {
+            today = today.ToString("yyyy-MM-dd"),
+            computedThrough = baselineDay?.ToString("yyyy-MM-dd"),
+            minReadingsForBaseline = HealthThresholds.MinBaselineN,
+            groups = MetricCatalogue.Groups,
+            metrics = rows,
         });
     }
 

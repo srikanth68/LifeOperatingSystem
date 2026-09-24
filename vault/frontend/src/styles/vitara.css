@@ -735,3 +735,113 @@ h1.module-title  { font-size: 1.35rem; margin-bottom: 0; }
   color: var(--text3);
   line-height: 1.4;
 }
+
+/* ── Everything we track ─────────────────────────────────────────────────────
+   One card per metric, always. The states are the point: current, gone quiet,
+   still learning a normal, and never recorded each look different at a glance,
+   so an empty cell can never be mistaken for a metric that doesn't exist. */
+
+.vm-page { --vm-accent: var(--vitara); }
+
+.vm-head { margin-bottom: 1rem; }
+.vm-title { font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; font-weight: 600; margin: 0 0 0.3rem; color: var(--text); }
+.vm-lede { margin: 0; max-width: 78ch; font-size: 0.85rem; line-height: 1.6; color: var(--text2); }
+
+.vm-filters { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 1rem 0 1.5rem; }
+.vm-filter {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text2);
+  padding: 0.35rem 0.85rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.vm-filter:hover { color: var(--text); border-color: var(--border2); }
+.vm-filter.active { color: var(--text); border-color: var(--vm-accent); background: var(--vitara-dim); }
+.vm-filter-count { color: var(--text3); font-variant-numeric: tabular-nums; margin-left: 0.3rem; }
+.vm-filter.active .vm-filter-count { color: var(--vm-accent); }
+
+.vm-group { margin-bottom: 1.75rem; }
+.vm-group-head { margin-bottom: 0.7rem; }
+.vm-group-head h3 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--vm-accent); margin: 0 0 0.2rem;
+}
+.vm-group-head p { margin: 0; font-size: 0.8rem; color: var(--text3); max-width: 78ch; }
+
+.vm-grid {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 0.75rem;
+}
+
+.vm-card {
+  display: flex; flex-direction: column; gap: 0.45rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 0.9rem 1rem 0.95rem;
+}
+/* Gone quiet gets a warm edge; never recorded is dashed and dimmed -- present, clearly
+   not filled, and not shouting. */
+.vm-card.vm-stale { border-color: rgba(212,168,67,0.35); }
+.vm-card.vm-no_data { border-style: dashed; background: transparent; }
+
+.vm-card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; }
+.vm-card-label { font-size: 0.86rem; font-weight: 600; color: var(--text); }
+
+.vm-source {
+  font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700;
+  color: var(--text3); border: 1px solid var(--border); border-radius: 4px; padding: 0.1rem 0.4rem;
+  white-space: nowrap;
+}
+.vm-source-ring { color: var(--vitara); border-color: rgba(6,200,160,0.35); }
+.vm-source-manual { color: var(--gold); border-color: rgba(212,168,67,0.35); }
+.vm-source-lab { color: var(--nexus); border-color: rgba(79,158,248,0.35); }
+
+.vm-value { display: flex; align-items: baseline; gap: 0.35rem; flex-wrap: wrap; }
+.vm-number { font-size: 1.6rem; font-weight: 600; line-height: 1.1; color: var(--text); }
+.vm-unit { font-size: 0.82rem; color: var(--text2); }
+.vm-when { font-size: 0.72rem; color: var(--text3); margin-left: auto; }
+.vm-when.is-stale { color: var(--gold); }
+.vm-empty .vm-number { color: var(--text3); }
+
+.vm-normal { font-size: 0.76rem; color: var(--text2); line-height: 1.5; }
+.vm-normal b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.vm-normal span { color: var(--text3); }
+
+.vm-learning-bar {
+  display: block; height: 4px; border-radius: 3px; background: var(--border2);
+  overflow: hidden; margin-bottom: 0.35rem; max-width: 160px;
+}
+.vm-learning-bar span { display: block; height: 100%; background: var(--vm-accent); border-radius: 3px; }
+
+.vm-what { margin: 0; font-size: 0.75rem; line-height: 1.55; color: var(--text3); }
+
+.vm-note { margin: 0.2rem 0 0; font-size: 0.72rem; line-height: 1.45; color: var(--text2); }
+.vm-note-warn { color: var(--gold-l); }
+
+.vm-error {
+  border: 1px solid rgba(232,68,68,0.35); background: var(--debt-dim);
+  border-radius: var(--r-md); padding: 1rem 1.15rem; max-width: 70ch;
+}
+.vm-error p { margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--text); line-height: 1.55; }
+.vm-error-detail { font-size: 0.74rem !important; color: var(--text3) !important; font-family: monospace; }
+
+.vm-foot {
+  margin: 1.5rem 0 0; padding-top: 0.9rem; border-top: 1px solid var(--border);
+  font-size: 0.74rem; color: var(--text3); line-height: 1.6; max-width: 80ch;
+}
+
+/* One panel failing, said out loud rather than as a blank screen. */
+.v-panel-error {
+  border: 1px solid rgba(232,68,68,0.35);
+  background: var(--debt-dim);
+  border-radius: var(--r-md);
+  padding: 1rem 1.15rem;
+  max-width: 70ch;
+}
+.v-panel-error p { margin: 0 0 0.5rem; font-size: 0.85rem; line-height: 1.55; color: var(--text); }
+.v-panel-error-detail { font-size: 0.74rem !important; color: var(--text3) !important; font-family: monospace; }
