@@ -34,6 +34,13 @@ interface Finding {
   daysRunning: number;
 }
 
+interface Coverage {
+  metricsWithNormal: number;
+  stillLearning: number;
+  stillLearningMetrics: string[];
+  note: string;
+}
+
 interface Summary {
   status: string;
   latestDataDay: string | null;
@@ -41,7 +48,12 @@ interface Summary {
   daysBehind: number | null;
   activeFindings: number;
   bySeverity: Record<string, number>;
+  coverage?: Coverage;
+  // How many of the active findings lead today. The rest are standing and unchanged,
+  // listed rather than hidden -- see Surfacing on the server.
+  surfacing?: { cap: number; held: number; note: string };
   findings: Finding[];
+  standing?: Finding[];
 }
 
 interface Baseline {
@@ -178,7 +190,6 @@ const TYPE_LABELS: Record<string, string> = {
   lab_anchor: 'Lab result',
 };
 
-const SEVERITY_ORDER: Record<string, number> = { high: 3, notable: 2, info: 1 };
 const SEVERITY_LABEL: Record<string, string> = { high: 'Worth acting on', notable: 'Keep an eye on', info: 'For information' };
 
 // Severity is status, so it never travels on colour alone: every use pairs the colour
@@ -270,6 +281,22 @@ function Verdict() {
               </li>
             ))}
           </ul>
+        )}
+
+        {/* "Everything within your normal" is true and misleading when half the
+            metrics have no normal to be outside of, so the count travels with it. */}
+        {data.coverage && data.coverage.stillLearning > 0 && (
+          <p className="insight-learning">
+            <b>{data.coverage.metricsWithNormal}</b> measurements have a normal to be checked against;{' '}
+            <b>{data.coverage.stillLearning}</b> are still learning theirs.
+            <Info label="What still learning means">
+              A normal needs enough readings behind it to mean anything. Until then a measurement is
+              recorded and shown, but not checked — so it can be neither flagged nor called fine.
+              {data.coverage.stillLearningMetrics.length > 0 && (
+                <> Still learning: {data.coverage.stillLearningMetrics.join(', ')}.</>
+              )}
+            </Info>
+          </p>
         )}
 
         <p className="insight-meta">
@@ -399,10 +426,10 @@ function Findings() {
   });
   if (!data || data.findings.length === 0) return null;
 
-  const sorted = [...data.findings].sort(
-    (a, b) => (SEVERITY_ORDER[b.severity] ?? 0) - (SEVERITY_ORDER[a.severity] ?? 0)
-             || b.daysRunning - a.daysRunning,
-  );
+  // The server has already chosen the order and which few lead; re-sorting here would
+  // put the tab and San in disagreement about what today's news is.
+  const sorted = data.findings;
+  const standing = data.standing ?? [];
 
   return (
     <section className="insight-section">
@@ -412,6 +439,8 @@ function Findings() {
           A finding appears when a measurement stays away from your own usual range for long enough
           that chance is an unlikely explanation. The dots under each one are how many days it has
           been running, which is the difference between one odd morning and something worth acting on.
+          At most {data.surfacing?.cap ?? 3} lead at a time, newest first at equal severity — anything
+          serious always leads, and nothing is ever dropped.
         </Info>
       </h2>
       <ul className="insight-findings">
@@ -433,6 +462,25 @@ function Findings() {
           </li>
         ))}
       </ul>
+
+      {/* Held back from the lead, not hidden. Something running for its fortieth day has
+          been said thirty-nine times; it is still true and still here. */}
+      {standing.length > 0 && (
+        <details className="insight-standing">
+          <summary>
+            {standing.length === 1 ? 'One more finding' : `${standing.length} more findings`} standing and unchanged
+          </summary>
+          <ul className="insight-standing-list">
+            {standing.map(f => (
+              <li key={f.key}>
+                <SeverityIcon severity={f.severity} />
+                <span className="insight-standing-text">{f.summary}</span>
+                <em>{f.daysRunning === 1 ? 'first seen today' : `day ${f.daysRunning}`}</em>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </section>
   );
 }

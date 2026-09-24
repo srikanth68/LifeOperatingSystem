@@ -492,3 +492,42 @@
   border-color: var(--border);
   box-shadow: var(--hx-shadow);
 }
+
+/* ── Coverage, and the findings held back from the lead ──────────────────── */
+
+.insight-learning {
+  margin: 0.7rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text2);
+}
+.insight-learning b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.insight-standing { margin-top: 0.75rem; }
+.insight-standing > summary {
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text2);
+  padding: 0.35rem 0;
+  list-style: none;
+}
+.insight-standing > summary::-webkit-details-marker { display: none; }
+.insight-standing > summary::before { content: '\25b8'; margin-right: 0.45rem; color: var(--text3); }
+.insight-standing[open] > summary::before { content: '\25be'; }
+.insight-standing > summary:hover { color: var(--text); }
+
+.insight-standing-list { list-style: none; margin: 0.2rem 0 0; padding: 0; }
+.insight-standing-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text2);
+}
+.insight-standing-list li:first-child { border-top: none; }
+.insight-standing-text { flex: 1; min-width: 0; }
+.insight-standing-list em { font-style: normal; font-size: 0.72rem; color: var(--text3); white-space: nowrap; }

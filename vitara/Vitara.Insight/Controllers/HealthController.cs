@@ -269,6 +269,20 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
 
         var daysBehind = baselineDay is null ? (int?)null : today.DayNumber - baselineDay.Value.DayNumber;
 
+        // Which few lead today. Everything active is still active and still listed by
+        // /findings -- this only decides what gets said first, because a list that is
+        // long and mostly unchanged every morning is a list that stops being read.
+        var chosen = Surfacing.Choose(findings);
+
+        // How much of the picture has a normal yet.
+        //
+        // Without this, a metric with four readings behind it and a metric with ninety
+        // read identically once they are inside their range, and "nothing is flagged"
+        // covers both. A model told only about findings will say the reassuring thing.
+        var baselines = baselineDay is null ? [] : await repo.GetBaselinesAsync(baselineDay.Value);
+        var learning = baselines.Where(b => !b.IsValid).Select(b => b.Metric).Distinct().ToList();
+        var settled = baselines.Where(b => b.IsValid).Select(b => b.Metric).Distinct().Count();
+
         // Said in words, because the dates alone were not enough.
         //
         // Asked "is anything wrong with my health", San answered "nothing is flagged as
@@ -288,8 +302,12 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
                   "Say so before reporting them."
             : findings.Count == 0
                 ? $"Analysis current through {baselineDay:yyyy-MM-dd}. Nothing is outside this user's " +
-                  "normal range."
-                : $"Analysis current through {baselineDay:yyyy-MM-dd}.";
+                  "normal range." + LearningClause(learning.Count)
+                : $"Analysis current through {baselineDay:yyyy-MM-dd}." +
+                  (chosen.Standing.Count > 0
+                      ? $" The {chosen.Surfaced.Count} findings below are what leads today; " +
+                        $"{chosen.Standing.Count} more are standing and unchanged."
+                      : "");
 
         return Ok(new
         {
@@ -303,21 +321,53 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
             activeFindings = findings.Count,
             bySeverity = findings.GroupBy(f => f.Severity).ToDictionary(g => g.Key, g => g.Count()),
 
-            findings = findings
-                .OrderByDescending(f => Rank(f.Severity))
-                .ThenByDescending(f => f.LastDetectedLocal)
-                .Select(f => new
-                {
-                    f.Key,
-                    f.Type,
-                    // Carried even though Summary already names it in prose. The key is
-                    // colon-delimited and the summary is a sentence; a caller that wants
-                    // to group or label by metric should not have to parse either.
-                    f.Metric,
-                    f.Severity,
-                    f.Summary,
-                    daysRunning = f.LastDetectedLocal.DayNumber - f.FirstDetectedLocal.DayNumber + 1,
-                }),
+            // How many metrics have earned a normal, and how many have not. A caller
+            // reporting "nothing is flagged" over eleven settled metrics and thirty
+            // unsettled ones is reporting the wrong thing.
+            coverage = new
+            {
+                metricsWithNormal = settled,
+                stillLearning = learning.Count,
+                stillLearningMetrics = learning
+                    .Select(m => MetricCatalogue.Find(m)?.Label ?? m)
+                    .OrderBy(x => x, StringComparer.Ordinal)
+                    .Take(8),
+                note = learning.Count == 0
+                    ? ""
+                    : $"{learning.Count} metrics do not have enough readings for a normal yet. For those, " +
+                      "say 'not enough data yet' rather than implying they are fine.",
+            },
+
+            // The cap, said out loud. A caller that shortens the list on its own has no
+            // way to tell the reader that it did.
+            surfacing = new { cap = chosen.Cap, held = chosen.Standing.Count, note = chosen.Note },
+
+            findings = chosen.Surfaced.Select(f => new
+            {
+                f.Key,
+                f.Type,
+                // Carried even though Summary already names it in prose. The key is
+                // colon-delimited and the summary is a sentence; a caller that wants
+                // to group or label by metric should not have to parse either.
+                f.Metric,
+                f.Severity,
+                f.Summary,
+                daysRunning = Surfacing.DaysRunning(f),
+                surfaced = true,
+            }),
+
+            // Present, briefly. Held back from the lead is not the same as hidden, and a
+            // caller asked "is that everything?" must be able to answer truthfully.
+            standing = chosen.Standing.Select(f => new
+            {
+                f.Key,
+                f.Type,
+                f.Metric,
+                f.Severity,
+                f.Summary,
+                daysRunning = Surfacing.DaysRunning(f),
+                surfaced = false,
+            }),
         });
     }
 
@@ -326,5 +376,14 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         "high" => 3,
         "notable" => 2,
         _ => 1,
+    };
+
+    // Said on the reassuring branch specifically. "Nothing is outside your normal range"
+    // is true and misleading when half the metrics have no normal to be outside of.
+    private static string LearningClause(int learning) => learning switch
+    {
+        0 => "",
+        1 => " One metric is still learning its normal and was not checked.",
+        _ => $" {learning} metrics are still learning their normal and were not checked.",
     };
 }
