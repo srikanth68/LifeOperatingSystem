@@ -258,6 +258,84 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         });
     }
 
+    // Did the early-illness signal actually work?
+    //
+    // The one detector here with ground truth available: the user marks the days they
+    // were ill so those days stay out of their baselines, and those marks are exactly
+    // the labels an evaluation needs. Without this, every threshold in that detector
+    // can be defended and none of it can be tested -- which is how a detector ends up
+    // tuned to whatever produced a comfortable number of alerts in its first month.
+    //
+    // Deliberately unflattering. Two marked illnesses produce a sentence saying two is
+    // not an evaluation, rather than a percentage that reads like one.
+    [HttpGet("illness-eval")]
+    public async Task<IActionResult> IllnessEvaluation([FromQuery] int days = 365)
+    {
+        var to = LocalTime.Today;
+        var from = to.AddDays(-Math.Clamp(days, 30, 1825));
+
+        var observations = await repo.GetObservationsAsync(from, to);
+        var derived = await repo.GetDerivedMetricsAsync(from, to);
+        var excluded = await repo.GetExcludedPeriodsAsync();
+
+        var vitals = FindingRun.BuildVitals(derived, observations);
+        var result = IllnessEval.Evaluate(
+            vitals,
+            excluded.Where(p => p.EndLocal >= from).ToList(),
+            HealthThresholdSet.FromConfiguration(),
+            HealthThresholds.IllnessSustainedDays);
+
+        return Ok(new
+        {
+            windowDays = to.DayNumber - from.DayNumber,
+            result.DaysEvaluated,
+
+            // Counts and lists are named apart deliberately: serialised with a camelCase
+            // policy, "Episodes" and "episodes" collide into one key and the payload
+            // silently carries whichever was written last.
+            episodeCount = result.Episodes,
+            result.Caught,
+            result.Missed,
+            falseAlarmCount = result.FalseAlarms,
+
+            // Positive is a warning, zero or negative is a confirmation. Reported
+            // separately from the catch rate because they are worth different amounts
+            // and averaging them together would hide which one this detector gives.
+            medianLeadDays = result.MedianLeadDays,
+
+            // The sentence first. A caller that prints only one field should print this.
+            result.Verdict,
+
+            thresholds = new
+            {
+                restingHrZ = HealthThresholds.IllnessRestingHrZ,
+                hrvZ = HealthThresholds.IllnessHrvZ,
+                tempZ = HealthThresholds.IllnessTempZ,
+                tempFloorC = HealthThresholds.IllnessTempFloorC,
+                tempOverrideC = HealthThresholds.IllnessTempOverrideC,
+                sustainedDays = HealthThresholds.IllnessSustainedDays,
+                leadWindowDays = IllnessEval.LeadWindowDays,
+            },
+
+            episodes = result.PerEpisode.Select(e => new
+            {
+                start = e.Start.ToString("yyyy-MM-dd"),
+                end = e.End.ToString("yyyy-MM-dd"),
+                e.Caught,
+                e.LeadDays,
+                signalStart = e.SignalStart?.ToString("yyyy-MM-dd"),
+                e.Notes,
+            }),
+
+            falseAlarms = result.FalseAlarmRuns.Select(r => new
+            {
+                start = r.Start.ToString("yyyy-MM-dd"),
+                end = r.End.ToString("yyyy-MM-dd"),
+                days = r.End.DayNumber - r.Start.DayNumber + 1,
+            }),
+        });
+    }
+
     // One call for "how am I doing", shaped for a model rather than a chart.
     [HttpGet("summary")]
     public async Task<IActionResult> Summary()

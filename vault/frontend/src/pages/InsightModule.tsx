@@ -100,6 +100,19 @@ interface CorrelationSet {
   correlations: Correlation[];
 }
 
+interface IllnessEval {
+  windowDays: number;
+  daysEvaluated: number;
+  episodeCount: number;
+  caught: number;
+  missed: number;
+  falseAlarmCount: number;
+  medianLeadDays: number | null;
+  verdict: string;
+  episodes: { start: string; end: string; caught: boolean; leadDays: number | null; signalStart: string | null; notes: string | null }[];
+  falseAlarms: { start: string; end: string; days: number }[];
+}
+
 interface BioContribution {
   key: string;
   name: string;
@@ -675,6 +688,61 @@ function Correlations() {
   );
 }
 
+// ── Has the illness warning ever worked? ──────────────────────────────
+
+// The only claim here that can be checked against what actually happened, so it is.
+// A detector that has never caught anything should say so where the reader can see it,
+// not only in a test suite.
+function IllnessRecord() {
+  const { data } = useQuery({
+    queryKey: ['illness-eval'],
+    queryFn: () => get<IllnessEval>(`${API}/api/health/illness-eval`),
+  });
+  if (!data) return null;
+
+  const nothingToSay = data.episodeCount === 0 && data.falseAlarmCount === 0;
+
+  return (
+    <section className="insight-section">
+      <h2 className="insight-h2">
+        Has the illness warning worked
+        <Info label="How this is checked">
+          The days you marked yourself ill are the only ground truth in this system, so they are used to
+          score the warning that is supposed to precede them. A signal arriving on the day you marked it
+          is confirmation rather than warning, and is counted separately. Runs of signal with no illness
+          near them are counted as false alarms even if you did feel rough — that is what keeps the
+          number honest.
+        </Info>
+      </h2>
+
+      {nothingToSay ? (
+        <p className="insight-muted">
+          Nothing to check against yet. Mark the days you were ill — those days are kept out of your
+          baselines anyway — and this becomes a real answer about whether the warning works for you.
+        </p>
+      ) : (
+        <>
+          <div className="insight-eval-row">
+            <div className="insight-eval-stat">
+              <b>{data.caught}/{data.episodeCount}</b>
+              <span>illnesses with a signal</span>
+            </div>
+            <div className="insight-eval-stat">
+              <b>{data.medianLeadDays === null ? '—' : `${data.medianLeadDays > 0 ? '+' : ''}${data.medianLeadDays}d`}</b>
+              <span>{(data.medianLeadDays ?? 0) > 0 ? 'median warning' : 'median timing'}</span>
+            </div>
+            <div className="insight-eval-stat">
+              <b>{data.falseAlarmCount}</b>
+              <span>false alarms</span>
+            </div>
+          </div>
+          <p className="insight-muted insight-lede">{data.verdict}</p>
+        </>
+      )}
+    </section>
+  );
+}
+
 // ── All baselines (the table view) ───────────────────────────────────────────
 
 function BaselineTable() {
@@ -768,6 +836,7 @@ function InsightPage() {
         <Findings />
         <TodayVsNormal />
         <Correlations />
+        <IllnessRecord />
         <BaselineTable />
       </div>
     </Shell>

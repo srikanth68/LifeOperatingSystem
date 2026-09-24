@@ -531,3 +531,32 @@
 .insight-standing-list li:first-child { border-top: none; }
 .insight-standing-text { flex: 1; min-width: 0; }
 .insight-standing-list em { font-style: normal; font-size: 0.72rem; color: var(--text3); white-space: nowrap; }
+
+/* ── The detector's own record ───────────────────────────────────────────── */
+
+.insight-eval-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.7rem;
+}
+.insight-eval-stat {
+  flex: 1 1 8rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 0.7rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.insight-eval-stat b {
+  font-size: 1.3rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.insight-eval-stat span { font-size: 0.73rem; color: var(--text3); }
+
+.hx .insight-eval-stat { background: var(--surface); box-shadow: var(--hx-shadow); }

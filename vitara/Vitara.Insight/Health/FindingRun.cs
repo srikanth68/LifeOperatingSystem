@@ -216,7 +216,10 @@ public static class FindingRun
     // The three z-scores the illness signal reads, aligned by day. A day missing any
     // of them still counts -- the detector requires two of three, so an absent skin
     // temperature does not silence a clear resting-HR and HRV signal.
-    private static List<DailyVitals> BuildVitals(
+    // Public because the evaluation replays the detector over the same input the
+    // detection pass sees. Building a second copy of this for the eval would let the
+    // two drift, and then the evaluation measures something nobody ships.
+    public static List<DailyVitals> BuildVitals(
         IReadOnlyList<DerivedMetric> derived, IReadOnlyList<Observation> observations)
     {
         var rhr = ZByDay(derived, MetricKeys.RestingHeartRate);
