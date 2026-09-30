@@ -37,7 +37,11 @@ interface Dashboard {
   resilience?: Dated & { level?: string; sleepRecovery?: number; daytimeRecovery?: number; stressScore?: number };
   spo2Data?: Dated & { average?: number; breathingDisturbance?: number };
   cardiovascularAge?: number;
+  cardiovascularAgeDay?: string;
+  cardiovascularAgeDaysAgo?: number;
   vo2Max?: number;
+  vo2MaxDay?: string;
+  vo2MaxDaysAgo?: number;
   weeklyAvg?: { hrv: number; rhr: number; sleepScore: number; readinessScore: number; steps: number; activityScore: number };
   recentWorkouts?: { activity: string; calories?: number; distance?: number; intensity?: string; startTime?: string }[];
   latestHeartRate?: { timestamp: string; bpm: number };
@@ -100,6 +104,18 @@ const send = async <T = unknown,>(url: string, method: string, body?: unknown): 
   if (r.status === 204) return undefined as T;
   return r.json();
 };
+
+// Oura returns one row per sleep SESSION and detects naps, so a day can carry several.
+// The night is the longest of them; the rest are naps and must not be averaged in --
+// doing that is what made a normal night read as three hours above usual.
+function oneNightPerDay(sessions: Sleep[]): Sleep[] {
+  const best = new Map<string, Sleep>();
+  for (const s of sessions) {
+    const held = best.get(s.day);
+    if (!held || s.totalSleepMinutes > held.totalSleepMinutes) best.set(s.day, s);
+  }
+  return [...best.values()].sort((a, b) => a.day.localeCompare(b.day));
+}
 
 const dayLabel = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 const shortDay = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
@@ -288,7 +304,7 @@ function TodayPage({ status }: { status: OuraStatus }) {
   const today = new Date().toISOString().slice(0, 10);
   const meal = food?.find(f => f.day === today) ?? food?.[0];
 
-  const byDay = [...(nights ?? [])].sort((a, b) => a.day.localeCompare(b.day));
+  const byDay = oneNightPerDay(nights ?? []);
   const actDays = [...(days ?? [])].sort((a, b) => a.day.localeCompare(b.day));
   const recentLabs = (labs ?? []).slice(0, 4);
 
@@ -364,7 +380,16 @@ function TodayPage({ status }: { status: OuraStatus }) {
               </div>
               <div className="hx-steps">
                 {steps(d, meal).map((st, i, all) => (
-                  <span key={st.id} className={`hx-step ${st.done ? 'done' : all.findIndex(x => !x.done) === i ? 'now' : ''}`}>
+                  <span
+                    key={st.id}
+                    className={[
+                      'hx-step',
+                      st.done ? 'done' : all.findIndex(x => !x.done) === i ? 'now' : '',
+                      // The connector to the left belongs to the PREVIOUS step. Colouring
+                      // it by this one drew a finished line out of an unfinished step.
+                      i > 0 && all[i - 1].done ? 'linked' : '',
+                    ].filter(Boolean).join(' ')}
+                  >
                     <i/>
                     <span>{st.id}</span>
                   </span>
@@ -530,10 +555,11 @@ function TodayPage({ status }: { status: OuraStatus }) {
               <div className="hx-grid hx-grid-4">
                 <Stat label="Cardiovascular age" accent={HEART}
                       value={d.cardiovascularAge != null ? Math.round(d.cardiovascularAge) : null} unit="yrs"
-                      sub={d.profile?.age != null ? `you are ${d.profile.age}` : 'estimated'}
-                      empty="Needs more wear"/>
+                      sub={ageOfReading(d.cardiovascularAgeDaysAgo, d.profile?.age != null ? `you are ${d.profile.age}` : 'estimated')}
+                      empty="Oura publishes this every few weeks"/>
                 <Stat label="VO₂ max" accent={MOVE} value={d.vo2Max != null ? d.vo2Max.toFixed(1) : null} unit="ml/kg/min"
-                      sub="aerobic fitness" empty="Not estimated yet"/>
+                      sub={ageOfReading(d.vo2MaxDaysAgo, 'aerobic fitness')}
+                      empty="Oura publishes this every few weeks"/>
                 <Stat label="Resilience" accent={BODY}
                       value={d.resilience?.level ? d.resilience.level.replace('_', ' ') : null}
                       sub={d.resilience?.sleepRecovery != null ? `sleep recovery ${d.resilience.sleepRecovery}` : 'long-run measure'}
@@ -684,6 +710,16 @@ function contributors(d: Dashboard): { name: string; value: number }[] {
   return all.filter((c): c is { name: string; value: number } => c.value != null);
 }
 
+// A slow-moving reading is shown with its age. Oura publishes cardiovascular age and
+// VO2 max every few weeks, so the honest label is "measured 12 days ago" -- not the
+// number on its own, which reads as today's.
+function ageOfReading(daysAgo: number | undefined, fallback: string): string {
+  if (daysAgo == null) return fallback;
+  if (daysAgo <= 0) return `${fallback} \u00b7 today`;
+  if (daysAgo === 1) return `${fallback} \u00b7 yesterday`;
+  return `${fallback} \u00b7 ${daysAgo} days ago`;
+}
+
 // The one thing most worth attention, chosen from the data rather than from a plan.
 // When nothing is off its usual, it says that instead of inventing an errand.
 function focusTitle(d: Dashboard): string {
@@ -762,15 +798,16 @@ function SleepPage() {
     );
   }
 
+  // Averaged over nights, not sessions: a nap is not a short night, and including one
+  // drags every "vs usual" on this page toward the nap.
+  const perNight = oneNightPerDay(data);
   const a = {
-    score: avg(data.map(s => s.score)), hrv: avg(data.map(s => s.avgHrv)),
-    deep: avg(data.map(s => s.deepMinutes)), rem: avg(data.map(s => s.remMinutes)),
-    total: avg(data.map(s => s.totalSleepMinutes)), eff: avg(data.map(s => s.efficiency)),
+    score: avg(perNight.map(s => s.score)), hrv: avg(perNight.map(s => s.avgHrv)),
+    deep: avg(perNight.map(s => s.deepMinutes)), rem: avg(perNight.map(s => s.remMinutes)),
+    total: avg(perNight.map(s => s.totalSleepMinutes)), eff: avg(perNight.map(s => s.efficiency)),
   };
 
-  const byDay = new Map<string, Sleep>();
-  for (const s of data) { const ex = byDay.get(s.day); if (!ex || s.totalSleepMinutes > ex.totalSleepMinutes) byDay.set(s.day, s); }
-  const nights = [...byDay.values()].sort((x, y) => y.day.localeCompare(x.day));
+  const nights = [...oneNightPerDay(data)].reverse();   // newest first for this page
   const lastNight = nights[0];
 
   const rows = nights.map(s => {

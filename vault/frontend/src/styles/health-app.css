@@ -569,7 +569,7 @@
   background: var(--border2);
 }
 .hx-step:first-child::before { display: none; }
-.hx-step.done::before { background: var(--vitara); }
+.hx-step.linked::before { background: var(--vitara); }
 .hx-step i {
   width: 13px; height: 13px; border-radius: 50%; display: block; position: relative; z-index: 1;
   border: 2px solid var(--border2); background: var(--surface);

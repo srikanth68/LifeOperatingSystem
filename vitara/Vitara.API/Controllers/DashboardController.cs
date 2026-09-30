@@ -17,9 +17,22 @@ public class DashboardController(IVitaraRepository repo) : ControllerBase
         var readiness  = await repo.GetReadinessAsync(weekAgo, today);
         var activity   = await repo.GetActivityAsync(weekAgo, today);
         var stress     = await repo.GetStressAsync(weekAgo, today);
-        var resilience = await repo.GetResilienceAsync(weekAgo, today);
         var spo2       = await repo.GetSpo2Async(weekAgo, today);
-        var cvAge      = await repo.GetCardiovascularAgeAsync(weekAgo, today);
+
+        // Slow movers get their own windows.
+        //
+        // A week is the right look-back for sleep and steps and the wrong one for these:
+        // Oura publishes cardiovascular age and VO2 max every few weeks, and resilience
+        // is built from weeks rather than days. Asking for seven days of them returns
+        // nothing most of the time, and the dashboard then reported "needs more wear" to
+        // someone who had a perfectly good reading a fortnight old. The Body tab, which
+        // asks for thirty days, was showing that reading at the same moment.
+        //
+        // Each carries its own day out, so an old reading is shown as old rather than as
+        // today's -- the rule the rest of this payload has followed since it was caught
+        // presenting four-day-old vitals as current.
+        var resilience = await repo.GetResilienceAsync(today.AddDays(-30), today);
+        var cvAge      = await repo.GetCardiovascularAgeAsync(today.AddDays(-90), today);
         var vo2        = await repo.GetVo2MaxAsync(today.AddDays(-90), today);
         var workouts   = await repo.GetWorkoutsAsync(weekAgo, today);
         var heartRate  = await repo.GetHeartRateAsync(DateTime.UtcNow.AddHours(-24), DateTime.UtcNow);
@@ -125,7 +138,11 @@ public class DashboardController(IVitaraRepository repo) : ControllerBase
                 breathingDisturbance = todaySpo2.BreathingDisturbanceIndex,
             },
             cardiovascularAge = latestCvAge?.VascularAge,
+            cardiovascularAgeDay = latestCvAge?.Day.ToString("yyyy-MM-dd"),
+            cardiovascularAgeDaysAgo = latestCvAge is null ? (int?)null : today.DayNumber - latestCvAge.Day.DayNumber,
             vo2Max = latestVo2?.Vo2Max,
+            vo2MaxDay = latestVo2?.Day.ToString("yyyy-MM-dd"),
+            vo2MaxDaysAgo = latestVo2 is null ? (int?)null : today.DayNumber - latestVo2.Day.DayNumber,
             weeklyAvg = new
             {
                 hrv = Math.Round(sleep.Where(s => s.AvgHrv.HasValue).Select(s => s.AvgHrv!.Value).DefaultIfEmpty(0).Average(), 0),
