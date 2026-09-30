@@ -187,7 +187,6 @@ const NIGHT = 'var(--hx-2)';
 const MOVE  = 'var(--hx-1)';
 const TEMP  = 'var(--hx-3)';
 const BODY  = 'var(--hx-4)';
-const AIR   = 'var(--hx-6)';
 
 function toneFor(score?: number | null): string {
   if (score == null) return 'var(--text3)';
@@ -792,25 +791,28 @@ function SleepPage() {
 
   const stageTotal = lastNight ? (lastNight.deepMinutes + lastNight.remMinutes + lastNight.lightMinutes) || 1 : 1;
 
+  // Oldest-first, for the sparklines in the rail.
+  const series = [...nights].reverse();
+
   return (
-    <div>
+    <div className="hx-bento">
+      <div className="hx-col">
       {/* Last night first; the fortnight's average is context underneath. A 14-day mean
           is the wrong headline for something you check each morning -- it barely moves,
           so it cannot answer "how did I sleep", and it averages a bad night away. */}
-      <div className="hx-hero">
-        <Card className="hx-hero-main">
-          <Ring score={lastNight?.score} label="sleep score" tone={toneFor(lastNight?.score)}/>
-          <div className="hx-hero-copy">
-            <p className="hx-eyebrow">Last night · {lastNight ? dayLabel(lastNight.day) : ''}</p>
-            <h2 className="hx-headline">{lastNight ? fmtMin(lastNight.totalSleepMinutes) : '—'} asleep</h2>
-            <p className="hx-sub">
+        <Panel title="Last night" icon="🌙" note={lastNight ? dayLabel(lastNight.day) : undefined} className="hx-hero2">
+          <div className="hx-hero2-body">
+          <Ring score={lastNight?.score} size={118} label="sleep score" tone={toneFor(lastNight?.score)}/>
+          <div className="hx-hero2-copy">
+            <h2 className="hx-hero2-verdict">{lastNight ? fmtMin(lastNight.totalSleepMinutes) : '—'} asleep</h2>
+            <p className="hx-hero2-sub">
               {lastNight
                 ? `${fmtClock(lastNight.bedtimeStart)} to ${fmtClock(lastNight.bedtimeEnd)} · ${Math.round(lastNight.efficiency * 100)}% of your time in bed`
                 : 'No night recorded.'}
             </p>
             {lastNight && (
               <>
-                <div className="hx-stages" style={{ marginTop: '0.75rem' }}>
+                <div className="hx-stages" style={{ marginTop: '0.85rem' }}>
                   <span style={{ width: `${lastNight.deepMinutes / stageTotal * 100}%`, background: 'var(--hx-2)' }} title={`Deep ${fmtMin(lastNight.deepMinutes)}`}/>
                   <span style={{ width: `${lastNight.remMinutes / stageTotal * 100}%`, background: 'var(--hx-4)' }} title={`REM ${fmtMin(lastNight.remMinutes)}`}/>
                   <span style={{ width: `${lastNight.lightMinutes / stageTotal * 100}%`, background: 'var(--hx-6)' }} title={`Light ${fmtMin(lastNight.lightMinutes)}`}/>
@@ -824,30 +826,10 @@ function SleepPage() {
               </>
             )}
           </div>
-        </Card>
+          </div>
+        </Panel>
 
-        <div className="hx-grid hx-grid-4">
-          <Stat label="Deep" accent="var(--sleep-deep)" value={lastNight ? fmtMin(lastNight.deepMinutes) : null}
-                sub={<HxDelta value={lastNight?.deepMinutes} reference={a.deep} goodWhen="higher" unit=" min"/>}
-                info="The deepest stage, when most physical repair happens. It is usually the first thing a short night takes away."
-                empty="Not measured"/>
-          <Stat label="REM" accent="var(--sleep-rem)" value={lastNight ? fmtMin(lastNight.remMinutes) : null}
-                sub={<HxDelta value={lastNight?.remMinutes} reference={a.rem} goodWhen="higher" unit=" min"/>}
-                info="The dreaming stage, tied to memory and mood. It comes mostly in the second half of the night, so waking early cuts it first."
-                empty="Not measured"/>
-          <Stat label="HRV" accent="var(--hx-2)" value={lastNight?.avgHrv != null ? Math.round(lastNight.avgHrv) : null} unit="ms"
-                sub={<HxDelta value={lastNight?.avgHrv} reference={a.hrv} goodWhen="higher" unit=" ms"/>}
-                info="Heart rate variability averaged across the night. Compared against your own recent nights, never against anyone else's."
-                empty="Not measured"/>
-          <Stat label="Efficiency" accent="var(--sleep-light)" value={lastNight != null ? Math.round(lastNight.efficiency * 100) : null} unit="%"
-                sub={a.eff != null ? `usually ${Math.round(a.eff * 100)}%` : 'no average yet'}
-                info="The share of your time in bed that you were actually asleep. Above about 85% is generally considered good."
-                empty="Not measured"/>
-        </div>
-      </div>
-
-      <SectionHead title="When you slept" note="Each bar is one night, from lights out to waking." />
-      <div className="hx-chart">
+      <Panel title="When you slept" note="Each bar is one night, from lights out to waking.">
         <ResponsiveContainer width="100%" height={rows.length * 30 + 44}>
           <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 0 }} barCategoryGap="34%">
             <CartesianGrid horizontal={false} {...GRID}/>
@@ -860,10 +842,9 @@ function SleepPage() {
             <Bar dataKey="duration" stackId="t" radius={5} fill="var(--hx-1)" isAnimationActive={false}/>
           </BarChart>
         </ResponsiveContainer>
-      </div>
+      </Panel>
 
-      <SectionHead title="Fourteen nights" note={a.total != null ? `usually ${fmtMin(Math.round(a.total))} asleep` : undefined} />
-      <div className="hx-chart">
+      <Panel title="Fourteen nights" note={a.total != null ? `usually ${fmtMin(Math.round(a.total))} asleep` : undefined}>
         <ResponsiveContainer width="100%" height={180}>
           <BarChart data={[...nights].reverse().map(s => ({ day: shortDay(s.day), hours: +(s.totalSleepMinutes / 60).toFixed(2), score: s.score ?? null }))}
                     margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
@@ -876,7 +857,37 @@ function SleepPage() {
           </BarChart>
         </ResponsiveContainer>
         <p className="hx-chart-note" style={{ marginTop: '0.5rem' }}>The line is your own 14-night average.</p>
+      </Panel>
       </div>
+
+      {/* The four parts of a night, each against its own fortnight. In the rail rather
+          than across the top: they are context for the headline, not four headlines. */}
+      <aside className="hx-rail">
+        <RailCard label="Deep" icon="🛏️"
+                  value={lastNight ? fmtMin(lastNight.deepMinutes) : null}
+                  sub={<HxDelta value={lastNight?.deepMinutes} reference={a.deep} goodWhen="higher" unit=" min"/>}
+                  info="The deepest stage, when most physical repair happens. It is usually the first thing a short night takes away."
+                  empty="Not measured"
+                  spark={<Spark color="var(--sleep-deep)" data={series.map(n => n.deepMinutes)}/>}/>
+        <RailCard label="REM" icon="💭"
+                  value={lastNight ? fmtMin(lastNight.remMinutes) : null}
+                  sub={<HxDelta value={lastNight?.remMinutes} reference={a.rem} goodWhen="higher" unit=" min"/>}
+                  info="The dreaming stage, tied to memory and mood. It comes mostly in the second half of the night, so waking early cuts it first."
+                  empty="Not measured"
+                  spark={<Spark color="var(--sleep-rem)" data={series.map(n => n.remMinutes)}/>}/>
+        <RailCard label="HRV" icon="〰️"
+                  value={lastNight?.avgHrv != null ? Math.round(lastNight.avgHrv) : null} unit="ms"
+                  sub={<HxDelta value={lastNight?.avgHrv} reference={a.hrv} goodWhen="higher" unit=" ms"/>}
+                  info="Heart rate variability averaged across the night. Compared against your own recent nights, never against anyone else's."
+                  empty="Not measured"
+                  spark={<Spark color="var(--hx-2)" data={series.map(n => n.avgHrv ?? null)}/>}/>
+        <RailCard label="Efficiency" icon="⏱️"
+                  value={lastNight != null ? Math.round(lastNight.efficiency * 100) : null} unit="%"
+                  sub={a.eff != null ? `usually ${Math.round(a.eff * 100)}%` : 'no average yet'}
+                  info="The share of your time in bed that you were actually asleep. Above about 85% is generally considered good."
+                  empty="Not measured"
+                  spark={<Spark color="var(--sleep-light)" data={series.map(n => Math.round(n.efficiency * 100))}/>}/>
+      </aside>
     </div>
   );
 }
@@ -934,55 +945,36 @@ function BodyPage() {
   const vo2Series = (ageHist?.vo2Max ?? []).map(v => ({ day: dayLabel(v.day), value: v.value }));
   const cardioSeries = (ageHist?.cardiovascularAge ?? []).map(c => ({ day: dayLabel(c.day), value: c.value }));
 
+  const weightSeries = (weighIns ?? []).map(w => +kgToLb(w.weightKg).toFixed(1));
+
   return (
-    <div>
+    <div className="hx-bento">
+      <div className="hx-col">
       {/* The estimate, labelled, with the disclaimer the API itself carries. */}
-      <div className="hx-hero">
-        <Card className="hx-hero-main">
-          <div className="hx-hero-copy">
-            <p className="hx-eyebrow">Biological age · {bio?.label ?? 'Estimate'}</p>
+        <Panel title={bio?.label ?? 'Biological age'} icon="⚖️" className="hx-hero2">
+          <div className="hx-hero2-copy">
             {bio?.bioAge != null ? (
               <>
-                <h2 className="hx-headline" style={{ fontSize: '2.4rem', lineHeight: 1.05 }}>{bio.bioAge.toFixed(1)}</h2>
-                <p className="hx-sub">
+                <h2 className="hx-hero2-verdict" style={{ fontSize: '2.4rem', lineHeight: 1.05 }}>{bio.bioAge.toFixed(1)}</h2>
+                <p className="hx-hero2-sub">
                   <b style={{ color: younger ? 'var(--hx-good)' : 'var(--hx-bad)' }}>
                     {Math.abs(bio.delta!).toFixed(1)} years {younger ? 'younger' : 'older'}
                   </b>{' '}
                   than your age, {bio.chronologicalAge}.
                 </p>
-                {bio.disclaimer && <p className="hx-sub" style={{ marginTop: '0.6rem', fontSize: '0.78rem', color: 'var(--text3)' }}>{bio.disclaimer}</p>}
+                {bio.disclaimer && <p className="hx-hero2-sub" style={{ marginTop: '0.6rem', fontSize: '0.78rem', color: 'var(--text3)' }}>{bio.disclaimer}</p>}
               </>
             ) : (
-              <p className="hx-sub">
+              <p className="hx-hero2-sub">
                 {bio?.dataQuality === 'insufficient'
                   ? 'Needs at least three days of sleep and readiness data before it can be estimated.'
                   : 'Working it out…'}
               </p>
             )}
           </div>
-        </Card>
+        </Panel>
 
-        <div className="hx-grid hx-grid-4">
-          <Stat label="Cardiovascular age" accent={HEART} value={bio?.cardiovascularAge != null ? Math.round(bio.cardiovascularAge) : null} unit="yrs"
-                sub={bio?.chronologicalAge ? `you are ${bio.chronologicalAge}` : 'estimated'}
-                info="Oura's estimate of how old your vascular measurements look. An estimate from a ring, not a diagnosis."
-                empty="Needs more wear"/>
-          <Stat label="VO₂ max" accent={MOVE} value={bio?.vo2Max?.toFixed(1)} unit="ml/kg/min" sub="aerobic fitness"
-                info="The oxygen your body can use at full effort. It moves over months of training, not over days."
-                empty="Not estimated yet"/>
-          <Stat label="Weight" accent={BODY} value={latestWeight ? kgToLb(latestWeight.weightKg).toFixed(1) : null} unit="lb"
-                sub={latestWeight ? `recorded ${dayLabel(latestWeight.day)}` : undefined}
-                info="Shown in pounds, stored in kilograms so the phone sync and BMI stay consistent."
-                empty="Nothing recorded yet"/>
-          <Stat label="BMI" accent={BODY} value={latestBmi != null ? latestBmi.toFixed(1) : null}
-                sub={heightM ? 'weight against height' : 'Set your height on the Record tab'}
-                info="Weight against height. It says nothing about muscle or about where fat sits, which is why waist-to-height is the better guide."
-                empty="Needs weight and height"/>
-        </div>
-      </div>
-
-      <SectionHead title="Record a weight" info="Enter pounds. It is stored in kilograms so the phone sync and the BMI calculation stay consistent with each other."/>
-      <Card>
+      <Panel title="Record a weight" info="Enter pounds. It is stored in kilograms so the phone sync and the BMI calculation stay consistent with each other.">
         <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <input type="number" step="0.1" placeholder="lb" value={weight}
                  onChange={e => setWeight(e.target.value)}
@@ -993,11 +985,11 @@ function BodyPage() {
           </button>
           {logWeight.isError && <span className="hx-delta bad">Couldn't save — try again</span>}
         </div>
-      </Card>
+      </Panel>
 
-      <SectionHead title="Weight" note="The last six months."/>
+      <Panel title="Weight" note="The last six months.">
       {weightChart.length > 1 ? (
-        <div className="hx-chart">
+        <>
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={weightChart} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
               <CartesianGrid vertical={false} {...GRID}/>
@@ -1007,15 +999,16 @@ function BodyPage() {
               <Line type="monotone" dataKey="weight" stroke="var(--hx-1)" strokeWidth={2} dot={false} isAnimationActive={false}/>
             </LineChart>
           </ResponsiveContainer>
-        </div>
+        </>
       ) : (
         <Empty title="Not enough weigh-ins to draw a line.">Record a second one and the trend starts here.</Empty>
       )}
+      </Panel>
 
       {/* Two charts, not one with two axes: VO2 max and cardiovascular age are measured
           in different things, and stacking them on one plot invents a relationship by
           choosing where the scales line up. */}
-      <SectionHead title="Fitness over ninety days"/>
+      <Panel title="Fitness over ninety days">
       <div className="hx-grid hx-grid-3">
         <div className="hx-chart">
           <div className="hx-chart-head"><span className="hx-chart-title">VO₂ max</span><span className="hx-chart-note">ml/kg/min</span></div>
@@ -1051,6 +1044,32 @@ function BodyPage() {
           )}
         </div>
       </div>
+      </Panel>
+      </div>
+
+      <aside className="hx-rail">
+        <RailCard label="Cardiovascular age" icon="❤️"
+                  value={bio?.cardiovascularAge != null ? Math.round(bio.cardiovascularAge) : null} unit="yrs"
+                  sub={bio?.chronologicalAge ? `you are ${bio.chronologicalAge}` : 'estimated'}
+                  info="Oura's estimate of how old your vascular measurements look. An estimate from a ring, not a diagnosis."
+                  empty="Needs more wear"
+                  spark={<Spark color="var(--hx-3)" data={cardioSeries.map(c => c.value)}/>}/>
+        <RailCard label="VO₂ max" icon="🏃" value={bio?.vo2Max?.toFixed(1)} unit="ml/kg/min"
+                  sub="aerobic fitness"
+                  info="The oxygen your body can use at full effort. It moves over months of training, not over days."
+                  empty="Not estimated yet"
+                  spark={<Spark color="var(--hx-1)" data={vo2Series.map(v => v.value)}/>}/>
+        <RailCard label="Weight" icon="⚖️"
+                  value={latestWeight ? kgToLb(latestWeight.weightKg).toFixed(1) : null} unit="lb"
+                  sub={latestWeight ? `recorded ${dayLabel(latestWeight.day)}` : undefined}
+                  info="Shown in pounds, stored in kilograms so the phone sync and BMI stay consistent."
+                  empty="Nothing recorded yet"
+                  spark={<Spark color="var(--hx-4)" data={weightSeries}/>}/>
+        <RailCard label="BMI" icon="📐" value={latestBmi != null ? latestBmi.toFixed(1) : null}
+                  sub={heightM ? 'weight against height' : 'Set your height on the Record tab'}
+                  info="Weight against height. It says nothing about muscle or about where fat sits, which is why waist-to-height is the better guide."
+                  empty="Needs weight and height"/>
+      </aside>
     </div>
   );
 }
@@ -1108,51 +1127,34 @@ function ActivityPage() {
   const today = data?.length ? latest(data) : undefined;   // endpoints return oldest-first
   const stepsChart = (data ?? []).map(d => ({ day: shortDay(d.day), steps: d.steps, cal: d.activeCalories }));
 
+  const series = data ?? [];
+
   return (
-    <div>
-      <div className="hx-hero">
-        <Card className="hx-hero-main">
-          <Ring score={today?.score} label="activity" tone={toneFor(today?.score)}/>
-          <div className="hx-hero-copy">
-            <p className="hx-eyebrow">{today ? dayLabel(today.day) : 'Today'}</p>
-            <h2 className="hx-headline">
-              {today ? `${today.steps.toLocaleString()} steps` : 'Nothing counted yet'}
-            </h2>
-            <p className="hx-sub">
-              {today
-                ? `${Math.round(today.activeCalories)} kcal beyond resting · ${today.highActivityMinutes} min at high intensity`
-                : 'Wear the ring, or log a workout below, and the day starts filling in.'}
-            </p>
+    <div className="hx-bento">
+      <div className="hx-col">
+        <Panel title="Today" icon="🏃" note={today ? dayLabel(today.day) : undefined} className="hx-hero2">
+          <div className="hx-hero2-body">
+            <Ring score={today?.score} size={118} label="activity" tone={toneFor(today?.score)}/>
+            <div className="hx-hero2-copy">
+              <h2 className="hx-hero2-verdict">
+                {today ? `${today.steps.toLocaleString()} steps` : 'Nothing counted yet'}
+              </h2>
+              <p className="hx-hero2-sub">
+                {today
+                  ? `${Math.round(today.activeCalories)} kcal beyond resting · ${today.highActivityMinutes} min at high intensity`
+                  : 'Wear the ring, or log a workout below, and the day starts filling in.'}
+              </p>
+            </div>
           </div>
-        </Card>
+        </Panel>
 
-        <div className="hx-grid hx-grid-4">
-          <Stat label="Steps" accent={MOVE} value={today?.steps?.toLocaleString()}
-                sub={<HxDelta value={today?.steps} reference={a.steps} goodWhen="higher"/>}
-                info="Counted by the ring. The comparison is your own recent average, not a ten-thousand-step target."
-                empty="Nothing counted today"/>
-          <Stat label="Active calories" accent={TEMP} value={today?.activeCalories != null ? Math.round(today.activeCalories) : null} unit="kcal"
-                sub={<HxDelta value={today?.activeCalories} reference={a.cal} goodWhen="higher" unit=" kcal"/>}
-                info="Burned above resting, estimated from movement and heart rate. It excludes the calories you burn just being alive."
-                empty="Nothing counted today"/>
-          <Stat label="High intensity" accent={HEART} value={today?.highActivityMinutes} unit="min"
-                sub={<HxDelta value={today?.highActivityMinutes} reference={a.highMin} goodWhen="higher" unit=" min"/>}
-                info="Minutes spent at hard effort. Everything gentler is counted as medium or low activity instead."
-                empty="None today"/>
-          <Stat label="Distance" accent={AIR} value={today?.steps != null ? ((today.steps * 0.00075).toFixed(1)) : null} unit="km"
-                sub="from your steps"
-                info="Estimated from your step count at an average stride length, so treat it as a rough figure rather than a measurement."
-                empty="Nothing counted today"/>
-        </div>
-      </div>
-
-      <SectionHead title="Log a workout" note="Anything the ring won't see: weights, classes, a walk without it."/>
-      <Card><LogWorkoutForm/></Card>
+      <Panel title="Log a workout" note="Anything the ring won't see: weights, classes, a walk without it.">
+        <LogWorkoutForm/>
+      </Panel>
 
       {data?.length ? (
         <>
-          <SectionHead title="Fourteen days" note={a.steps != null ? `usually ${Math.round(a.steps).toLocaleString()} steps` : undefined}/>
-          <div className="hx-chart">
+          <Panel title="Fourteen days" note={a.steps != null ? `usually ${Math.round(a.steps).toLocaleString()} steps` : undefined}>
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={stepsChart} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                 <CartesianGrid vertical={false} {...GRID}/>
@@ -1168,15 +1170,17 @@ function ActivityPage() {
               </BarChart>
             </ResponsiveContainer>
             <p className="hx-chart-note" style={{ marginTop: '0.5rem' }}>The line is your own 14-day average.</p>
-          </div>
+          </Panel>
         </>
       ) : (
         <Empty title="No days recorded yet.">Activity arrives with the ring's daily sync.</Empty>
       )}
 
-      <WorkoutImpactPanel/>
+      <Panel title="What your training costs and returns">
+        <WorkoutImpactPanel/>
+      </Panel>
 
-      <SectionHead title="Workouts" note="The last thirty days."/>
+      <Panel title="Workouts" note="The last thirty days.">
       {workouts && workouts.length > 0 ? (
         <div className="hx-grid hx-grid-3">
           {workouts.slice(0, 12).map(w => (
@@ -1198,6 +1202,33 @@ function ActivityPage() {
       ) : (
         <Empty title="No workouts in the last month.">Sessions the ring detects, and ones you log above, both appear here.</Empty>
       )}
+      </Panel>
+      </div>
+
+      <aside className="hx-rail">
+        <RailCard label="Steps" icon="👟" value={today?.steps?.toLocaleString()}
+                  sub={<HxDelta value={today?.steps} reference={a.steps} goodWhen="higher"/>}
+                  info="Counted by the ring. The comparison is your own recent average, not a ten-thousand-step target."
+                  empty="Nothing counted today"
+                  spark={<Spark kind="bar" color="var(--hx-1)" data={series.map(x => x.steps)}/>}/>
+        <RailCard label="Active calories" icon="🔥"
+                  value={today?.activeCalories != null ? Math.round(today.activeCalories) : null} unit="kcal"
+                  sub={<HxDelta value={today?.activeCalories} reference={a.cal} goodWhen="higher" unit=" kcal"/>}
+                  info="Burned above resting, estimated from movement and heart rate. It excludes the calories you burn just being alive."
+                  empty="Nothing counted today"
+                  spark={<Spark kind="bar" color="var(--hx-3)" data={series.map(x => x.activeCalories)}/>}/>
+        <RailCard label="High intensity" icon="⚡" value={today?.highActivityMinutes} unit="min"
+                  sub={<HxDelta value={today?.highActivityMinutes} reference={a.highMin} goodWhen="higher" unit=" min"/>}
+                  info="Minutes spent at hard effort. Everything gentler is counted as medium or low activity instead."
+                  empty="None today"
+                  spark={<Spark kind="bar" color="var(--hx-5)" data={series.map(x => x.highActivityMinutes)}/>}/>
+        <RailCard label="Distance" icon="📍"
+                  value={today?.steps != null ? (today.steps * 0.00075).toFixed(1) : null} unit="km"
+                  sub="estimated from your steps"
+                  info="Estimated from your step count at an average stride length, so treat it as a rough figure rather than a measurement."
+                  empty="Nothing counted today"
+                  spark={<Spark color="var(--hx-6)" data={series.map(x => +(x.steps * 0.00075).toFixed(2))}/>}/>
+      </aside>
     </div>
   );
 }
@@ -1226,21 +1257,24 @@ function ReadinessPage() {
   const levels = data.reduce((acc, r) => { const l = r.level ?? 'unknown'; acc[l] = (acc[l] ?? 0) + 1; return acc; }, {} as Record<string, number>);
   const trend = [...data].sort((x, y) => x.day.localeCompare(y.day)).map(r => ({ day: shortDay(r.day), score: r.score ?? null }));
 
+  // Oldest-first, for the rail.
+  const series = [...data].sort((x, y) => x.day.localeCompare(y.day));
+
   return (
-    <div>
-      <div className="hx-hero">
-        <Card className="hx-hero-main">
-          <Ring score={today?.score} label="readiness" tone={toneFor(today?.score)}/>
-          <div className="hx-hero-copy">
-            <p className="hx-eyebrow">{today ? dayLabel(today.day) : 'Today'}</p>
-            <h2 className="hx-headline">
+    <div className="hx-bento">
+      <div className="hx-col">
+        <Panel title="Recovery" icon="🌱" note={today ? dayLabel(today.day) : 'Today'} className="hx-hero2">
+          <div className="hx-hero2-body">
+          <Ring score={today?.score} size={118} label="readiness" tone={toneFor(today?.score)}/>
+          <div className="hx-hero2-copy">
+            <h2 className="hx-hero2-verdict">
               {today?.level ? today.level.replace('_', ' ') : today?.score != null ? 'Recovery' : 'Nothing today yet'}
               <Info label="What readiness means">
                 How recovered you are, read from your overnight heart rate, heart rate variability and
                 temperature — measured against your own recent nights, never against anyone else.
               </Info>
             </h2>
-            <p className="hx-sub">
+            <p className="hx-hero2-sub">
               {today
                 ? [today.restingHeartRate != null ? `${today.restingHeartRate} bpm resting` : null,
                    today.hrvBalance != null ? `HRV balance ${today.hrvBalance}` : null,
@@ -1258,30 +1292,10 @@ function ReadinessPage() {
               <Chip>of the last {data.length} days</Chip>
             </div>
           </div>
-        </Card>
+          </div>
+        </Panel>
 
-        <div className="hx-grid hx-grid-4">
-          <Stat label="Resting heart rate" accent={HEART} value={today?.restingHeartRate} unit="bpm"
-                sub={<HxDelta value={today?.restingHeartRate} reference={a.rhr} goodWhen="lower" unit=" bpm"/>}
-                info="The lowest sustained rate your heart held overnight. It rises with illness, alcohol, a late meal or a hard training block."
-                empty="No overnight reading"/>
-          <Stat label="HRV balance" accent={NIGHT} value={today?.hrvBalance} unit="/100"
-                sub={<HxDelta value={today?.hrvBalance} reference={a.hrv} goodWhen="higher"/>}
-                info="Last night's heart rate variability scored against your own last two weeks. Fifty is your normal."
-                empty="Needs more nights"/>
-          <Stat label="Recovery index" accent={BODY} value={today?.recoveryIndex} unit="/100"
-                sub={<HxDelta value={today?.recoveryIndex} reference={a.recov} goodWhen="higher"/>}
-                info="How early in the night your heart rate settled to its lowest point. Settling early scores higher; alcohol and late food push it later."
-                empty="Needs more nights"/>
-          <Stat label="Temperature" accent={TEMP} value={today?.temperatureDeviation != null ? `${today.temperatureDeviation > 0 ? '+' : ''}${today.temperatureDeviation.toFixed(2)}` : null}
-                unit="°C" sub="vs your own usual"
-                info="A deviation from your own baseline, not an absolute temperature. A sustained rise is often the earliest sign of illness."
-                empty="Not measured"/>
-        </div>
-      </div>
-
-      <SectionHead title="Fourteen days" note={a.score != null ? `usually ${Math.round(a.score)}` : undefined}/>
-      <div className="hx-chart">
+      <Panel title="Fourteen days" note={a.score != null ? `usually ${Math.round(a.score)}` : undefined}>
         <ResponsiveContainer width="100%" height={190}>
           <AreaChart data={trend} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <defs>
@@ -1298,9 +1312,9 @@ function ReadinessPage() {
             <Area type="monotone" dataKey="score" stroke="var(--hx-1)" strokeWidth={2} fill="url(#hxReady)" dot={false} isAnimationActive={false} connectNulls/>
           </AreaChart>
         </ResponsiveContainer>
-      </div>
+      </Panel>
 
-      <SectionHead title="Day by day"/>
+      <Panel title="Day by day" note="Each night, and what it was made of.">
       <div className="hx-grid hx-grid-4">
         {[...data].reverse().map(r => (
           <div key={r.id} className="hx-stat">
@@ -1318,6 +1332,33 @@ function ReadinessPage() {
           </div>
         ))}
       </div>
+      </Panel>
+      </div>
+
+      {/* The four readings the score is built from, each over the fortnight. */}
+      <aside className="hx-rail">
+        <RailCard label="Resting heart rate" icon="❤️" value={today?.restingHeartRate} unit="bpm"
+                  sub={<HxDelta value={today?.restingHeartRate} reference={a.rhr} goodWhen="lower" unit=" bpm"/>}
+                  info="The lowest sustained rate your heart held overnight. It rises with illness, alcohol, a late meal or a hard training block."
+                  empty="No overnight reading"
+                  spark={<Spark color="var(--hx-5)" data={series.map(r => r.restingHeartRate ?? null)}/>}/>
+        <RailCard label="HRV balance" icon="〰️" value={today?.hrvBalance} unit="/100"
+                  sub={<HxDelta value={today?.hrvBalance} reference={a.hrv} goodWhen="higher"/>}
+                  info="Last night's heart rate variability scored against your own last two weeks. Fifty is your normal."
+                  empty="Needs more nights"
+                  spark={<Spark color="var(--hx-2)" data={series.map(r => r.hrvBalance ?? null)}/>}/>
+        <RailCard label="Recovery index" icon="🔄" value={today?.recoveryIndex} unit="/100"
+                  sub={<HxDelta value={today?.recoveryIndex} reference={a.recov} goodWhen="higher"/>}
+                  info="How early in the night your heart rate settled to its lowest point. Settling early scores higher; alcohol and late food push it later."
+                  empty="Needs more nights"
+                  spark={<Spark color="var(--hx-4)" data={series.map(r => r.recoveryIndex ?? null)}/>}/>
+        <RailCard label="Temperature" icon="🌡️"
+                  value={today?.temperatureDeviation != null ? `${today.temperatureDeviation > 0 ? '+' : ''}${today.temperatureDeviation.toFixed(2)}` : null}
+                  unit="°C" sub="vs your own usual"
+                  info="A deviation from your own baseline, not an absolute temperature. A sustained rise is often the earliest sign of illness."
+                  empty="Not measured"
+                  spark={<Spark color="var(--hx-3)" data={series.map(r => r.temperatureDeviation ?? null)}/>}/>
+      </aside>
     </div>
   );
 }
