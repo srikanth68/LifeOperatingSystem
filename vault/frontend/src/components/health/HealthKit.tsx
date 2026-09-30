@@ -213,6 +213,136 @@ export function Delta({ value, reference, goodWhen, unit = '', digits = 0 }: {
   );
 }
 
+// ── The dashboard pieces ─────────────────────────────────────────────────────
+//
+// A tile answers "what is this number". A panel answers "how is this part of me
+// doing", which needs a heading, a headline figure and its own small chart. The
+// difference is why the Today tab could not be built out of Stat alone.
+
+export function Panel({ title, icon, note, right, info, className = '', children }: {
+  title: string;
+  icon?: ReactNode;
+  note?: ReactNode;
+  right?: ReactNode;
+  info?: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className={`hx-panel ${className}`}>
+      <header className="hx-panel-head">
+        {icon && <span className="hx-panel-icon" aria-hidden="true">{icon}</span>}
+        <h3>{title}</h3>
+        {info && <Info>{info}</Info>}
+        {note && <span className="hx-panel-note">{note}</span>}
+        {right && <span className="hx-panel-right">{right}</span>}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+// A chart small enough to read at a glance and too small to read precisely, which is
+// the point: it shows shape, and the number beside it carries the value. No axes, no
+// grid, no tooltip -- anything that needs those belongs in a real chart on its own tab.
+export function Spark({ data, color = 'var(--hx-1)', kind = 'line', height = 34 }: {
+  data: (number | null)[];
+  color?: string;
+  kind?: 'line' | 'bar';
+  height?: number;
+}) {
+  const points = data.filter((v): v is number => v != null);
+  if (points.length < 2) return <span className="hx-spark-empty" style={{ height }}>not enough yet</span>;
+
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const span = max - min || 1;
+  const w = 100;
+  const step = w / (data.length - 1);
+
+  if (kind === 'bar') {
+    const barW = Math.max(1.5, step * 0.55);
+    return (
+      <svg className="hx-spark" viewBox={`0 0 ${w} ${height}`} height={height} preserveAspectRatio="none" aria-hidden="true">
+        {data.map((v, i) => {
+          if (v == null) return null;
+          const h = Math.max(1.5, ((v - min) / span) * (height - 3) + 1.5);
+          return <rect key={i} x={i * step - barW / 2} y={height - h} width={barW} height={h} rx={0.8} fill={color} opacity={0.85}/>;
+        })}
+      </svg>
+    );
+  }
+
+  const d = data
+    .map((v, i) => (v == null ? null : `${i * step},${height - 2 - ((v - min) / span) * (height - 4)}`))
+    .filter(Boolean)
+    .join(' L ');
+
+  return (
+    <svg className="hx-spark" viewBox={`0 0 ${w} ${height}`} height={height} preserveAspectRatio="none" aria-hidden="true">
+      <path d={`M ${d}`} fill="none" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"/>
+    </svg>
+  );
+}
+
+// The right-hand rail: one measurement, its trend, and a word for how it is going.
+// The word is required rather than optional -- a green line means nothing on its own,
+// and a rail of coloured lines is decoration pretending to be information.
+export function RailCard({ label, icon, value, unit, chip, sub, spark, empty, info }: {
+  label: string;
+  icon?: ReactNode;
+  value?: string | number | null;
+  unit?: string;
+  chip?: ReactNode;
+  sub?: ReactNode;
+  spark?: ReactNode;
+  empty?: string;
+  info?: ReactNode;
+}) {
+  const missing = value == null || value === '';
+  return (
+    <div className={`hx-rail-card ${missing ? 'is-empty' : ''}`}>
+      <div className="hx-rail-head">
+        {icon && <span className="hx-rail-icon" aria-hidden="true">{icon}</span>}
+        <span className="hx-rail-label">{label}{info && <Info>{info}</Info>}</span>
+        {chip}
+      </div>
+      <div className="hx-rail-body">
+        <div>
+          <div className="hx-rail-value">
+            <b>{missing ? '\u2014' : value}</b>
+            {!missing && unit && <span>{unit}</span>}
+          </div>
+          <span className="hx-rail-sub">{missing ? (empty ?? 'Nothing yet') : sub}</span>
+        </div>
+        {!missing && spark && <div className="hx-rail-spark">{spark}</div>}
+      </div>
+    </div>
+  );
+}
+
+// A row in a list of short statements -- an insight, a lab, a workout. Deliberately not
+// a table: three of these read better as sentences than as cells.
+export function Row({ icon, title, note, right, tone }: {
+  icon?: ReactNode;
+  title: ReactNode;
+  note?: ReactNode;
+  right?: ReactNode;
+  tone?: 'good' | 'warn' | 'bad';
+}) {
+  return (
+    <div className={`hx-row-item ${tone ? `tone-${tone}` : ''}`}>
+      {icon && <span className="hx-row-icon" aria-hidden="true">{icon}</span>}
+      <span className="hx-row-body">
+        <b>{title}</b>
+        {note && <span>{note}</span>}
+      </span>
+      {right && <span className="hx-row-right">{right}</span>}
+    </div>
+  );
+}
+
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div className="hx-empty">

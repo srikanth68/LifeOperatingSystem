@@ -448,3 +448,200 @@
 }
 
 .hx-ok { margin: 0.7rem 0 0; font-size: 0.8rem; line-height: 1.5; color: var(--hx-good); font-weight: 600; }
+
+/* ── The bento ───────────────────────────────────────────────────────────────
+ *
+ * Two columns: the body of the day on the left, a rail of single measurements on
+ * the right. The rail drops under the main column before it gets narrow enough to
+ * squeeze a sparkline into nothing.
+ */
+
+.hx-bento {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 272px;
+  gap: 0.85rem;
+  align-items: start;
+}
+@media (max-width: 1080px) { .hx-bento { grid-template-columns: 1fr; } }
+
+.hx-col { display: flex; flex-direction: column; gap: 0.85rem; min-width: 0; }
+.hx-rail { display: flex; flex-direction: column; gap: 0.7rem; min-width: 0; }
+
+/* Two panels side by side inside the main column. */
+.hx-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 0.85rem;
+}
+
+.hx-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--hx-r);
+  padding: 1rem 1.15rem 1.15rem;
+  box-shadow: var(--hx-shadow);
+  min-width: 0;
+}
+
+.hx-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+  flex-wrap: wrap;
+}
+.hx-panel-head h3 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.95rem; font-weight: 700; margin: 0; color: var(--text);
+}
+.hx-panel-icon { font-size: 1rem; line-height: 1; }
+.hx-panel-note { font-size: 0.76rem; color: var(--text3); }
+.hx-panel-right { margin-left: auto; font-size: 0.76rem; color: var(--text3); }
+
+/* ── Greeting ────────────────────────────────────────────────────────────── */
+
+.hx-greet {
+  display: flex; align-items: flex-start; gap: 0.75rem;
+  background: linear-gradient(100deg, var(--vitara-dim), transparent 70%), var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--hx-r);
+  padding: 0.85rem 1.1rem;
+  margin-bottom: 0.85rem;
+}
+.hx-greet-mark {
+  width: 30px; height: 30px; flex: none; border-radius: 9px;
+  display: grid; place-items: center;
+  background: var(--surface); color: var(--vitara);
+  box-shadow: 0 1px 2px rgba(19,32,27,0.08);
+}
+.hx-greet b { display: block; font-size: 0.92rem; color: var(--text); }
+.hx-greet span { font-size: 0.8rem; color: var(--text2); line-height: 1.5; }
+
+/* ── The readiness hero, without a photograph behind it ─────────────────────
+ *
+ * The reference had a mountain at 40% opacity under the score. It looked good and
+ * it made the one number on the page that matters compete with a landscape, so
+ * this is a flat card with the accent used as a wash instead.
+ */
+
+.hx-hero2 {
+  background:
+    radial-gradient(120% 120% at 0% 0%, var(--vitara-dim), transparent 62%),
+    var(--surface);
+}
+.hx-hero2-body { display: flex; align-items: center; gap: 1.4rem; flex-wrap: wrap; }
+.hx-hero2-copy { flex: 1; min-width: 12rem; }
+.hx-hero2-verdict {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.2rem; font-weight: 600; margin: 0 0 0.25rem; color: var(--text);
+}
+.hx-hero2-sub { margin: 0; font-size: 0.82rem; line-height: 1.55; color: var(--text2); }
+
+.hx-inline-stats {
+  display: flex; gap: 1.5rem; flex-wrap: wrap;
+  margin-top: 1rem; padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+.hx-inline-stat { display: flex; flex-direction: column; gap: 0.1rem; }
+.hx-inline-stat span {
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--text3); display: inline-flex; align-items: center; gap: 0.3rem;
+}
+.hx-inline-stat b { font-size: 1.05rem; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* ── Today's focus, and its four steps ─────────────────────────────────────── */
+
+.hx-focus-card {
+  background: var(--surface3);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0.8rem 0.9rem;
+}
+.hx-focus-card b { display: block; font-size: 0.85rem; color: var(--text); margin-bottom: 0.25rem; }
+.hx-focus-card p { margin: 0; font-size: 0.78rem; line-height: 1.55; color: var(--text2); }
+
+/* Four dots on a line: done, current, not yet. State is in the shape and the label,
+   never in the colour alone. */
+.hx-steps { display: flex; margin-top: 1rem; }
+.hx-step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.35rem; position: relative; }
+.hx-step::before {
+  content: ''; position: absolute; top: 6px; left: -50%; width: 100%; height: 2px;
+  background: var(--border2);
+}
+.hx-step:first-child::before { display: none; }
+.hx-step.done::before { background: var(--vitara); }
+.hx-step i {
+  width: 13px; height: 13px; border-radius: 50%; display: block; position: relative; z-index: 1;
+  border: 2px solid var(--border2); background: var(--surface);
+}
+.hx-step.done i { border-color: var(--vitara); background: var(--vitara); }
+.hx-step.now i { border-color: var(--vitara); background: var(--surface); box-shadow: 0 0 0 3px var(--vitara-dim); }
+.hx-step span { font-size: 0.68rem; color: var(--text3); }
+.hx-step.done span, .hx-step.now span { color: var(--text2); }
+
+/* ── Rail cards ──────────────────────────────────────────────────────────── */
+
+.hx-rail-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 0.75rem 0.9rem 0.8rem;
+  box-shadow: var(--hx-shadow);
+}
+.hx-rail-head { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem; }
+.hx-rail-icon { font-size: 0.9rem; line-height: 1; }
+.hx-rail-label { font-size: 0.76rem; font-weight: 600; color: var(--text2); margin-right: auto; display: inline-flex; align-items: center; }
+.hx-rail-body { display: flex; align-items: flex-end; justify-content: space-between; gap: 0.6rem; }
+.hx-rail-value { display: flex; align-items: baseline; gap: 0.25rem; }
+.hx-rail-value b {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.5rem; font-weight: 600; line-height: 1.05; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.hx-rail-value span { font-size: 0.76rem; color: var(--text3); }
+.hx-rail-sub { font-size: 0.7rem; color: var(--text3); }
+.hx-rail-card.is-empty .hx-rail-value b { color: var(--text3); }
+.hx-rail-spark { width: 74px; flex: none; }
+
+.hx-spark { display: block; width: 100%; overflow: visible; }
+.hx-spark-empty { display: grid; place-items: center; font-size: 0.66rem; color: var(--text3); width: 74px; }
+
+/* ── List rows ───────────────────────────────────────────────────────────── */
+
+.hx-rows { display: flex; flex-direction: column; }
+.hx-row-item {
+  display: flex; align-items: flex-start; gap: 0.6rem;
+  padding: 0.55rem 0; border-top: 1px solid var(--border);
+}
+.hx-rows > .hx-row-item:first-child { border-top: none; }
+.hx-row-icon {
+  width: 26px; height: 26px; flex: none; border-radius: 8px; display: grid; place-items: center;
+  background: var(--surface3); font-size: 0.8rem;
+}
+.hx-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.hx-row-body b { font-size: 0.8rem; font-weight: 600; color: var(--text); line-height: 1.4; }
+.hx-row-body span { font-size: 0.72rem; color: var(--text3); line-height: 1.45; }
+.hx-row-right { font-size: 0.74rem; color: var(--text3); white-space: nowrap; align-self: center; }
+.hx-row-item.tone-good .hx-row-icon { background: rgba(26,127,75,0.1); }
+.hx-row-item.tone-warn .hx-row-icon { background: rgba(209,143,0,0.12); }
+.hx-row-item.tone-bad .hx-row-icon { background: rgba(184,52,42,0.09); }
+
+/* ── Macro lines, for the nutrition panel ────────────────────────────────── */
+
+.hx-macro { display: flex; align-items: center; gap: 0.6rem; padding: 0.35rem 0; }
+.hx-macro i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.hx-macro-name { font-size: 0.78rem; color: var(--text2); flex: 1; }
+.hx-macro-val { font-size: 0.8rem; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.hx-macro-goal { font-size: 0.7rem; color: var(--text3); }
+
+/* A contributor: a name, how much of 100 it reached, and the number. The bar is the
+   same colour for all four -- they are the same kind of thing, and colouring them
+   differently would imply a ranking Oura does not publish. */
+.hx-contrib { display: flex; align-items: center; gap: 0.6rem; padding: 0.28rem 0; }
+.hx-contrib-name { font-size: 0.76rem; color: var(--text2); width: 8.2rem; flex: none; }
+.hx-contrib-bar { flex: 1; height: 5px; border-radius: 999px; background: var(--bg2); overflow: hidden; }
+.hx-contrib-bar i { display: block; height: 100%; border-radius: 999px; background: var(--vitara); }
+.hx-contrib-val {
+  font-size: 0.76rem; font-weight: 600; color: var(--text);
+  font-variant-numeric: tabular-nums; width: 1.8rem; text-align: right;
+}

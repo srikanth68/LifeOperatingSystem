@@ -8,7 +8,7 @@ import {
 import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
 import { VitaraMetricsCatalogue } from '../components/VitaraMetricsCatalogue';
-import { Shell as HxShell, Tabs as HxTabs, Card, Ring, Stat, Chip, Delta as HxDelta, SectionHead, Empty, Info, HX_SERIES } from '../components/health/HealthKit';
+import { Shell as HxShell, Tabs as HxTabs, Card, Ring, Stat, Chip, Delta as HxDelta, SectionHead, Empty, Info, Panel, Spark, RailCard, Row, HX_SERIES } from '../components/health/HealthKit';
 import '../styles/modules.css';
 import '../styles/vitara.css';
 
@@ -197,34 +197,80 @@ function toneFor(score?: number | null): string {
   return 'var(--hx-bad)';
 }
 
-// One sentence, written from what actually arrived. The page used to open with three
-// score rings and no claim at all -- the reader had to assemble the answer themselves.
-function headline(d: Dashboard): { line: string; sub: string } {
+// What today actually says, in one line.
+//
+// The reference design opened with "You're making progress!" over a photograph. The
+// sentiment is the easy part and the wrong part: an encouragement that fires whatever
+// the data says is a decoration, and after a week of reading it under a bad morning
+// nobody reads it at all. So this is computed, it can say nothing, and it never claims
+// a direction without a difference behind it.
+function greeting(d: Dashboard): { line: string; sub: string } {
   const r = d.readiness?.score;
-  const slept = d.sleep ? fmtMin(d.sleep.totalMinutes) : null;
+  const better: string[] = [];
+  const worse: string[] = [];
 
-  if (r == null && !slept) {
+  const compare = (now?: number | null, usual?: number | null, name?: string, goodWhen: 'higher' | 'lower' = 'higher') => {
+    if (now == null || usual == null || !name) return;
+    const diff = now - usual;
+    if (Math.abs(diff) < usual * 0.04) return;              // inside the noise
+    ((goodWhen === 'higher' ? diff > 0 : diff < 0) ? better : worse).push(name);
+  };
+
+  compare(d.sleep?.totalMinutes, d.weeklyAvg?.sleepScore != null ? null : null, undefined);
+  compare(d.sleep?.hrv, d.weeklyAvg?.hrv, 'HRV');
+  compare(d.readiness?.restingHr, d.weeklyAvg?.rhr, 'resting heart rate', 'lower');
+  compare(d.activity?.steps, d.weeklyAvg?.steps, 'activity');
+
+  if (r == null) {
     return {
-      line: 'Nothing has arrived for today yet.',
-      sub: 'Your ring uploads when you open the Oura app, usually in the morning. Everything below is the last reading each measurement had.',
+      line: 'Nothing has arrived for today yet',
+      sub: 'Your ring uploads when you open the Oura app. Everything below is the last reading each measurement had.',
     };
   }
 
-  const mood = r == null ? 'Today' : r >= 85 ? 'Well recovered' : r >= 70 ? 'Steady' : r >= 50 ? 'Take it easy' : 'Run down';
-  const parts: string[] = [];
-  if (slept) parts.push('you slept ' + slept);
-  if (d.readiness?.restingHr != null) parts.push('resting heart rate ' + d.readiness.restingHr + ' bpm');
-  if (d.activity?.steps != null) parts.push(d.activity.steps.toLocaleString() + ' steps so far');
+  const line =
+    r >= 85 ? 'You are well recovered'
+    : r >= 70 ? 'You are in reasonable shape today'
+    : r >= 50 ? 'Today is a lighter day'
+    : 'Your body is asking for a rest day';
 
-  return {
-    line: r == null ? 'Today' : mood + ' — readiness ' + Math.round(r),
-    sub: parts.length ? parts.join(', ') + '.' : 'No detail behind it yet today.',
-  };
+  // Named, or not mentioned. "Trending in the right direction" with nothing behind it
+  // is the sentence this function exists to avoid.
+  const sub =
+    better.length && worse.length ? `${cap(list(better))} improved against your usual; ${list(worse)} did not.`
+    : better.length ? `${cap(list(better))} sat better than your usual.`
+    : worse.length ? `${cap(list(worse))} sat below your usual.`
+    : 'Everything measured is close to your own usual.';
+
+  return { line, sub };
+}
+
+const list = (xs: string[]) => xs.length <= 1 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`;
+const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+
+// The four things a day is made of, and whether each has happened yet. Drawn as a rail
+// because the order is real -- sleep is settled before activity, which is settled before
+// the evening -- and because "3 of 4" says less than which one is missing.
+function steps(d: Dashboard, nutrition?: NutritionRow) {
+  return [
+    { id: 'Sleep', done: d.sleep != null },
+    { id: 'Activity', done: (d.activity?.steps ?? 0) > 1000 },
+    { id: 'Nutrition', done: (nutrition?.calories ?? 0) > 0 },
+    { id: 'Recovery', done: d.readiness?.score != null },
+  ];
 }
 
 function TodayPage({ status }: { status: OuraStatus }) {
   const qClient = useQueryClient();
   const { data: d } = useQuery<Dashboard>({ queryKey: ['dashboard'], queryFn: () => get(`${API}/api/dashboard`), refetchInterval: 60_000 });
+
+  // The panels each need a little history of their own. Separate queries so one slow or
+  // missing endpoint leaves a single card empty rather than blanking the page.
+  const { data: nights } = useQuery<Sleep[]>({ queryKey: ['sleep', 7], queryFn: () => get(`${API}/api/sleep?days=7`) });
+  const { data: days } = useQuery<Activity[]>({ queryKey: ['activity', 7], queryFn: () => get(`${API}/api/activity?days=7`) });
+  const { data: food } = useQuery<NutritionRow[]>({ queryKey: ['nutrition-today'], queryFn: () => get(`${API}/api/nutrition?days=1`) });
+  const { data: labs } = useQuery<Measurement[]>({ queryKey: ['measurements', 120], queryFn: () => get(`${API}/api/measurements?days=120`) });
+
   const sync = useMutation({
     mutationFn: () => fetch(`${API}/api/oura/sync`, { method: 'POST', headers: authHeaders() }).then(r => { if (!r.ok) throw new Error(r.status.toString()); return r.json(); }),
     onSuccess: () => qClient.invalidateQueries(),
@@ -238,9 +284,14 @@ function TodayPage({ status }: { status: OuraStatus }) {
     ? (Date.now() - new Date(status.lastSyncedAt).getTime()) / 3_600_000
     : null;
 
-  const { line, sub } = headline(d);
-  const hr = d.latestHeartRate?.bpm ?? d.readiness?.restingHr ?? null;
+  const { line, sub } = greeting(d);
   const samples = d.heartRateSamples ?? [];
+  const today = new Date().toISOString().slice(0, 10);
+  const meal = food?.find(f => f.day === today) ?? food?.[0];
+
+  const byDay = [...(nights ?? [])].sort((a, b) => a.day.localeCompare(b.day));
+  const actDays = [...(days ?? [])].sort((a, b) => a.day.localeCompare(b.day));
+  const recentLabs = (labs ?? []).slice(0, 4);
 
   return (
     <div>
@@ -254,249 +305,449 @@ function TodayPage({ status }: { status: OuraStatus }) {
         </div>
       )}
 
-      {/* Hero: the answer first, the scores beside it. */}
-      <div className="hx-hero">
-        <Card className="hx-hero-main">
-          <Ring score={d.readiness?.score} label="readiness" tone={toneFor(d.readiness?.score)} />
-          <div className="hx-hero-copy">
-            <p className="hx-eyebrow">
-              {new Date(d.date ?? Date.now()).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-            </p>
-            <h2 className="hx-headline">{line}</h2>
-            <p className="hx-sub">{sub}</p>
-            {d.readiness?.level && (
-              <div style={{ marginTop: '0.6rem' }}>
-                <Chip tone={(d.readiness.score ?? 0) >= 70 ? 'good' : (d.readiness.score ?? 0) >= 50 ? 'warn' : 'bad'}>
-                  {d.readiness.level.replace('_', ' ')}
-                </Chip>
+      {/* One computed sentence. No name: this repository is public. */}
+      <div className="hx-greet">
+        <span className="hx-greet-mark">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 13h3l3 7 4-16 3 9h5"/>
+          </svg>
+        </span>
+        <span>
+          <b>{line}.</b>
+          {sub}
+        </span>
+      </div>
+
+      <div className="hx-bento">
+        <div className="hx-col">
+          <div className="hx-pair">
+            {/* Readiness, flat. The reference put a mountain behind this number; a
+                landscape competing with the one figure that matters is a trade the
+                photograph wins. */}
+            <Panel title="Overall readiness" className="hx-hero2"
+                   info="Built from your overnight heart rate, heart rate variability and temperature, measured against your own recent nights — never against anyone else's.">
+              <div className="hx-hero2-body">
+                <Ring score={d.readiness?.score} size={124} label="readiness" tone={toneFor(d.readiness?.score)}/>
+                <div className="hx-hero2-copy">
+                  <p className="hx-hero2-verdict">{line}</p>
+                  <p className="hx-hero2-sub">{meaning(d.readiness?.score)}</p>
+                  {d.readiness?.level && (
+                    <div style={{ marginTop: '0.55rem' }}>
+                      <Chip tone={(d.readiness.score ?? 0) >= 70 ? 'good' : (d.readiness.score ?? 0) >= 50 ? 'warn' : 'bad'}>
+                        {d.readiness.level.replace('_', ' ')}
+                      </Chip>
+                    </div>
+                  )}
+                </div>
               </div>
+
+              <div className="hx-inline-stats">
+                <span className="hx-inline-stat">
+                  <span>Sleep</span>
+                  <b>{d.sleep ? fmtMin(d.sleep.totalMinutes) : '—'}</b>
+                </span>
+                <span className="hx-inline-stat">
+                  <span>HRV</span>
+                  <b>{d.sleep?.hrv != null ? `${Math.round(d.sleep.hrv)} ms` : '—'}</b>
+                </span>
+                <span className="hx-inline-stat">
+                  <span>Resting HR</span>
+                  <b>{d.readiness?.restingHr != null ? `${Math.round(d.readiness.restingHr)} bpm` : '—'}</b>
+                </span>
+              </div>
+            </Panel>
+
+            <Panel title="Today's focus"
+                   info="Chosen from whichever of your own measurements is furthest below its usual, not from a plan. When nothing is off, it says so.">
+              <div className="hx-focus-card">
+                <b>{focusTitle(d)}</b>
+                <p>{focusBody(d)}</p>
+              </div>
+              <div className="hx-steps">
+                {steps(d, meal).map((st, i, all) => (
+                  <span key={st.id} className={`hx-step ${st.done ? 'done' : all.findIndex(x => !x.done) === i ? 'now' : ''}`}>
+                    <i/>
+                    <span>{st.id}</span>
+                  </span>
+                ))}
+              </div>
+
+              {contributors(d).length > 0 && (
+                <>
+                  <div className="hx-panel-head" style={{ margin: '1.1rem 0 0.5rem' }}>
+                    <h3 style={{ fontSize: '0.8rem' }}>What fed the score</h3>
+                    <Info>
+                      Oura&apos;s own contributors, each out of 100, where 100 means that input helped today&apos;s
+                      readiness as much as it could. They are scores, not measurements — the resting heart rate
+                      contributor is not a pulse.
+                    </Info>
+                  </div>
+                  {contributors(d).map(c => (
+                    <div key={c.name} className="hx-contrib">
+                      <span className="hx-contrib-name">{c.name}</span>
+                      <span className="hx-contrib-bar"><i style={{ width: `${c.value}%` }}/></span>
+                      <span className="hx-contrib-val">{c.value}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+            </Panel>
+          </div>
+
+          {/* Sleep */}
+          <Panel title="Sleep" icon="🌙"
+                 note={d.sleep ? `${d.sleep.efficiency}% of your time in bed` : undefined}
+                 right={byDay.length > 1 ? 'last 7 nights' : undefined}>
+            {d.sleep ? (
+              <>
+                <div className="hx-hero2-body" style={{ gap: '1.1rem', alignItems: 'flex-start' }}>
+                  <div style={{ minWidth: '9rem' }}>
+                    <div className="hx-rail-value">
+                      <b style={{ fontSize: '1.9rem' }}>{fmtMin(d.sleep.totalMinutes)}</b>
+                      {d.sleep.score != null && <Chip tone={d.sleep.score >= 70 ? 'good' : 'warn'}>score {d.sleep.score}</Chip>}
+                    </div>
+                    <span className="hx-rail-sub">
+                      <HxDelta value={d.sleep.totalMinutes} reference={avg(byDay.slice(0, -1).map(n => n.totalSleepMinutes))} goodWhen="higher" unit=" min"/>
+                    </span>
+
+                    <div className="hx-stages" style={{ marginTop: '0.9rem' }}>
+                      {[
+                        { m: d.sleep.deepMinutes, c: 'var(--sleep-deep)', n: 'Deep' },
+                        { m: d.sleep.remMinutes, c: 'var(--sleep-rem)', n: 'REM' },
+                        { m: d.sleep.lightMinutes, c: 'var(--sleep-light)', n: 'Light' },
+                      ].map(seg => (
+                        <span key={seg.n} title={`${seg.n} ${fmtMin(seg.m)}`}
+                              style={{ background: seg.c, width: `${(seg.m / (d.sleep!.deepMinutes + d.sleep!.remMinutes + d.sleep!.lightMinutes || 1)) * 100}%` }}/>
+                      ))}
+                    </div>
+                    <div className="hx-legend" style={{ marginTop: '0.5rem' }}>
+                      <span><i style={{ background: 'var(--sleep-deep)' }}/>Deep {fmtMin(d.sleep.deepMinutes)}</span>
+                      <span><i style={{ background: 'var(--sleep-rem)' }}/>REM {fmtMin(d.sleep.remMinutes)}</span>
+                      <span><i style={{ background: 'var(--sleep-light)' }}/>Light {fmtMin(d.sleep.lightMinutes)}</span>
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: '11rem' }}>
+                    <span className="hx-panel-note">Sleep trend</span>
+                    <ResponsiveContainer width="100%" height={120}>
+                      <LineChart data={byDay.map(n => ({ day: shortDay(n.day), h: +(n.totalSleepMinutes / 60).toFixed(2) }))}
+                                 margin={{ top: 8, right: 4, bottom: 0, left: 0 }}>
+                        <CartesianGrid {...GRID} vertical={false}/>
+                        <XAxis dataKey="day" tick={AX} tickLine={false} axisLine={false}/>
+                        <YAxis width={28} tick={AX} tickLine={false} axisLine={false} unit="h"/>
+                        <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle} formatter={(v: number) => [`${v} h`, 'Asleep']}/>
+                        <Line type="monotone" dataKey="h" stroke="var(--hx-2)" strokeWidth={2} dot={{ r: 2.5 }} isAnimationActive={false}/>
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <Empty title="No night recorded.">Wear the ring overnight and it appears here after the next sync.</Empty>
             )}
-          </div>
-        </Card>
+          </Panel>
 
-        <div className="hx-grid hx-grid-4">
-          <div className="hx-stat" style={{ ['--tile' as string]: NIGHT }}>
-            <div className="hx-stat-head">
-              <span className="hx-stat-label">
-                Sleep
-                <Info>Total time actually asleep, not time in bed. The score weighs how long you slept, when, and how broken it was.</Info>
-              </span>
-              {d.sleep?.daysAgo ? <Chip tone="warn">{d.sleep.daysAgo}d old</Chip> : null}
-            </div>
-            <div className="hx-stat-value">
-              <span className="hx-stat-num" style={d.sleep ? { color: NIGHT } : undefined}>{d.sleep ? fmtMin(d.sleep.totalMinutes) : '—'}</span>
-            </div>
-            <span className="hx-stat-sub">{d.sleep?.score != null ? `score ${d.sleep.score}` : 'No night recorded yet'}</span>
-          </div>
+          <div className="hx-pair">
+            {/* Activity */}
+            <Panel title="Activity" icon="🏃"
+                   info="Steps and active calories are the ring's own counts. Distance is estimated from your steps at an average stride, so treat it as a rough figure.">
+              {d.activity ? (
+                <>
+                  <div className="hx-rail-value">
+                    <b style={{ fontSize: '1.9rem' }}>{d.activity.steps.toLocaleString()}</b>
+                    <span>steps</span>
+                  </div>
+                  <span className="hx-rail-sub">
+                    <HxDelta value={d.activity.steps} reference={d.weeklyAvg?.steps} goodWhen="higher"/>
+                  </span>
+                  <div className="hx-inline-stats" style={{ marginTop: '0.8rem', paddingTop: '0.7rem' }}>
+                    <span className="hx-inline-stat">
+                      <span>Distance</span>
+                      <b>{(d.activity.steps * 0.00075).toFixed(1)} km</b>
+                    </span>
+                    <span className="hx-inline-stat">
+                      <span>Active calories</span>
+                      <b>{Math.round(d.activity.activeCalories)} kcal</b>
+                    </span>
+                  </div>
+                  {actDays.length > 1 && (
+                    <ResponsiveContainer width="100%" height={92}>
+                      <BarChart data={actDays.map(a => ({ day: shortDay(a.day), steps: a.steps }))} margin={{ top: 12, right: 4, bottom: 0, left: 0 }}>
+                        <XAxis dataKey="day" tick={AX} tickLine={false} axisLine={false}/>
+                        <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle} formatter={(v: number) => [v.toLocaleString(), 'Steps']}/>
+                        <Bar dataKey="steps" radius={[4, 4, 0, 0]} fill="var(--hx-1)" isAnimationActive={false}/>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </>
+              ) : (
+                <Empty title="Nothing counted today.">Steps arrive with the ring's next upload.</Empty>
+              )}
+            </Panel>
 
-          <Stat
-            label="Steps"
-            accent={MOVE}
-            value={d.activity?.steps != null ? d.activity.steps.toLocaleString() : null}
-            sub={d.weeklyAvg?.steps != null ? `usually ${Math.round(d.weeklyAvg.steps).toLocaleString()}` : 'no weekly average yet'}
-            empty="Nothing counted today"
-            info="Counted by the ring. The comparison is your own recent average, not a ten-thousand-step target."
-          />
-
-          <Stat
-            label="Heart rate"
-            accent={HEART}
-            value={hr}
-            unit="bpm"
-            sub={d.latestHeartRate ? `latest, ${relTime(d.latestHeartRate.timestamp)}` : 'overnight resting rate'}
-            empty="No reading today"
-            info="The most recent beat-rate the ring recorded. Your overnight resting rate sits on the Recovery tab."
-          />
-
-          <Stat
-            label="HRV"
-            accent={NIGHT}
-            value={d.sleep?.hrv != null ? Math.round(d.sleep.hrv) : null}
-            unit="ms"
-            sub={<HxDelta value={d.sleep?.hrv} reference={d.weeklyAvg?.hrv} goodWhen="higher" unit=" ms"/>}
-            empty="Not measured last night"
-            info="Heart rate variability: the spacing between beats while you slept. Higher usually means better recovered, and only your own trend is meaningful — never someone else's number."
-          />
-        </div>
-      </div>
-
-      {/* Everything else the ring reported, each saying so when it reported nothing. */}
-      <SectionHead title="Overnight" note="Measured while you slept, against your own recent average." />
-      <div className="hx-grid hx-grid-4">
-        <Stat
-          label="Resting heart rate"
-          accent={HEART}
-          value={d.readiness?.restingHr}
-          unit="bpm"
-          sub={<HxDelta value={d.readiness?.restingHr} reference={d.weeklyAvg?.rhr} goodWhen="lower" unit=" bpm"/>}
-          empty="No overnight reading"
-          info="The lowest sustained rate your heart held overnight. It rises with illness, alcohol, a late meal or a hard training block."
-        />
-        <Stat
-          label="Breathing rate"
-          accent={NIGHT}
-          value={d.sleep?.breathingRate != null ? d.sleep.breathingRate.toFixed(1) : null}
-          unit="/min"
-          sub="while asleep"
-          empty="Not measured last night"
-          info="Breaths per minute while you slept. It is remarkably steady night to night, which is exactly what makes a change worth noticing."
-        />
-        <Stat
-          label="Blood oxygen"
-          accent={AIR}
-          value={d.spo2Data?.average != null ? d.spo2Data.average.toFixed(1) : (d.sleep?.spo2 != null ? d.sleep.spo2.toFixed(1) : null)}
-          unit="%"
-          sub={d.spo2Data?.breathingDisturbance != null ? `disturbance index ${d.spo2Data.breathingDisturbance}` : 'averaged through the night'}
-          empty="Not measured last night"
-          info="The share of your blood carrying oxygen, averaged across the night. Readings that sit below about 95% night after night are worth raising with a doctor."
-        />
-        <Stat
-          label="Skin temperature"
-          accent={TEMP}
-          value={d.sleep?.skinTemp != null ? `${d.sleep.skinTemp > 0 ? '+' : ''}${d.sleep.skinTemp.toFixed(2)}` : null}
-          unit="°C"
-          sub="vs your own usual"
-          empty="Not measured last night"
-          info="A deviation from your own baseline, not an absolute temperature. A sustained rise is often the earliest sign that something is coming."
-        />
-        <Stat
-          label="Stress"
-          accent={TEMP}
-          value={d.stress?.summary ? d.stress.summary.replace('_', ' ') : null}
-          sub={d.stress?.recoveryMinutes != null ? `${d.stress.recoveryMinutes} min of recovery` : 'daytime reading'}
-          empty="No stress reading today"
-          info="Built from daytime heart rate and skin signals. Recovery minutes are the time your body spent settling back down again."
-        />
-        <Stat
-          label="Resilience"
-          accent={BODY}
-          value={d.resilience?.level ? d.resilience.level.replace('_', ' ') : null}
-          sub={d.resilience?.sleepRecovery != null ? `sleep recovery ${d.resilience.sleepRecovery}` : 'long-run measure'}
-          empty="Needs a few weeks of wear"
-          info="How well you bounce back from load, built from weeks of sleep and daytime recovery rather than from any single day."
-        />
-        <Stat
-          label="Cardiovascular age"
-          accent={HEART}
-          value={d.cardiovascularAge != null ? Math.round(d.cardiovascularAge) : null}
-          unit="yrs"
-          sub={d.profile?.age != null ? `you are ${d.profile.age}` : 'estimated'}
-          empty="Needs more wear to estimate"
-          info="Oura's estimate of how old your vascular measurements look. An estimate from a ring, not a diagnosis."
-        />
-        <Stat
-          label="VO₂ max"
-          accent={MOVE}
-          value={d.vo2Max != null ? d.vo2Max.toFixed(1) : null}
-          unit="ml/kg/min"
-          sub="aerobic fitness"
-          empty="Not estimated yet"
-          info="The oxygen your body can use at full effort — the standard measure of aerobic fitness. It moves over months of training, not over days."
-        />
-      </div>
-
-      {/* Last night, as one bar. */}
-      <SectionHead
-        title="Last night"
-        note={d.sleep ? `${fmtMin(d.sleep.totalMinutes)} asleep · ${d.sleep.efficiency}% efficient` : undefined}
-      />
-      {d.sleep ? (
-        <div className="hx-chart">
-          <div className="hx-chart-head">
-            <span className="hx-chart-title">Sleep stages</span>
-            <span className="hx-legend">
-              <span><i style={{ background: 'var(--hx-2)' }}/>Deep {fmtMin(d.sleep.deepMinutes)}</span>
-              <span><i style={{ background: 'var(--hx-4)' }}/>REM {fmtMin(d.sleep.remMinutes)}</span>
-              <span><i style={{ background: 'var(--hx-6)' }}/>Light {fmtMin(d.sleep.lightMinutes)}</span>
-            </span>
-          </div>
-          {/* One bar, three segments, separated by the surface rather than by borders.
-              The legend above names them, so the bar carries no labels of its own. */}
-          <div className="hx-stages">
-            {[
-              { m: d.sleep.deepMinutes, c: 'var(--hx-2)', n: 'Deep' },
-              { m: d.sleep.remMinutes, c: 'var(--hx-4)', n: 'REM' },
-              { m: d.sleep.lightMinutes, c: 'var(--hx-6)', n: 'Light' },
-            ].map(seg => (
-              <span
-                key={seg.n}
-                title={`${seg.n} ${fmtMin(seg.m)}`}
-                style={{
-                  background: seg.c,
-                  width: `${(seg.m / (d.sleep!.deepMinutes + d.sleep!.remMinutes + d.sleep!.lightMinutes || 1)) * 100}%`,
-                }}
-              />
-            ))}
-          </div>
-        </div>
-      ) : (
-        <Empty title="No night recorded.">Wear the ring overnight and it will appear here after the next sync.</Empty>
-      )}
-
-      {/* 24h heart rate. */}
-      <SectionHead
-        title="Heart rate today"
-        note={samples.length > 0 ? `${Math.min(...samples.map(h => h.bpm))}–${Math.max(...samples.map(h => h.bpm))} bpm` : undefined}
-      />
-      {samples.length > 0 ? (
-        <div className="hx-chart">
-          <ResponsiveContainer width="100%" height={140}>
-            <AreaChart
-              data={samples.map(h => ({ t: new Date(h.timestamp).toLocaleTimeString('en-US', { hour: 'numeric' }), bpm: h.bpm }))}
-              margin={{ top: 6, right: 6, bottom: 0, left: 0 }}
-            >
-              <defs>
-                <linearGradient id="hxHr" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--hx-5)" stopOpacity={0.16}/>
-                  <stop offset="100%" stopColor="var(--hx-5)" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="var(--border)" vertical={false}/>
-              <XAxis dataKey="t" tick={{ fill: 'var(--text3)', fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={40}/>
-              <YAxis width={34} tick={{ fill: 'var(--text3)', fontSize: 11 }} tickLine={false} axisLine={false}/>
-              <Area type="monotone" dataKey="bpm" stroke="var(--hx-5)" fill="url(#hxHr)" strokeWidth={2} dot={false} isAnimationActive={false}/>
-              <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle}/>
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      ) : (
-        <Empty title="No heart-rate samples today.">These arrive with the ring's next upload.</Empty>
-      )}
-
-      {/* Workouts. */}
-      <SectionHead title="Recent workouts" />
-      {d.recentWorkouts && d.recentWorkouts.length > 0 ? (
-        <div className="hx-grid hx-grid-3">
-          {d.recentWorkouts.map((w, i) => (
-            <div key={i} className="hx-stat">
-              <div className="hx-stat-head">
-                <span className="hx-stat-label" style={{ textTransform: 'capitalize' }}>{w.activity}</span>
-                {w.intensity && <Chip>{w.intensity}</Chip>}
+            {/* Heart */}
+            <Panel title="Heart health" icon="❤️"
+                   info="Resting rate is the lowest sustained rate of the night. Breathing rate is measured while you sleep and is remarkably steady, which is what makes a change worth noticing.">
+              <div className="hx-inline-stats" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+                <span className="hx-inline-stat">
+                  <span>Resting HR</span>
+                  <b>{d.readiness?.restingHr != null ? `${Math.round(d.readiness.restingHr)} bpm` : '—'}</b>
+                </span>
+                <span className="hx-inline-stat">
+                  <span>Breathing rate</span>
+                  <b>{d.sleep?.breathingRate != null ? `${d.sleep.breathingRate.toFixed(1)} /min` : '—'}</b>
+                </span>
+                <span className="hx-inline-stat">
+                  <span>Blood oxygen</span>
+                  <b>{d.spo2Data?.average != null ? `${d.spo2Data.average.toFixed(1)}%` : '—'}</b>
+                </span>
               </div>
-              <span className="hx-stat-sub">
-                {[
-                  w.calories != null ? `${w.calories} cal` : null,
-                  w.distance ? `${(w.distance / 1000).toFixed(1)} km` : null,
-                  w.startTime ? relTime(w.startTime) : null,
-                ].filter(Boolean).join(' · ') || 'No detail recorded'}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <Empty title="No workouts in the last week.">Sessions the ring detects, or ones you log, show up here.</Empty>
-      )}
+              {samples.length > 0 ? (
+                <ResponsiveContainer width="100%" height={120}>
+                  <AreaChart data={samples.map(h => ({ t: new Date(h.timestamp).toLocaleTimeString('en-US', { hour: 'numeric' }), bpm: h.bpm }))}
+                             margin={{ top: 14, right: 6, bottom: 0, left: 0 }}>
+                    <defs>
+                      <linearGradient id="hxHr" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--hx-5)" stopOpacity={0.18}/>
+                        <stop offset="100%" stopColor="var(--hx-5)" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid {...GRID} vertical={false}/>
+                    <XAxis dataKey="t" tick={AX} tickLine={false} axisLine={false} minTickGap={40}/>
+                    <YAxis width={32} tick={AX} tickLine={false} axisLine={false}/>
+                    <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle}/>
+                    <Area type="monotone" dataKey="bpm" stroke="var(--hx-5)" fill="url(#hxHr)" strokeWidth={2} dot={false} isAnimationActive={false}/>
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <Empty title="No heart-rate samples today.">These arrive with the ring's next upload.</Empty>
+              )}
+            </Panel>
+          </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
-        <button className="hx-btn hx-btn-ghost" onClick={() => sync.mutate()} disabled={sync.isPending}>
-          {sync.isPending ? 'Syncing…' : sync.isError ? 'Sync failed — try again' : 'Sync with Oura'}
-        </button>
+          <div className="hx-pair">
+            {/* Body */}
+            <Panel title="Body" icon="⚖️">
+              <div className="hx-grid hx-grid-4">
+                <Stat label="Cardiovascular age" accent={HEART}
+                      value={d.cardiovascularAge != null ? Math.round(d.cardiovascularAge) : null} unit="yrs"
+                      sub={d.profile?.age != null ? `you are ${d.profile.age}` : 'estimated'}
+                      empty="Needs more wear"/>
+                <Stat label="VO₂ max" accent={MOVE} value={d.vo2Max != null ? d.vo2Max.toFixed(1) : null} unit="ml/kg/min"
+                      sub="aerobic fitness" empty="Not estimated yet"/>
+                <Stat label="Resilience" accent={BODY}
+                      value={d.resilience?.level ? d.resilience.level.replace('_', ' ') : null}
+                      sub={d.resilience?.sleepRecovery != null ? `sleep recovery ${d.resilience.sleepRecovery}` : 'long-run measure'}
+                      empty="Needs a few weeks"/>
+                <Stat label="Stress" accent={TEMP}
+                      value={d.stress?.summary ? d.stress.summary.replace('_', ' ') : null}
+                      sub={d.stress?.recoveryMinutes != null ? `${d.stress.recoveryMinutes} min recovering` : 'daytime reading'}
+                      empty="No reading today"/>
+              </div>
+            </Panel>
+
+            {/* Nutrition */}
+            <Panel title="Nutrition" icon="🍽️" right={meal?.calorieGoal ? `goal ${meal.calorieGoal} kcal` : undefined}>
+              {meal && meal.calories > 0 ? (
+                <>
+                  <div className="hx-rail-value">
+                    <b style={{ fontSize: '1.9rem' }}>{Math.round(meal.calories)}</b>
+                    <span>kcal logged</span>
+                  </div>
+                  <div style={{ marginTop: '0.7rem' }}>
+                    {[
+                      { n: 'Protein', v: meal.protein, g: meal.proteinGoal, c: 'var(--hx-2)' },
+                      { n: 'Carbs', v: meal.carbs, g: meal.carbGoal, c: 'var(--hx-3)' },
+                      { n: 'Fat', v: meal.fat, g: meal.fatGoal, c: 'var(--hx-4)' },
+                    ].map(m => (
+                      <div key={m.n} className="hx-macro">
+                        <i style={{ background: m.c }}/>
+                        <span className="hx-macro-name">{m.n}</span>
+                        <span className="hx-macro-val">{Math.round(m.v)} g</span>
+                        {m.g != null && <span className="hx-macro-goal">of {Math.round(m.g)}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <Empty title="Nothing logged today.">The Food tab is where meals go in; nothing is counted that you have not entered.</Empty>
+              )}
+            </Panel>
+          </div>
+
+          {/* Labs */}
+          <Panel title="Recent readings" icon="🧪" right={recentLabs.length > 0 ? 'you recorded these' : undefined}
+                 info="Blood pressure, glucose, lab results — anything the ring cannot measure. These feed the same baselines its data does.">
+            {recentLabs.length > 0 ? (
+              <div className="hx-rows">
+                {recentLabs.map(m => (
+                  <Row key={m.id} title={m.label}
+                       note={`${m.at}${m.signature ? ` · ${m.signature}` : ''}`}
+                       right={<span className="hx-row-right">{m.value} {m.unit}</span>}/>
+                ))}
+              </div>
+            ) : (
+              <Empty title="Nothing recorded by hand yet.">
+                One blood-pressure reading at the same time of day for a fortnight becomes a baseline worth trusting.
+              </Empty>
+            )}
+          </Panel>
+        </div>
+
+        {/* ── The rail ───────────────────────────────────────────────────── */}
+        <aside className="hx-rail">
+          <RailCard label="Steps" icon="👟"
+                    value={d.activity?.steps?.toLocaleString()}
+                    sub={d.weeklyAvg?.steps ? `usually ${Math.round(d.weeklyAvg.steps).toLocaleString()}` : 'no average yet'}
+                    empty="Nothing counted today"
+                    spark={<Spark kind="bar" color="var(--hx-1)" data={actDays.map(a => a.steps)}/>}/>
+
+          <RailCard label="Heart rate" icon="❤️"
+                    value={d.latestHeartRate?.bpm ?? (d.readiness?.restingHr != null ? Math.round(d.readiness.restingHr) : null)}
+                    unit="bpm"
+                    chip={d.readiness?.restingHr != null && d.weeklyAvg?.rhr != null
+                      ? <Chip tone={d.readiness.restingHr <= d.weeklyAvg.rhr ? 'good' : 'warn'}>
+                          {d.readiness.restingHr <= d.weeklyAvg.rhr ? 'settled' : 'raised'}
+                        </Chip>
+                      : undefined}
+                    sub={d.latestHeartRate ? `latest, ${relTime(d.latestHeartRate.timestamp)}` : 'overnight resting rate'}
+                    empty="No reading today"
+                    spark={<Spark color="var(--hx-5)" data={samples.slice(-24).map(h => h.bpm)}/>}/>
+
+          <RailCard label="HRV" icon="〰️"
+                    value={d.sleep?.hrv != null ? Math.round(d.sleep.hrv) : null} unit="ms"
+                    chip={d.sleep?.hrv != null && d.weeklyAvg?.hrv != null
+                      ? <Chip tone={d.sleep.hrv >= d.weeklyAvg.hrv ? 'good' : 'warn'}>
+                          {d.sleep.hrv >= d.weeklyAvg.hrv ? 'improving' : 'below usual'}
+                        </Chip>
+                      : undefined}
+                    sub={d.weeklyAvg?.hrv ? `usually ${Math.round(d.weeklyAvg.hrv)} ms` : 'last night'}
+                    empty="Not measured last night"
+                    info="Heart rate variability: the spacing between beats while you slept. Only your own trend means anything."
+                    spark={<Spark color="var(--hx-2)" data={byDay.map(n => n.avgHrv ?? null)}/>}/>
+
+          <Panel title="Quick insights">
+            {quickInsights(d).length > 0 ? (
+              <div className="hx-rows">
+                {quickInsights(d).map(q => (
+                  <Row key={q.title} icon={q.icon} tone={q.tone} title={q.title} note={q.note}/>
+                ))}
+              </div>
+            ) : (
+              <Empty title="Nothing stands out today.">Everything measured sits close to your own usual.</Empty>
+            )}
+          </Panel>
+
+          <Panel title="Recent workouts">
+            {d.recentWorkouts && d.recentWorkouts.length > 0 ? (
+              <div className="hx-rows">
+                {d.recentWorkouts.slice(0, 4).map((w, i) => (
+                  <Row key={i} icon="🏋️" title={w.activity.replace(/_/g, ' ')}
+                       note={[w.startTime ? relTime(w.startTime) : null, w.calories ? `${Math.round(w.calories)} kcal` : null]
+                         .filter(Boolean).join(' · ')}
+                       right={w.intensity ? <Chip>{w.intensity}</Chip> : undefined}/>
+                ))}
+              </div>
+            ) : (
+              <Empty title="No workouts this week.">Sessions the ring detects, or ones you log, show up here.</Empty>
+            )}
+          </Panel>
+
+          <button className="hx-btn" onClick={() => sync.mutate()} disabled={sync.isPending}>
+            {sync.isPending ? 'Syncing…' : 'Sync with Oura'}
+          </button>
+        </aside>
       </div>
     </div>
   );
 }
 
-// ── SLEEP ─────────────────────────────────────────────────────────────────────
+// What the score means for the day in front of you. Band-based and deliberately not
+// advice: "ready for training" is a statement about the reading, "go and train" is a
+// decision that belongs to the person holding the body.
+function meaning(score?: number | null): string {
+  if (score == null) return 'Nothing has been scored today yet.';
+  if (score >= 85) return 'Your body looks ready for training and a full day.';
+  if (score >= 70) return 'Normal load looks fine. Nothing here argues against a hard session.';
+  if (score >= 50) return 'Your overnight numbers came in under par. Expect less from yourself than usual.';
+  return 'Several overnight measures are well below your usual at once.';
+}
+
+// The parts Oura weighed, each out of 100. Shown because "readiness 72" says nothing
+// about WHICH of the four is holding it there.
+function contributors(d: Dashboard): { name: string; value: number }[] {
+  const all = [
+    { name: 'HRV balance', value: d.readiness?.hrvBalance },
+    { name: 'Recovery index', value: d.readiness?.recoveryIndex },
+    { name: 'Sleep balance', value: d.readiness?.sleepBalance },
+    { name: 'Activity balance', value: d.readiness?.activityBalance },
+  ];
+  return all.filter((c): c is { name: string; value: number } => c.value != null);
+}
+
+// The one thing most worth attention, chosen from the data rather than from a plan.
+// When nothing is off its usual, it says that instead of inventing an errand.
+function focusTitle(d: Dashboard): string {
+  if (d.readiness?.score == null) return 'Waiting on today\'s upload';
+  if ((d.readiness.score ?? 0) < 60) return 'Take it easy today';
+  if (d.sleep?.hrv != null && d.weeklyAvg?.hrv != null && d.sleep.hrv < d.weeklyAvg.hrv * 0.9) return 'Protect tonight\'s sleep';
+  if (d.activity?.steps != null && d.weeklyAvg?.steps != null && d.activity.steps < d.weeklyAvg.steps * 0.5) return 'Get a walk in';
+  return 'Keep your routine';
+}
+
+function focusBody(d: Dashboard): string {
+  if (d.readiness?.score == null) return 'Open the Oura app to let the ring upload, and this fills in.';
+  if ((d.readiness.score ?? 0) < 60) return 'Readiness is below your usual. Training hard on a day like this costs more than it returns.';
+  if (d.sleep?.hrv != null && d.weeklyAvg?.hrv != null && d.sleep.hrv < d.weeklyAvg.hrv * 0.9)
+    return 'Your HRV came in under your usual. An earlier night is the single thing most likely to move it back.';
+  if (d.activity?.steps != null && d.weeklyAvg?.steps != null && d.activity.steps < d.weeklyAvg.steps * 0.5)
+    return 'You are well under your usual step count for this time of day.';
+  return 'Nothing is off its usual. The useful thing today is not changing anything.';
+}
+
+// Three at most, each a real comparison against this person's own recent average.
+function quickInsights(d: Dashboard): { title: string; note: string; icon: string; tone?: 'good' | 'warn' | 'bad' }[] {
+  const out: { title: string; note: string; icon: string; tone?: 'good' | 'warn' | 'bad' }[] = [];
+
+  if (d.sleep?.hrv != null && d.weeklyAvg?.hrv != null) {
+    const diff = Math.round(d.sleep.hrv - d.weeklyAvg.hrv);
+    if (Math.abs(diff) >= 3)
+      out.push({
+        title: `HRV is ${Math.abs(diff)} ms ${diff > 0 ? 'higher' : 'lower'} than usual`,
+        note: diff > 0 ? 'Usually a sign of better recovery.' : 'Often follows a late night, alcohol or a hard session.',
+        icon: '〰️', tone: diff > 0 ? 'good' : 'warn',
+      });
+  }
+
+  if (d.activity?.steps != null && d.weeklyAvg?.steps != null) {
+    const diff = Math.round(d.activity.steps - d.weeklyAvg.steps);
+    if (Math.abs(diff) >= 1500)
+      out.push({
+        title: `${Math.abs(diff).toLocaleString()} ${diff > 0 ? 'more' : 'fewer'} steps than usual`,
+        note: `Your recent average is ${Math.round(d.weeklyAvg.steps).toLocaleString()}.`,
+        icon: '👟', tone: diff > 0 ? 'good' : undefined,
+      });
+  }
+
+  if (d.readiness?.restingHr != null && d.weeklyAvg?.rhr != null) {
+    const diff = Math.round(d.readiness.restingHr - d.weeklyAvg.rhr);
+    if (Math.abs(diff) >= 2)
+      out.push({
+        title: `Resting heart rate ${Math.abs(diff)} bpm ${diff > 0 ? 'above' : 'below'} usual`,
+        note: diff > 0 ? 'Worth an eye if it holds for a few days.' : 'Lower is generally the better direction.',
+        icon: '❤️', tone: diff > 0 ? 'warn' : 'good',
+      });
+  }
+
+  if (d.sleep?.skinTemp != null && Math.abs(d.sleep.skinTemp) >= 0.25)
+    out.push({
+      title: `Skin temperature ${d.sleep.skinTemp > 0 ? 'up' : 'down'} ${Math.abs(d.sleep.skinTemp).toFixed(2)} °C`,
+      note: 'Measured against your own usual, not an absolute.',
+      icon: '🌡️', tone: d.sleep.skinTemp > 0 ? 'warn' : undefined,
+    });
+
+  return out.slice(0, 4);
+}
 
 function SleepPage() {
   const { data, isPending, isError, error } = useQuery<Sleep[]>({ queryKey: ['sleep', 14], queryFn: () => get(`${API}/api/sleep?days=14`) });
