@@ -87,6 +87,12 @@ struct MaayaCompanionApp: App {
                 if phase == .active, auth.isAuthenticated {
                     Task { await NotificationManager.shared.sync(using: client) }
                 }
+
+                // Drop every hold on the display when the app stops being frontmost.
+                // iOS already ignores the idle timer for an app that is not in front, so
+                // this is not what protects the battery -- it is what stops a view whose
+                // onDisappear never ran from holding the screen open on the next launch.
+                if phase != .active { KeepAwake.releaseAll() }
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
                 SyncManager.scheduleBackgroundSync()

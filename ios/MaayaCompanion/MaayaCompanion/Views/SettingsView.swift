@@ -9,6 +9,7 @@ struct SettingsView: View {
     @AppStorage("apiKey") private var apiKey = ""
     @AppStorage("autoSyncEnabled") private var autoSyncEnabled = true
     @AppStorage("vitaraSyncEnabled") private var vitaraSyncEnabled = true
+    @AppStorage("sanKeepScreenAwake") private var sanKeepScreenAwake = true
 
     let locationManager: LocationManager
     let calendarManager: CalendarManager
@@ -68,6 +69,15 @@ struct SettingsView: View {
                     Text("Apple Health → Vitara")
                 } footer: {
                     Text("Pushes steps, heart rate, active calories, sleep, weight, recent workouts, and the last week of daily activity from Apple Health directly into Vitara (port 5100). Uses the Device Key above.")
+                        .font(.caption)
+                }
+
+                Section {
+                    Toggle("Keep screen awake in San", isOn: $sanKeepScreenAwake)
+                } header: {
+                    Text("San")
+                } footer: {
+                    Text("Stops the display sleeping while the San tab is open, so a long reply can be read without tapping. A voice call always holds the screen regardless of this: the display sleeping suspends the app and ends the call.")
                         .font(.caption)
                 }
 

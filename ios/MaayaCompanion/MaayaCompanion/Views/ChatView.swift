@@ -27,6 +27,11 @@ struct ChatView: View {
     @AppStorage("sanAutoSpeak") private var autoSpeak = false
     @State private var confirmClear = false
 
+    // Default on, because the complaint that prompted this was the screen locking
+    // while San was being read, and off is one tap away for anyone who would rather
+    // have the battery. Calls ignore this: a locked screen ends a call outright.
+    @AppStorage("sanKeepScreenAwake") private var keepAwake = true
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -87,6 +92,10 @@ struct ChatView: View {
                     Task { await loadHistory() }   // spoken exchange persists server-side
                 }
             }
+            // While this tab is the one on screen. Reading a long reply, or waiting on a
+            // local model that takes its time, both count as using San -- and neither
+            // involves touching the glass, which is all the idle timer measures.
+            .keepScreenAwake("san-chat", active: keepAwake)
         }
     }
 

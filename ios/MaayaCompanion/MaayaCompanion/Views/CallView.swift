@@ -39,6 +39,10 @@ struct CallView: View {
         }
         .task { await manager.start() }
         .onDisappear { manager.stop() }
+        // A call is the one screen nobody touches while using it, and the display
+        // sleeping here does not merely dim the view -- it suspends the app and ends
+        // the call mid-sentence. Held for the whole call, released when the sheet goes.
+        .keepScreenAwake("voice-call")
         .sensoryFeedback(trigger: manager.phase) { _, new in
             switch new {
             case .listening: return .impact(weight: .light)
