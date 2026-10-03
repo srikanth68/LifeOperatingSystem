@@ -269,6 +269,23 @@ public class FakeRepo : IVitaraRepository
     public Task<List<Device>> GetDevicesAsync() => Task.FromResult(DeviceData);
     public List<Intervention> InterventionData { get; } = [];
     public Task<List<Intervention>> GetInterventionsAsync() => Task.FromResult(InterventionData);
+
+    public Task<Intervention> SaveInterventionAsync(Intervention intervention)
+    {
+        InterventionData.Add(intervention);
+        return Task.FromResult(intervention);
+    }
+
+    public Task<bool> EndInterventionAsync(Guid id, DateOnly endedOn)
+    {
+        var row = InterventionData.FirstOrDefault(i => i.Id == id);
+        if (row is null) return Task.FromResult(false);
+        row.EndedOnLocal = endedOn;
+        return Task.FromResult(true);
+    }
+
+    public Task<bool> DeleteInterventionAsync(Guid id) =>
+        Task.FromResult(InterventionData.RemoveAll(i => i.Id == id) > 0);
     public Task SaveSyncStateAsync(SyncState state) { SyncStateData = state; return Task.CompletedTask; }
     public Task<int> ReplaceMealsForDayAsync(DateOnly day, string source, IEnumerable<MealEntry> meals)
     {

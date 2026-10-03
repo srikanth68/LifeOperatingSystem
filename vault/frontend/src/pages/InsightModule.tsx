@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { makeModuleQueryClient } from '../services/moduleQuery';
 import { Shell, Info, Chip, Row } from '../components/health/HealthKit';
 import { authHeaders } from '../services/auth';
@@ -161,6 +161,41 @@ interface Forecasts {
   restingHeartRate: Forecast | null;
   hrv: Forecast | null;
   timeAsleep: Forecast | null;
+}
+
+// Grading your own decisions. The verdict is often "cannot say", and those are the
+// honest answers far more often than a result is.
+interface Target { key: string; label: string; unit: string; group: string; better: string }
+
+interface Evaluated {
+  id: string;
+  name: string;
+  kind: string;
+  dose: string | null;
+  startedOn: string;
+  endedOn: string | null;
+  running: boolean;
+  daysIn: number;
+  targetMetric: string | null;
+  targetLabel: string | null;
+  verdict: string;
+  statement: string;
+  confidence: 'none' | 'low' | 'moderate';
+  caveats: string[];
+  earliestVerdict: string | null;
+  before: { median: number; n: number } | null;
+  after: { median: number; n: number } | null;
+  change: number | null;
+  rebound: { comparableWindows: number; median: number; p75: number } | null;
+  alsoChanged: { metric: string; label: string; change: number; direction: string; detail: string }[];
+  alsoChangedNote: string;
+}
+
+interface InterventionScan {
+  runInDays: number;
+  windowDays: number;
+  interventions: Evaluated[];
+  evidence: { grade: string; label: string; claim: string; caveat: string } | null;
 }
 
 // Several measures read together. The negatives are served too, and are usually the
@@ -800,6 +835,172 @@ function Correlations() {
 // The closest thing here to what people mean by an AI doctor, and deliberately not
 // one. It names no condition and recommends nothing; it remembers, which is the part
 // a ten-minute appointment actually fails at.
+// The only question here whose answer can embarrass the app, and the reason it is
+// worth asking: everything else describes what happened, and this checks whether a
+// decision was any good.
+//
+// The target is chosen when the intervention is created, never afterwards. That
+// ordering is the feature — picking the metric after seeing which one moved is how a
+// tracker proves that everything works.
+function InterventionsSection() {
+  const qc = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ['interventions'],
+    queryFn: () => get<InterventionScan>(`${API}/api/health/interventions`),
+  });
+  const { data: targets } = useQuery({
+    queryKey: ['targets'],
+    queryFn: () => get<Target[]>(`${VITARA}/api/interventions/targets`),
+  });
+
+  const [name, setName] = useState('');
+  const [kind, setKind] = useState('protocol');
+  const [target, setTarget] = useState('');
+  const [startedOn, setStartedOn] = useState(new Date().toISOString().slice(0, 10));
+  const [error, setError] = useState<string | null>(null);
+
+  const add = useMutation({
+    mutationFn: async () => {
+      const r = await fetch(`${VITARA}/api/interventions`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, kind, targetMetric: target || null, startedOn }),
+      });
+      const json = await r.json();
+      if (!r.ok) throw new Error(json?.error ?? `${r.status}`);
+      return json;
+    },
+    onSuccess: () => {
+      setName(''); setTarget(''); setError(null);
+      qc.invalidateQueries({ queryKey: ['interventions'] });
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  const stop = useMutation({
+    mutationFn: (id: string) =>
+      fetch(`${VITARA}/api/interventions/${id}/stop`, { method: 'POST', headers: authHeaders() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['interventions'] }),
+  });
+
+  if (!data) return null;
+
+  return (
+    <section className="insight-section">
+      <h2 className="insight-h2">
+        Did it work
+        {data.evidence && (
+          <Info label="How much weight this carries">
+            {data.evidence.claim} Evidence: {data.evidence.label}. {data.evidence.caveat}
+          </Info>
+        )}
+      </h2>
+
+      <p className="insight-muted insight-lede">
+        The first {data.runInDays} days of anything are not counted, and {data.windowDays} are needed after
+        that. Pick what it is meant to change now — choosing afterwards finds whichever metric happened to move.
+      </p>
+
+      <div className="insight-card" style={{ marginBottom: '0.9rem' }}>
+        <div className="hx-form">
+          <input
+            placeholder="What did you start?"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            style={{ flex: 1, minWidth: '11rem' }}
+          />
+          <select value={kind} onChange={e => setKind(e.target.value)}>
+            <option value="protocol">protocol</option>
+            <option value="supplement">supplement</option>
+            <option value="medication">medication</option>
+            <option value="dose_change">dose change</option>
+          </select>
+          <select value={target} onChange={e => setTarget(e.target.value)} style={{ minWidth: '12rem' }}>
+            <option value="">meant to change… (no verdict without this)</option>
+            {(targets ?? []).map(t => (
+              <option key={t.key} value={t.key}>{t.label} — {t.better} is better</option>
+            ))}
+          </select>
+          <input type="date" value={startedOn} onChange={e => setStartedOn(e.target.value)} />
+          <button className="hx-btn" disabled={!name.trim() || add.isPending} onClick={() => add.mutate()}>
+            {add.isPending ? 'Saving…' : 'Start tracking'}
+          </button>
+        </div>
+        {error && <p className="hx-error" style={{ marginTop: '0.5rem' }}>{error}</p>}
+      </div>
+
+      {data.interventions.length === 0 ? (
+        <p className="insight-muted">Nothing recorded yet.</p>
+      ) : (
+        data.interventions.map(i => <Verdictcard key={i.id} e={i} onStop={() => stop.mutate(i.id)} />)
+      )}
+    </section>
+  );
+}
+
+function Verdictcard({ e, onStop }: { e: Evaluated; onStop: () => void }) {
+  // Only two verdicts are a result. Everything else is a reason there is not one yet,
+  // and those are coloured neutrally on purpose — a grey "cannot say" must not read
+  // as a failure, or nobody records the next one.
+  const tone =
+    e.verdict === 'improved' ? 'good'
+    : e.verdict === 'worsened' ? 'warn'
+    : undefined;
+
+  return (
+    <div className="insight-card" style={{ marginBottom: '0.9rem' }}>
+      <div className="insight-finding-head" style={{ justifyContent: 'space-between' }}>
+        <span>
+          <span className="insight-metric">{e.name}</span>
+          <span className="insight-type">
+            {e.kind.replace('_', ' ')} · {e.daysIn} days{e.targetLabel ? ` · for ${e.targetLabel}` : ''}
+          </span>
+        </span>
+        <span style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+          <Chip tone={tone}>{e.verdict.replace(/_/g, ' ')}</Chip>
+          {e.running && (
+            <button className="hx-icon-btn" onClick={onStop} aria-label="Mark this as stopped">stop</button>
+          )}
+        </span>
+      </div>
+
+      <p className="insight-summary" style={{ marginTop: '0.5rem' }}>{e.statement}</p>
+
+      {e.rebound && (
+        /* The number the whole verdict turns on, shown rather than only applied. */
+        <p className="insight-muted" style={{ fontSize: '0.75rem', marginTop: '0.4rem' }}>
+          Measured against {e.rebound.comparableWindows} earlier stretches of yours that were just as far below
+          par and recovered on their own by about {e.rebound.median}.
+        </p>
+      )}
+
+      {e.caveats.length > 0 && (
+        <ul className="insight-asks insight-asks-muted" style={{ marginTop: '0.5rem' }}>
+          {e.caveats.map(c => <li key={c}>{c}</li>)}
+        </ul>
+      )}
+
+      {e.alsoChanged.length > 0 && (
+        <>
+          <p className="insight-eyebrow" style={{ marginTop: '0.7rem' }}>Also moved</p>
+          <div className="hx-rows">
+            {e.alsoChanged.map(c => (
+              <Row
+                key={c.metric}
+                tone={c.direction === 'better' ? 'good' : c.direction === 'worse' ? 'warn' : undefined}
+                title={c.label}
+                note={c.detail}
+                right={<Chip>{c.direction}</Chip>}
+              />
+            ))}
+          </div>
+          <p className="insight-muted" style={{ fontSize: '0.72rem', marginTop: '0.4rem' }}>{e.alsoChangedNote}</p>
+        </>
+      )}
+    </div>
+  );
+}
+
 // Patterns are the only thing on this page that reads across metrics. Everything else
 // asks a question about one number, which is the right question for an acute signal
 // and the wrong one for a slow correlated drift — each component of which sits, on its
@@ -1363,6 +1564,7 @@ function InsightPage() {
 
         <Findings />
         <PatternsSection />
+        <InterventionsSection />
         <VisitBriefSection />
         <BioSignatureSection />
         <WhatIf />

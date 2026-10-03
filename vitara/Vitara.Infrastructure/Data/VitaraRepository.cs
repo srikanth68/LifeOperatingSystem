@@ -321,6 +321,36 @@ public class VitaraRepository(VitaraDbContext db) : IVitaraRepository
     public Task<List<Intervention>> GetInterventionsAsync() =>
         db.Interventions.OrderBy(i => i.StartedOnLocal).ToListAsync();
 
+    public async Task<Intervention> SaveInterventionAsync(Intervention intervention)
+    {
+        db.Interventions.Add(intervention);
+        await db.SaveChangesAsync();
+        return intervention;
+    }
+
+    // Ended rather than deleted. A protocol that ran for three months and stopped is
+    // part of the record of why a metric moved, and removing it would take the
+    // explanation with it.
+    public async Task<bool> EndInterventionAsync(Guid id, DateOnly endedOn)
+    {
+        var row = await db.Interventions.FirstOrDefaultAsync(i => i.Id == id);
+        if (row is null) return false;
+
+        row.EndedOnLocal = endedOn;
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> DeleteInterventionAsync(Guid id)
+    {
+        var row = await db.Interventions.FirstOrDefaultAsync(i => i.Id == id);
+        if (row is null) return false;
+
+        db.Interventions.Remove(row);
+        await db.SaveChangesAsync();
+        return true;
+    }
+
     public Task<SyncState?> GetSyncStateAsync(string source) =>
         db.SyncStates.FirstOrDefaultAsync(s => s.Source == source);
 

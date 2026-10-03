@@ -277,6 +277,11 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
         // answer that changes how their glucose reads.
         await AddColumnIfMissingAsync(db, "LabPanels", "Fasting", "INTEGER");
 
+        // Anything recorded before this column existed has no declared target and
+        // gets no verdict, which is the correct answer for it: picking a target now
+        // would be picking it after seeing the result.
+        await AddColumnIfMissingAsync(db, "Interventions", "TargetMetric", "TEXT");
+
         // Renamed rather than added: the column holds Oura's 0-100 readiness contributor
         // and was called RestingHeartRate, which is how it ended up served as bpm and fed
         // to the bio-age model as a pulse. The data is kept -- it is a real score -- and
@@ -337,6 +342,7 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
                 Dose TEXT,
                 StartedOnLocal TEXT NOT NULL,
                 EndedOnLocal TEXT,
+                TargetMetric TEXT,
                 Notes TEXT,
                 CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
             );

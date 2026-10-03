@@ -38,6 +38,20 @@ public class Intervention
     public string? Dose { get; set; }
     public DateOnly StartedOnLocal { get; set; }
     public DateOnly? EndedOnLocal { get; set; }
+
+    // What this is supposed to change, named WHEN IT STARTS.
+    //
+    // The ordering is the whole point and is not a convenience. Without a target
+    // recorded up front, evaluating an intervention means looking at thirty metrics
+    // afterwards and finding the one that improved -- and one of thirty always
+    // improves. Choosing the outcome after seeing the outcome is not a weaker form of
+    // evidence, it is the absence of evidence wearing its clothes.
+    //
+    // Nullable because the table predates the idea and because a medication started
+    // for a reason nothing here measures is still worth recording as context for a
+    // regime change. Those simply do not get a verdict, and are told so.
+    public string? TargetMetric { get; set; }
+
     public string? Notes { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

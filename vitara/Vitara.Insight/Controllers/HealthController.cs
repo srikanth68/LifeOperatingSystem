@@ -266,6 +266,101 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         });
     }
 
+    // Did the thing you changed actually change anything.
+    //
+    // The only question in this system whose answer can embarrass it, and the reason
+    // it is worth having: everything else here describes what happened, and this
+    // checks whether a decision was any good. A health app that never grades its own
+    // suggestions is one whose suggestions never have to be right.
+    //
+    // Served for every intervention, including the ones with no verdict. "Started
+    // eleven days ago, nothing conclusive until 14 November" and "two things started
+    // the same week and neither can be credited" are the honest answers far more often
+    // than a result is, and hiding them would leave only the cases that happened to
+    // produce one.
+    [HttpGet("interventions")]
+    public async Task<IActionResult> Interventions()
+    {
+        var today = LocalTime.Today;
+
+        // Long enough to find earlier stretches as bad as the one that prompted each
+        // intervention -- the rebound estimate is the whole analysis and it needs
+        // history well before the start date.
+        var observations = await repo.GetObservationsAsync(today.AddDays(-800), today);
+        var interventions = await repo.GetInterventionsAsync();
+        var excluded = await repo.GetExcludedPeriodsAsync();
+        var travel = await repo.GetTravelPeriodsAsync();
+
+        var evaluations = InterventionEval.Run(interventions, observations, today, excluded, travel);
+        var note = Evidence.For(Evidence.InterventionEvaluation);
+
+        return Ok(new
+        {
+            today = today.ToString("yyyy-MM-dd"),
+            runInDays = InterventionEval.RunInDays,
+            windowDays = InterventionEval.WindowDays,
+
+            interventions = evaluations.Select(e => new
+            {
+                e.Id,
+                e.Name,
+                e.Kind,
+                e.Dose,
+                startedOn = e.StartedOn.ToString("yyyy-MM-dd"),
+                endedOn = e.EndedOn?.ToString("yyyy-MM-dd"),
+                running = e.EndedOn is null,
+                e.DaysIn,
+                e.TargetMetric,
+                e.TargetLabel,
+
+                e.Verdict,
+                e.Statement,
+                e.Confidence,
+                e.Caveats,
+                earliestVerdict = e.EarliestVerdict?.ToString("yyyy-MM-dd"),
+
+                before = Window(e.Before),
+                after = Window(e.After),
+                e.Change,
+                e.ChangeVsUsual,
+
+                // How much of it would probably have happened anyway. Shown rather
+                // than only applied, because the number is the argument.
+                rebound = e.Rebound is null ? null : new
+                {
+                    e.Rebound.ComparableWindows,
+                    e.Rebound.Median,
+                    e.Rebound.P75,
+                },
+
+                // Labelled, not buried: something here improving is a lead to declare
+                // as the next target, not a result. A metric picked after the fact is
+                // a metric picked because it moved.
+                alsoChanged = e.AlsoChanged.Select(c => new { c.Metric, c.Label, c.Change, c.Direction, c.Detail }),
+                alsoChangedNote = "None of these was what this was being tested on. Something improving here " +
+                                  "is a reason to make it the target of the next thing you try, not a result.",
+            }),
+
+            evidence = note is null ? null : new
+            {
+                grade = note.Grade.ToString(),
+                label = note.Label,
+                note.Claim,
+                note.Caveat,
+            },
+        });
+    }
+
+    private static object? Window(EvalWindow? w) => w is null ? null : new
+    {
+        from = w.From.ToString("yyyy-MM-dd"),
+        to = w.To.ToString("yyyy-MM-dd"),
+        w.N,
+        w.Median,
+        w.P25,
+        w.P75,
+    };
+
     // Several measures read together, including the ones that are not moving.
     //
     // Served whole rather than filtered to what fired, because the interesting half of

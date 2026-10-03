@@ -71,6 +71,7 @@ public static class Evidence
     public const string BiologicalAge = "biological_age";
     public const string MetabolicPattern = "metabolic_pattern";
     public const string CompositePattern = "composite_pattern";
+    public const string InterventionEvaluation = "intervention_evaluation";
     public const string PersonalBaseline = "personal_baseline";
     public const string LabReferenceRange = "lab_reference_range";
 
@@ -218,6 +219,11 @@ public static class Evidence
             "Several related measures moving the same way at once says more than any one of them.",
             "Reading measures together rather than one at a time is ordinary clinical practice, and each component here is independently graded above.",
             "The COMBINATION as scored here is not a validated instrument and no published threshold says how many moving measures constitute a pattern. Correlated measures are deliberately not counted twice, but the count is still a judgement this system is making. It is a reason to look, never a diagnosis."),
+
+        new(InterventionEvaluation, Grade.C,
+            "Whether something you started actually changed the thing it was meant to change.",
+            "A declared target, a before and after window, and the size of the rebound your own history shows from an equally bad stretch with nothing changed.",
+            "An uncontrolled experiment with one participant and no blinding. It cannot see placebo, it cannot separate two things started in the same month, and the rebound estimate is a handful of your own earlier windows rather than a control group. It is enough to stop a before-and-after comparison calling everything a success, and not enough to call anything proven."),
 
         new(MetricKeys.Spo2Average, Grade.C,
             "Repeated overnight oxygen dips can point at disturbed breathing in sleep.",

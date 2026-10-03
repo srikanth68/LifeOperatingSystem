@@ -155,6 +155,9 @@ public interface IVitaraRepository
     // What was deliberately started or stopped. Read when deciding whether a step
     // change in a metric has an explanation behind it.
     Task<List<Intervention>> GetInterventionsAsync();
+    Task<Intervention> SaveInterventionAsync(Intervention intervention);
+    Task<bool> EndInterventionAsync(Guid id, DateOnly endedOn);
+    Task<bool> DeleteInterventionAsync(Guid id);
 
     // Sync health for sources with no token of their own.
     Task<SyncState?> GetSyncStateAsync(string source);
