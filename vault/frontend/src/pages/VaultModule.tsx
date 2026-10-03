@@ -2,14 +2,16 @@ import { useState } from 'react';
 import Dashboard from './Dashboard';
 import Transactions from './Transactions';
 import CategoryBudget from './CategoryBudget';
+import Recurring from './Recurring';
 import Settings from './Settings';
 import '../styles/modules.css';
 
-type VaultPage = 'dashboard' | 'transactions' | 'category-budget' | 'settings';
+type VaultPage = 'dashboard' | 'transactions' | 'recurring' | 'category-budget' | 'settings';
 
 const TABS: { id: VaultPage; label: string }[] = [
   { id: 'dashboard',       label: 'Dashboard' },
   { id: 'transactions',    label: 'Transactions' },
+  { id: 'recurring',       label: 'Subscriptions' },
   { id: 'category-budget', label: 'Category Budget' },
   { id: 'settings',        label: 'Settings' },
 ];
@@ -32,6 +34,7 @@ export default function VaultModule() {
       </nav>
       {page === 'dashboard'       && <Dashboard />}
       {page === 'transactions'    && <Transactions />}
+      {page === 'recurring'       && <Recurring />}
       {page === 'category-budget' && <CategoryBudget />}
       {page === 'settings'        && <Settings />}
     </div>

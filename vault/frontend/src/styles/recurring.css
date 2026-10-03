@@ -1,0 +1,76 @@
+/* Repeating charges.
+ *
+ * Laid out so the annual figure is the first thing read and the merchant names are
+ * second. The list is supporting evidence for the total, not the other way round --
+ * anyone can list their subscriptions badly from memory, and nobody can add them up.
+ */
+
+.rc { display: flex; flex-direction: column; gap: 1rem; }
+.rc-muted { color: var(--text3); font-size: 0.85rem; }
+
+.rc-hero {
+  display: flex; gap: 1.5rem; align-items: flex-start; justify-content: space-between; flex-wrap: wrap;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg, 16px);
+  padding: 1.25rem 1.4rem;
+}
+.rc-eyebrow {
+  margin: 0 0 0.3rem; font-size: 0.68rem; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--text3);
+}
+.rc-total {
+  margin: 0; font-family: 'Space Grotesk', sans-serif;
+  font-size: 2.4rem; font-weight: 600; line-height: 1; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.rc-sub { margin: 0.4rem 0 0; font-size: 0.84rem; color: var(--text2); line-height: 1.5; }
+.rc-method { margin: 0; max-width: 34ch; font-size: 0.72rem; color: var(--text3); line-height: 1.5; }
+
+.rc-group {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg, 16px);
+  padding: 1rem 1.2rem 1.1rem;
+}
+/* The group worth noticing. A tinted edge rather than a tinted panel: the rows inside
+   still have to be readable, and the colour is a pointer, not a verdict. */
+.rc-group.is-highlight { border-left: 3px solid var(--gold); }
+
+.rc-group header { display: flex; align-items: baseline; gap: 0.6rem; }
+.rc-group h3 {
+  margin: 0; font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.95rem; font-weight: 700; color: var(--text);
+}
+.rc-group header span {
+  font-size: 0.72rem; color: var(--text3);
+  border: 1px solid var(--border); border-radius: 999px; padding: 0.05rem 0.45rem;
+}
+.rc-note { margin: 0.35rem 0 0; font-size: 0.76rem; color: var(--text3); line-height: 1.5; max-width: 64ch; }
+
+.rc-list { list-style: none; margin: 0.6rem 0 0; padding: 0; }
+.rc-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.2rem 1rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--border);
+}
+.rc-list > .rc-item:first-child { border-top: none; }
+
+.rc-name { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.rc-name b { font-size: 0.88rem; font-weight: 600; color: var(--text); }
+.rc-name em { font-style: normal; font-size: 0.72rem; color: var(--text3); }
+
+.rc-amount { display: flex; flex-direction: column; align-items: flex-end; gap: 0.1rem; }
+.rc-amount b { font-size: 0.95rem; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.rc-amount s { font-size: 0.72rem; color: var(--text3); }
+.rc-amount em { font-style: normal; font-size: 0.7rem; color: var(--text3); font-variant-numeric: tabular-nums; }
+
+.rc-when { grid-column: 1 / -1; font-size: 0.73rem; color: var(--text3); line-height: 1.45; }
+
+/* Status lives in the words. These only tint the name, and every row says in full
+   what its state is in the line underneath. */
+.rc-item.status-lapsed .rc-name b { color: var(--text3); text-decoration: line-through; }
+.rc-item.status-overdue .rc-name b,
+.rc-item.status-due .rc-name b { color: var(--gold-l, var(--gold)); }
