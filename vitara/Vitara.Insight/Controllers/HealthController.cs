@@ -266,6 +266,73 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         });
     }
 
+    // Several measures read together, including the ones that are not moving.
+    //
+    // Served whole rather than filtered to what fired, because the interesting half of
+    // this is usually the negative: "no metabolic pattern, and three of these eight
+    // are not being measured often enough to contribute" is the sentence that tells
+    // somebody which test to ask for. A findings list cannot carry that -- a finding
+    // is something that opens a conversation, and "nothing is happening" is not one.
+    [HttpGet("patterns")]
+    public async Task<IActionResult> PatternScan()
+    {
+        var today = LocalTime.Today;
+
+        // Long enough for the slowest window a pattern uses -- a waist trend is read
+        // over a year -- plus room for the previous lab draw before that.
+        var observations = await repo.GetObservationsAsync(today.AddDays(-800), today);
+        var ranges = await repo.GetReferenceRangesAsync();
+        var profile = await repo.GetProfileAsync();
+
+        var patterns = Patterns.Run(observations, today, ranges, profile?.BiologicalSex, profile?.Age);
+        var note = Evidence.For(Evidence.CompositePattern);
+
+        return Ok(new
+        {
+            today = today.ToString("yyyy-MM-dd"),
+
+            // Firing first, then the rest in catalogue order. Within the firing ones
+            // nothing is ranked: these are different domains and there is no honest
+            // basis for saying a lipid drift matters more than a lean-mass loss.
+            patterns = patterns.OrderByDescending(p => p.Fires).Select(p => new
+            {
+                p.Key,
+                p.Title,
+                p.Statement,
+                p.Interpretation,
+                p.Fires,
+                p.HeldBecause,
+                p.Moving,
+                p.Counted,
+                p.Unmeasured,
+                components = p.Components.Select(c => new
+                {
+                    c.Metric,
+                    c.Label,
+                    movement = c.Movement.ToString().ToLowerInvariant(),
+                    c.Detail,
+                    c.Basis,
+                    c.Counts,
+                    grade = Evidence.GradeFor(c.Metric)?.ToString(),
+                }),
+
+                // What would make this answer trustworthy. The data-gap requirement,
+                // said per pattern rather than as one list nobody can act on.
+                wouldHelp = p.Components
+                    .Where(c => c.Movement == Movement.Unmeasured)
+                    .Select(c => new { c.Metric, c.Label, c.Detail }),
+            }),
+
+            evidence = note is null ? null : new
+            {
+                grade = note.Grade.ToString(),
+                label = note.Label,
+                note.Claim,
+                note.Caveat,
+            },
+        });
+    }
+
     // What this system is confident about, and what it is not.
     //
     // A page in its own right rather than a footnote, because the honest answer to

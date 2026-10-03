@@ -70,6 +70,7 @@ public static class Evidence
     public const string IllnessDetection = "illness_detection";
     public const string BiologicalAge = "biological_age";
     public const string MetabolicPattern = "metabolic_pattern";
+    public const string CompositePattern = "composite_pattern";
     public const string PersonalBaseline = "personal_baseline";
     public const string LabReferenceRange = "lab_reference_range";
 
@@ -212,6 +213,11 @@ public static class Evidence
             "Several metabolic measures drifting the same way at once says more than any one of them.",
             "The individual components are established, and reading them together is ordinary clinical practice.",
             "The COMBINATION as scored here is not a validated instrument. It is a reason to look at the panel and ask a doctor, and it is deliberately not a diagnosis of anything."),
+
+        new(CompositePattern, Grade.C,
+            "Several related measures moving the same way at once says more than any one of them.",
+            "Reading measures together rather than one at a time is ordinary clinical practice, and each component here is independently graded above.",
+            "The COMBINATION as scored here is not a validated instrument and no published threshold says how many moving measures constitute a pattern. Correlated measures are deliberately not counted twice, but the count is still a judgement this system is making. It is a reason to look, never a diagnosis."),
 
         new(MetricKeys.Spo2Average, Grade.C,
             "Repeated overnight oxygen dips can point at disturbed breathing in sleep.",

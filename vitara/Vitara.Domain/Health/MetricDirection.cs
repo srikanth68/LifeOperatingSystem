@@ -24,7 +24,6 @@ public static class MetricDirection
         [MetricKeys.SkinTempDeviation]   = HigherIsWorse,
         [MetricKeys.StressHighSeconds]   = HigherIsWorse,
         [MetricKeys.SystolicBp]          = HigherIsWorse,
-        [MetricKeys.DiastolicBp]         = HigherIsWorse,
         [MetricKeys.Pulse]               = HigherIsWorse,
         [MetricKeys.Glucose]             = HigherIsWorse,
         [MetricKeys.WeightKg]            = HigherIsWorse,
@@ -34,6 +33,16 @@ public static class MetricDirection
         [MetricKeys.Triglycerides]       = HigherIsWorse,
         [MetricKeys.TotalCholesterol]    = HigherIsWorse,
         [MetricKeys.Crp]                 = HigherIsWorse,
+        [MetricKeys.Hba1c]               = HigherIsWorse,
+        [MetricKeys.FastingInsulin]      = HigherIsWorse,
+        [MetricKeys.HomaIr]              = HigherIsWorse,
+        [MetricKeys.ApoB]                = HigherIsWorse,
+        [MetricKeys.NonHdl]              = HigherIsWorse,
+        [MetricKeys.Creatinine]          = HigherIsWorse,
+        [MetricKeys.Alt]                 = HigherIsWorse,
+        [MetricKeys.Ast]                 = HigherIsWorse,
+        [MetricKeys.BodyFatPct]          = HigherIsWorse,
+        [MetricKeys.DiastolicBp]         = HigherIsWorse,
 
         [MetricKeys.HrvRmssd]            = HigherIsBetter,
         [MetricKeys.TotalSleepMinutes]   = HigherIsBetter,
@@ -46,6 +55,8 @@ public static class MetricDirection
         [MetricKeys.Spo2Average]         = HigherIsBetter,
         [MetricKeys.Vo2Max]              = HigherIsBetter,
         [MetricKeys.Hdl]                 = HigherIsBetter,
+        [MetricKeys.Egfr]                = HigherIsBetter,
+        [MetricKeys.LeanMassKg]          = HigherIsBetter,
 
         // Deliberately neutral: more steps is not better without knowing why they rose,
         // and TSH and vitamin D are bad at both ends.
@@ -53,6 +64,17 @@ public static class MetricDirection
         [MetricKeys.ActiveCalories]      = Neutral,
         [MetricKeys.Tsh]                 = Neutral,
         [MetricKeys.VitaminD]            = Neutral,
+
+        // Neutral for different reasons, all of them worth stating. Ferritin is bad at
+        // both ends -- low means depleted stores, high means inflammation or iron
+        // overload. B12 and folate are only meaningful when low; a high result is
+        // almost always supplementation and not a finding. Lp(a) is inherited and
+        // effectively fixed, so a "trend" in it is assay variation rather than
+        // anything happening to the person.
+        [MetricKeys.Ferritin]            = Neutral,
+        [MetricKeys.VitaminB12]          = Neutral,
+        [MetricKeys.Folate]              = Neutral,
+        [MetricKeys.Lpa]                 = Neutral,
     };
 
     // Unknown metrics -- a lab analyte nobody enumerated -- are neutral. An unknown

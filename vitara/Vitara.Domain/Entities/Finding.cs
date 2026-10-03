@@ -64,6 +64,12 @@ public static class FindingTypes
     // A lab value outside its range, or materially moved from the last draw.
     public const string LabAnchor = "lab_anchor";
 
+    // Several related measures moving the same way at once. The only detector here
+    // that reads across metrics: every other one asks a question about one number, and
+    // a slow correlated drift is invisible to all of them because each component on
+    // its own sits inside the range where nobody would mention it.
+    public const string Pattern = "pattern";
+
     // Expected data that did not arrive. Missing data is a finding, not a gap to paper
     // over: a ring left in a drawer looks exactly like a week of perfect health.
     public const string Staleness = "staleness";

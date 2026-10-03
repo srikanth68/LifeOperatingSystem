@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { makeModuleQueryClient } from '../services/moduleQuery';
-import { Shell, Info } from '../components/health/HealthKit';
+import { Shell, Info, Chip, Row } from '../components/health/HealthKit';
 import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
 import '../styles/modules.css';
@@ -161,6 +161,39 @@ interface Forecasts {
   restingHeartRate: Forecast | null;
   hrv: Forecast | null;
   timeAsleep: Forecast | null;
+}
+
+// Several measures read together. The negatives are served too, and are usually the
+// more useful half: "no metabolic pattern, and three of these eight are not being
+// measured often enough to contribute" is the sentence that names the next blood test.
+interface PatternComponent {
+  metric: string;
+  label: string;
+  movement: 'unmeasured' | 'steady' | 'favourable' | 'unfavourable';
+  detail: string;
+  basis: string;
+  counts: boolean;
+  grade: 'A' | 'B' | 'C' | 'D' | null;
+}
+
+interface PatternRow {
+  key: string;
+  title: string;
+  statement: string;
+  interpretation: string;
+  fires: boolean;
+  heldBecause: string | null;
+  moving: number;
+  counted: number;
+  unmeasured: number;
+  components: PatternComponent[];
+  wouldHelp: { metric: string; label: string; detail: string }[];
+}
+
+interface PatternScan {
+  today: string;
+  patterns: PatternRow[];
+  evidence: { grade: string; label: string; claim: string; caveat: string } | null;
 }
 
 interface VisitBrief {
@@ -767,6 +800,97 @@ function Correlations() {
 // The closest thing here to what people mean by an AI doctor, and deliberately not
 // one. It names no condition and recommends nothing; it remembers, which is the part
 // a ten-minute appointment actually fails at.
+// Patterns are the only thing on this page that reads across metrics. Everything else
+// asks a question about one number, which is the right question for an acute signal
+// and the wrong one for a slow correlated drift — each component of which sits, on its
+// own, well inside the range where nobody would mention it.
+function PatternsSection() {
+  const { data } = useQuery({
+    queryKey: ['patterns'],
+    queryFn: () => get<PatternScan>(`${API}/api/health/patterns`),
+  });
+  if (!data) return null;
+
+  const firing = data.patterns.filter(p => p.fires);
+  const quiet = data.patterns.filter(p => !p.fires);
+
+  return (
+    <section className="insight-section">
+      <h2 className="insight-h2">
+        Moving together
+        {data.evidence && (
+          <Info label="How much weight this carries">
+            {data.evidence.claim} Evidence: {data.evidence.label}. {data.evidence.caveat}
+          </Info>
+        )}
+      </h2>
+
+      <p className="insight-muted insight-lede">
+        {firing.length === 0
+          ? 'Nothing is moving as a group. Each measure below is still watched on its own.'
+          : `${firing.length} ${firing.length === 1 ? 'group of measures is' : 'groups of measures are'} moving together.`}
+      </p>
+
+      {firing.map(p => (
+        <div key={p.key} className="insight-card" style={{ marginBottom: '0.9rem' }}>
+          <p className="insight-eyebrow">{p.title}</p>
+          <p className="insight-summary" style={{ marginBottom: '0.5rem' }}>{p.statement}</p>
+          <p className="insight-muted" style={{ fontSize: '0.8rem', marginBottom: '0.7rem' }}>{p.interpretation}</p>
+          <ComponentList components={p.components} />
+        </div>
+      ))}
+
+      {quiet.length > 0 && (
+        <div className="insight-card">
+          {/* The quiet ones are listed rather than hidden. A pattern that is not
+              firing because nobody measured its components is a different fact from
+              one that is not firing because nothing is happening, and only one of
+              them is reassuring. */}
+          <p className="insight-eyebrow">Not showing a pattern</p>
+          <ul className="insight-asks insight-asks-muted">
+            {quiet.map(p => (
+              <li key={p.key}>
+                <b style={{ fontWeight: 600 }}>{p.title}</b> — {p.heldBecause}.
+                {p.wouldHelp.length > 0 && (
+                  <> Measuring {p.wouldHelp.map(w => w.label.toLowerCase()).join(', ')} would make this answerable.</>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ComponentList({ components }: { components: PatternComponent[] }) {
+  return (
+    <div className="hx-rows">
+      {components.map(c => (
+        <Row
+          key={c.metric}
+          tone={c.movement === 'unfavourable' ? 'warn' : c.movement === 'favourable' ? 'good' : undefined}
+          title={c.label}
+          note={
+            <>
+              {c.detail} · {c.basis}
+              {/* Said rather than silently dropped: a derived value restating its own
+                  inputs is still worth seeing, it just must not be counted twice. */}
+              {!c.counts && <> · shown but not counted, it is derived from another measure here</>}
+            </>
+          }
+          right={
+            c.movement === 'unmeasured' ? <Chip>not measured</Chip>
+            : c.movement === 'steady' ? <Chip>steady</Chip>
+            : c.movement === 'favourable' ? <Chip tone="good">better</Chip>
+            : <Chip tone="warn">worse</Chip>
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
 function VisitBriefSection() {
   const { data } = useQuery({
     queryKey: ['visit-brief'],
@@ -1238,6 +1362,7 @@ function InsightPage() {
         </div>
 
         <Findings />
+        <PatternsSection />
         <VisitBriefSection />
         <BioSignatureSection />
         <WhatIf />

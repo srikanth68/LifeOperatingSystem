@@ -184,9 +184,35 @@ public static class FindingRun
             if (found is not null) findings.Add(found);
         }
 
+        // ── Patterns ──────────────────────────────────────────────────────────────
+        //
+        // Before drift, because a pattern says more than its parts and the parts are
+        // then suppressed. "Resting heart rate is drifting up", "HRV is drifting down"
+        // and "your recovery measures have been moving the wrong way together for
+        // months" are three notifications about one thing, and only the third is worth
+        // reading.
+        var patterns = Patterns.Run(
+            input.Observations, asOf, input.ReferenceRangeRows, input.BiologicalSex, input.Age);
+
+        var explained = new HashSet<string>();
+
+        foreach (var pattern in patterns.Where(p => p.Fires))
+        {
+            var favourable = pattern.Components.Any(c => c.Counts && c.Movement == Movement.Favourable)
+                             && !pattern.Components.Any(c => c.Counts && c.Movement == Movement.Unfavourable);
+
+            findings.Add(Patterns.ToFinding(pattern, asOf, favourable));
+
+            foreach (var component in pattern.Components.Where(c => c.Counts && c.Movement != Movement.Steady))
+                explained.Add(component.Metric);
+        }
+
         // ── Drift ─────────────────────────────────────────────────────────────────
         foreach (var metric in SlowMetrics)
         {
+            // Already said, and said better, by a pattern that names it.
+            if (explained.Contains(metric)) continue;
+
             var points = input.Observations
                 .Where(o => o.Metric == metric && o.ObservedDateLocal > asOf.AddDays(-DriftWindowDays))
                 .Select(o => (o.ObservedDateLocal.DayNumber, o.Value))

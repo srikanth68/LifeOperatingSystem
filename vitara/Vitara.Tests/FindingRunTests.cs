@@ -37,6 +37,64 @@ public class FindingRunTests
         IEnumerable<Observation>? observations = null) =>
         new(observations?.ToList() ?? [], baselines?.ToList() ?? [], derived?.ToList() ?? [], Today);
 
+    // A clean monotonic ramp, which is what a pattern component needs to register.
+    private static List<Observation> Ramp(string metric, double from, double to, int days, int everyDays, string tier)
+    {
+        var points = days / everyDays;
+        return Enumerable.Range(0, points)
+            .Select(i => new Observation
+            {
+                Metric = metric,
+                Value = from + (to - from) * i / (double)(points - 1),
+                ObservedDateLocal = Today.AddDays(-days + i * everyDays),
+                ObservedAtLocal = Today.AddDays(-days + i * everyDays).ToDateTime(new TimeOnly(8, 0)),
+                Tier = tier,
+            })
+            .ToList();
+    }
+
+    [Fact]
+    public void APatternSuppressesTheDriftFindingsItIsMadeOf()
+    {
+        // "Resting heart rate is drifting up", "HRV is drifting down" and "your
+        // recovery measures have been moving the wrong way together for months" are
+        // three notifications about one thing. Only the third is worth reading, and
+        // sending all three is how a channel stops being read at all.
+        var observations = Ramp(MetricKeys.RestingHeartRate, 52, 61, 90, 1, Tiers.Dense)
+            .Concat(Ramp(MetricKeys.HrvRmssd, 70, 45, 90, 1, Tiers.Dense))
+            .ToList();
+
+        var findings = FindingRun.Detect(Inputs(observations: observations));
+
+        Assert.Single(findings, f => f.Type == FindingTypes.Pattern);
+        Assert.DoesNotContain(findings, f => f.Type == FindingTypes.Drift && f.Metric == MetricKeys.RestingHeartRate);
+        Assert.DoesNotContain(findings, f => f.Type == FindingTypes.Drift && f.Metric == MetricKeys.HrvRmssd);
+    }
+
+    [Fact]
+    public void ADriftThatNoPatternExplainsIsStillReportedOnItsOwn()
+    {
+        // The suppression must be narrow. One metric drifting with nothing else
+        // joining it is exactly what the drift detector is for.
+        var findings = FindingRun.Detect(Inputs(
+            observations: Ramp(MetricKeys.SystolicBp, 118, 134, 90, 1, Tiers.Medium)));
+
+        Assert.DoesNotContain(findings, f => f.Type == FindingTypes.Pattern);
+        Assert.Single(findings, f => f.Type == FindingTypes.Drift && f.Metric == MetricKeys.SystolicBp);
+    }
+
+    [Fact]
+    public void ASilentPatternNeverBecomesAFinding()
+    {
+        // The patterns endpoint serves every pattern including the quiet ones, because
+        // "nothing is happening, and here is what is not being measured" is the useful
+        // half. A finding is a thing that opens a conversation, and that is not one.
+        var findings = FindingRun.Detect(Inputs(
+            observations: Ramp(MetricKeys.WeightKg, 80, 80.4, 365, 10, Tiers.Medium)));
+
+        Assert.DoesNotContain(findings, f => f.Type == FindingTypes.Pattern);
+    }
+
     [Fact]
     public void ASustainedDeviationIsReported()
     {
