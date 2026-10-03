@@ -118,7 +118,7 @@ public class HealthSchemaTests
         db.Interventions.Add(new Intervention { Kind = "medication", Name = "example", StartedOnLocal = new DateOnly(2026, 6, 1) });
         db.ExcludedPeriods.Add(new ExcludedPeriod { StartLocal = new DateOnly(2026, 3, 1), EndLocal = new DateOnly(2026, 3, 14), Reason = "illness" });
         db.TravelPeriods.Add(new TravelPeriod { StartLocal = new DateOnly(2026, 5, 1), EndLocal = new DateOnly(2026, 5, 10), AwayTz = "Asia/Kolkata" });
-        db.LabPanels.Add(new LabPanel { DrawnOnLocal = new DateOnly(2026, 2, 2), LabName = "Quest" });
+        db.LabPanels.Add(new LabPanel { DrawnOnLocal = new DateOnly(2026, 2, 2), LabName = "Quest", Fasting = true });
         db.ReferenceRanges.Add(new ReferenceRange { Metric = MetricKeys.Hba1c, Low = 4.0, High = 5.6, Unit = "%" });
         await db.SaveChangesAsync();
 
@@ -126,7 +126,12 @@ public class HealthSchemaTests
         Assert.Single(await db.Interventions.ToListAsync());
         Assert.Single(await db.ExcludedPeriods.ToListAsync());
         Assert.Single(await db.TravelPeriods.ToListAsync());
-        Assert.Single(await db.LabPanels.ToListAsync());
+        var panel = Assert.Single(await db.LabPanels.ToListAsync());
+
+        // The fasting state arrived as a column on an existing database. It decides
+        // whether HOMA-IR can be computed at all, so a silent loss here would look
+        // exactly like a panel nobody recorded it for.
+        Assert.True(panel.Fasting);
         Assert.Single(await db.ReferenceRanges.ToListAsync());
     }
 

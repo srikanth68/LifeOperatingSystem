@@ -213,6 +213,14 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
                 info.What,
                 info.Decimals,
                 info.Polarity,
+
+                // How well established this measure is. Carried on the row rather than
+                // left to the wording of the description, so a surface cannot show a
+                // vendor score and a lipid panel in the same voice by accident.
+                grade = Evidence.GradeFor(info.Key)?.ToString(),
+                gradeLabel = Evidence.For(info.Key) is { } note ? note.Label : null,
+                caveat = Evidence.For(info.Key)?.Caveat,
+
                 state,
                 latest = latest.Value is null ? null : new
                 {
@@ -257,6 +265,63 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
             metrics = rows,
         });
     }
+
+    // What this system is confident about, and what it is not.
+    //
+    // A page in its own right rather than a footnote, because the honest answer to
+    // "how seriously should I take this" is different for every number here and
+    // nobody can work that out from the dashboard. Four grades, every claim placed in
+    // one, and the caveat that limits it attached to each.
+    //
+    // The ordering is deliberate: established first. A list sorted the other way
+    // reads as a list of exciting frontier measures with some boring old blood tests
+    // at the bottom, which is the opposite of the point.
+    [HttpGet("evidence")]
+    public IActionResult EvidenceTable()
+    {
+        var grouped = Evidence.All
+            .GroupBy(n => n.Grade)
+            .OrderBy(g => g.Key)
+            .Select(g => new
+            {
+                grade = g.Key.ToString(),
+                label = Evidence.Label(g.Key),
+                mustQualify = g.First().MustQualify,
+                meaning = g.Key switch
+                {
+                    Grade.A => "Large, replicated, outcome-based evidence, and in clinical use. Stated plainly.",
+                    Grade.B => "The association is solid; what it means depends on who you are, or the measure is noisy for one person on one day.",
+                    Grade.C => "Real literature, genuine disagreement, no settled threshold. Never stated without its caveat.",
+                    _ => "A plausible construct with no validated mapping to outcomes. Shown because it is asked for, never allowed to outrank anything above.",
+                },
+                items = g
+                    .OrderBy(n => MetricCatalogue.Find(n.Key)?.Label ?? n.Key, StringComparer.OrdinalIgnoreCase)
+                    .Select(n => new
+                    {
+                        n.Key,
+                        label = MetricCatalogue.Find(n.Key)?.Label ?? Pretty(n.Key),
+                        group = MetricCatalogue.Find(n.Key)?.Group ?? "Method",
+                        n.Claim,
+                        n.Basis,
+                        n.Caveat,
+                        n.MustQualify,
+                    }),
+            });
+
+        return Ok(new
+        {
+            grades = grouped,
+
+            // The rule this table exists to enforce, said out loud on the surface that
+            // shows it.
+            rule = "An emerging or experimental measure is never presented as an established one, " +
+                   "and never overrides one. Where they disagree, the established measure is the answer.",
+        });
+    }
+
+    // Concepts that are not metrics have no catalogue row to borrow a label from.
+    private static string Pretty(string key) => string.Join(" ",
+        key.Split('_').Select((w, i) => i == 0 && w.Length > 0 ? char.ToUpperInvariant(w[0]) + w[1..] : w));
 
     // Who this person is, physiologically, and what tomorrow looks like.
     //

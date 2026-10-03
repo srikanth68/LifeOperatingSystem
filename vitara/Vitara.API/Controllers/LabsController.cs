@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Vitara.Application.Interfaces;
 using Vitara.Domain.Entities;
@@ -25,7 +26,8 @@ public class LabsController(IVitaraRepository repo) : ControllerBase
         string? DrawnOn,                 // yyyy-MM-dd; today when omitted
         string? LabName,
         string? Notes,
-        List<LabResultInput> Results);
+        List<LabResultInput> Results,
+        bool? Fasting = null);
 
     [HttpGet]
     public async Task<IActionResult> Get([FromQuery] int limit = 20)
@@ -52,6 +54,24 @@ public class LabsController(IVitaraRepository repo) : ControllerBase
             var results = byPanel.TryGetValue(panel.Id, out var rows) ? rows : [];
             var index = ordered.FindIndex(p => p.Id == panel.Id);
 
+            // Several draws of the same analyte on one day should not silently pick
+            // one; the last entered wins, which is what a correction looks like.
+            var values = results
+                .GroupBy(m => m.Metric)
+                .ToDictionary(g => g.Key, g => g.OrderBy(m => m.CreatedAt).Last().Value);
+
+            var derived = DerivedLabs.From(values, panel.Fasting, profile?.BiologicalSex, profile?.Age);
+
+            (string Word, string Text, object? Band) Standing(string metric, double value)
+            {
+                var range = ReferenceRanges.For(ranges, metric, profile?.BiologicalSex, profile?.Age, panel.LabName);
+                var where = ReferenceRanges.Where(value, range);
+
+                return (where.ToString().ToLowerInvariant(),
+                        ReferenceRanges.Describe(where, range),
+                        range is null ? null : new { range.Low, range.High, band = ReferenceRanges.Band(range), range.Notes });
+            }
+
             // The nearest earlier panel that measured the same analyte -- not simply the
             // panel before this one, since panels differ in what they contain.
             double? Previous(string metric)
@@ -71,6 +91,41 @@ public class LabsController(IVitaraRepository repo) : ControllerBase
                 daysAgo = LocalTime.Today.DayNumber - panel.DrawnOnLocal.DayNumber,
                 panel.LabName,
                 panel.Notes,
+                panel.Fasting,
+
+                // Worked out from the draw rather than measured in it: non-HDL, HOMA-IR
+                // and eGFR, each of which the report usually leaves to the reader.
+                derived = derived.Values.Select(v => new
+                {
+                    metric = v.Metric,
+                    label = MetricCatalogue.Find(v.Metric)?.Label ?? v.Metric,
+                    v.Value,
+                    v.Unit,
+                    v.Method,
+                    v.From,
+                    v.Caveat,
+                    grade = v.Grade.ToString(),
+                    gradeLabel = Evidence.Label(v.Grade),
+
+                    standing = Standing(v.Metric, v.Value).Word,
+                    standingText = Standing(v.Metric, v.Value).Text,
+                    range = Standing(v.Metric, v.Value).Band,
+                }),
+
+                // And what could not be worked out, with the reason. A panel missing
+                // fasting insulin is structurally blind to insulin resistance, and
+                // saying so is worth more than any value would have been.
+                gaps = derived.Refusals.Select(r => new
+                {
+                    metric = r.Metric,
+                    r.Label,
+                    r.Reason,
+                    missing = r.Missing.Select(m => new
+                    {
+                        key = m,
+                        label = MetricCatalogue.Find(m)?.Label ?? m,
+                    }),
+                }),
                 results = results.Select(m =>
                 {
                     var info = MetricCatalogue.Find(m.Metric);
@@ -126,6 +181,12 @@ public class LabsController(IVitaraRepository repo) : ControllerBase
                     m.What,
                     m.Decimals,
                     range = range is null ? null : new { range.Low, range.High, band = ReferenceRanges.Band(range), range.Notes },
+
+                    // How well established this measure is, carried with it rather
+                    // than left to the wording of a label.
+                    grade = Evidence.GradeFor(m.Key)?.ToString(),
+                    gradeLabel = Evidence.For(m.Key) is { } e ? Evidence.Label(e.Grade) : null,
+                    caveat = Evidence.For(m.Key)?.Caveat,
                 };
             }));
     }
@@ -159,7 +220,15 @@ public class LabsController(IVitaraRepository repo) : ControllerBase
             DrawnOnLocal = drawn,
             LabName = string.IsNullOrWhiteSpace(input.LabName) ? null : input.LabName.Trim(),
             Notes = string.IsNullOrWhiteSpace(input.Notes) ? null : input.Notes.Trim(),
+            Fasting = input.Fasting,
         };
+
+        // Carried onto each reading as well as onto the draw. Glucose baselines split
+        // on fasting state, and a fasting lab glucose pooled with this morning's
+        // post-breakfast reading corrupts the bucket it was meant to improve.
+        var context = input.Fasting is null
+            ? null
+            : JsonSerializer.Serialize(new MeasurementContext(Fasting: input.Fasting));
 
         var at = drawn.ToDateTime(new TimeOnly(8, 0));   // draws are morning things
         var results = new List<Measurement>();
@@ -184,6 +253,7 @@ public class LabsController(IVitaraRepository repo) : ControllerBase
                 Value = r.Value,
                 Unit = string.IsNullOrWhiteSpace(r.Unit) ? info?.Unit ?? "" : r.Unit.Trim(),
                 ObservedAtLocal = at,
+                ContextJson = context,
                 Note = string.IsNullOrWhiteSpace(r.Note) ? null : r.Note.Trim(),
             });
         }

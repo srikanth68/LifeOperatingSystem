@@ -77,6 +77,82 @@ public static class ReferenceRanges
             Notes = "25-hydroxyvitamin D. Below 20 is commonly called deficient and 20-29 insufficient.",
         },
 
+        new()
+        {
+            Metric = MetricKeys.FastingInsulin, Low = 2.6, High = 24.9, Unit = "µIU/mL",
+            Notes = "A typical laboratory interval, and an unusually wide one: assays are not standardised between labs, so a value should be read against the range on your own report. Many clinicians working on metabolic health treat anything above about 10 as worth discussing, well inside the printed range.",
+        },
+        new()
+        {
+            Metric = MetricKeys.HomaIr, High = 2.0, Unit = "index",
+            Notes = "Commonly described as insulin-sensitive below about 2. There is no agreed cut-off and it varies by population and by assay; the trend across draws is the usable part.",
+        },
+        new()
+        {
+            Metric = MetricKeys.ApoB, High = 90, Unit = "mg/dL",
+            Notes = "Commonly reported as desirable below about 90, and below 80 or lower for people at higher cardiovascular risk. Which applies to you depends on risk this system does not know.",
+        },
+        new()
+        {
+            Metric = MetricKeys.Lpa, High = 75, Unit = "nmol/L",
+            Notes = "Commonly reported as raised above about 75 nmol/L (roughly 30 mg/dL). Units differ between labs and do not convert reliably, so check which your report used.",
+        },
+        new()
+        {
+            Metric = MetricKeys.NonHdl, High = 130, Unit = "mg/dL",
+            Notes = "Commonly reported as desirable below 130, which is conventionally 30 above the LDL target it accompanies.",
+        },
+        new()
+        {
+            Metric = MetricKeys.Egfr, Low = 90, Unit = "mL/min/1.73m²",
+            Notes = "90 and above is conventionally normal, 60-89 mildly reduced, and below 60 sustained for three months defines chronic kidney disease. It falls slowly with age in people with healthy kidneys.",
+        },
+        new()
+        {
+            Metric = MetricKeys.Creatinine, Low = 0.74, High = 1.35, Unit = "mg/dL", Sex = "male",
+            Notes = "Depends heavily on muscle mass. Read through eGFR rather than on its own.",
+        },
+        new()
+        {
+            Metric = MetricKeys.Creatinine, Low = 0.59, High = 1.04, Unit = "mg/dL", Sex = "female",
+            Notes = "Depends heavily on muscle mass. Read through eGFR rather than on its own.",
+        },
+        new()
+        {
+            Metric = MetricKeys.Alt, High = 33, Unit = "U/L", Sex = "female",
+            Notes = "Upper limits differ by sex and between laboratories, and several bodies argue the commonly printed limits are too high to catch fatty liver.",
+        },
+        new()
+        {
+            Metric = MetricKeys.Alt, High = 40, Unit = "U/L", Sex = "male",
+            Notes = "Upper limits differ by sex and between laboratories, and several bodies argue the commonly printed limits are too high to catch fatty liver.",
+        },
+        new()
+        {
+            Metric = MetricKeys.Ast, Low = 10, High = 40, Unit = "U/L",
+            Notes = "Also found in muscle: hard exercise in the day or two before a draw raises it without anything being wrong with the liver.",
+        },
+        new()
+        {
+            Metric = MetricKeys.Ferritin, Low = 30, High = 400, Unit = "ng/mL", Sex = "male",
+            Notes = "Rises with any inflammation, so a normal ferritin alongside a raised CRP does not rule out low iron stores.",
+        },
+        new()
+        {
+            Metric = MetricKeys.Ferritin, Low = 15, High = 200, Unit = "ng/mL", Sex = "female",
+            Notes = "Rises with any inflammation, so a normal ferritin alongside a raised CRP does not rule out low iron stores. Many clinicians treat below 30 as low where there are symptoms.",
+        },
+        new()
+        {
+            Metric = MetricKeys.VitaminB12, Low = 200, High = 900, Unit = "pg/mL",
+            Notes = "The lower end of the printed range is contested; symptoms occur in some people in the 200-400 band, where methylmalonic acid is the better test.",
+        },
+        new()
+        {
+            Metric = MetricKeys.Folate, Low = 3.0, Unit = "ng/mL",
+            Notes = "Read alongside B12. Treating folate while B12 is low is a recognised way to correct the blood count while nerve damage continues.",
+        },
+
         // The medium tier has published ranges too, and a glucose reading taken at home
         // deserves the same treatment as one drawn at a lab.
         new()

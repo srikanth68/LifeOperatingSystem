@@ -82,6 +82,16 @@ public class LabPanel
     public DateOnly DrawnOnLocal { get; set; }
     public string? LabName { get; set; }
     public string? Notes { get; set; }
+
+    // Whether the person had eaten.
+    //
+    // A property of the DRAW rather than of each result, which is the whole reason a
+    // panel is an entity: one needle, one fasting state, twelve analytes. It changes
+    // the interpretation of glucose and triglycerides outright, and HOMA-IR is not
+    // defined without it -- so null here is a real answer meaning "nobody recorded
+    // it", and is treated as a refusal rather than as a no.
+    public bool? Fasting { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 

@@ -38,6 +38,13 @@ public static class MetricKeys
     // no automatic source and existed nowhere until manual entry did.
     public const string WaistCircumferenceCm = "waist_circumference_cm";
 
+    // Body composition. Weight alone cannot tell a good month from a bad one: losing
+    // four kilos of fat and losing four kilos of which half is muscle are the same
+    // number on the scale and opposite outcomes. Needs a scale that reports it, or a
+    // measurement taken elsewhere, so both are manual.
+    public const string BodyFatPct = "body_fat_pct";
+    public const string LeanMassKg = "lean_mass_kg";
+
     // Sparse tier — labs.
     public const string Hba1c = "hba1c";
     public const string TotalCholesterol = "total_cholesterol";
@@ -47,6 +54,31 @@ public static class MetricKeys
     public const string Crp = "crp";
     public const string Tsh = "tsh";
     public const string VitaminD = "vitamin_d";
+
+    // Metabolic. Fasting insulin is the one that matters most and is ordered least:
+    // it moves years before fasting glucose does, and a panel without it cannot see
+    // insulin resistance building.
+    public const string FastingInsulin = "fasting_insulin";
+
+    // Lipids beyond the standard panel.
+    public const string ApoB = "apob";
+    public const string Lpa = "lpa";
+
+    // Organ function and nutritional status.
+    public const string Creatinine = "creatinine";
+    public const string Alt = "alt";
+    public const string Ast = "ast";
+    public const string Ferritin = "ferritin";
+    public const string VitaminB12 = "vitamin_b12";
+    public const string Folate = "folate";
+
+    // Computed from a single draw rather than measured. They are kept as metric keys
+    // because they are read, charted and compared exactly like measured analytes --
+    // the difference is in the Source column of the catalogue, not in whether they
+    // exist. Each one refuses to compute rather than guess at a missing input.
+    public const string NonHdl = "non_hdl";
+    public const string HomaIr = "homa_ir";
+    public const string Egfr = "egfr";
 }
 
 public static class Tiers

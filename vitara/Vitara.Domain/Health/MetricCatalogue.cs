@@ -96,6 +96,10 @@ public static class MetricCatalogue
             "Measured with a tape at the navel. Needs you; nothing can collect it automatically.", 1, StaleAfterDays: 30),
         new(WaistToHeight, "Waist-to-height", "ratio", GroupBody, Tiers.Medium, "computed",
             "Waist divided by height. A better guide to metabolic risk than BMI, and it needs one tape measurement.", 2, StaleAfterDays: 30),
+        new(MetricKeys.BodyFatPct, "Body fat", "%", GroupBody, Tiers.Medium, "manual",
+            "The share of you that is fat, from a scale that reports it or a measurement taken elsewhere. Read with lean mass: the two together are what tell a good month from a bad one.", 1, StaleAfterDays: 14),
+        new(MetricKeys.LeanMassKg, "Lean mass", "kg", GroupBody, Tiers.Medium, "manual",
+            "Everything that is not fat: muscle, bone, organs, water. The number that decides whether weight loss was the kind you wanted.", 1, StaleAfterDays: 14),
         new(MetricKeys.CardiovascularAge, "Cardiovascular age", "years", GroupBody, Tiers.Dense, "ring",
             "Your ring's estimate of circulatory age against your years. An estimate, not a diagnosis.", 1, StaleAfterDays: 14),
 
@@ -126,6 +130,34 @@ public static class MetricCatalogue
             "Thyroid signalling. Out of range in either direction is worth a conversation.", 2, StaleAfterDays: 240),
         new(MetricKeys.VitaminD, "Vitamin D", "ng/mL", GroupLabs, Tiers.Sparse, "lab",
             "Commonly low in winter and indoors; both ends of the range matter.", 0, StaleAfterDays: 240),
+        new(MetricKeys.FastingInsulin, "Fasting insulin", "µIU/mL", GroupLabs, Tiers.Sparse, "lab",
+            "How hard the pancreas is working to hold glucose steady. Rises years before glucose does, which makes it the earliest ordinary blood test for insulin resistance — and the one least often ordered.", 1, StaleAfterDays: 240),
+        new(MetricKeys.ApoB, "ApoB", "mg/dL", GroupLabs, Tiers.Sparse, "lab",
+            "A direct count of the particles that carry cholesterol into artery walls. Where it disagrees with LDL it is usually the better guide.", 0, StaleAfterDays: 240),
+        new(MetricKeys.Lpa, "Lipoprotein(a)", "nmol/L", GroupLabs, Tiers.Sparse, "lab",
+            "Inherited and effectively fixed for life. Worth measuring once, because a high value changes how seriously the rest of the panel should be taken; repeating it is not monitoring.", 0, StaleAfterDays: 3650),
+        new(MetricKeys.Creatinine, "Creatinine", "mg/dL", GroupLabs, Tiers.Sparse, "lab",
+            "A muscle waste product the kidneys clear. Read through eGFR below rather than on its own.", 2, StaleAfterDays: 240),
+        new(MetricKeys.Alt, "ALT", "U/L", GroupLabs, Tiers.Sparse, "lab",
+            "A liver enzyme. The one most likely to be mildly raised by fatty liver, which travels with the metabolic markers above.", 0, StaleAfterDays: 240),
+        new(MetricKeys.Ast, "AST", "U/L", GroupLabs, Tiers.Sparse, "lab",
+            "A second liver enzyme, also found in muscle — so a hard session a day or two before the draw raises it without anything being wrong with the liver.", 0, StaleAfterDays: 240),
+        new(MetricKeys.Ferritin, "Ferritin", "ng/mL", GroupLabs, Tiers.Sparse, "lab",
+            "Stored iron. Low means stores are running out before anaemia shows; it also rises with any inflammation, so a normal value alongside a raised CRP proves little.", 0, StaleAfterDays: 240),
+        new(MetricKeys.VitaminB12, "Vitamin B12", "pg/mL", GroupLabs, Tiers.Sparse, "lab",
+            "Low intake or low absorption both show here, and the consequences are neurological as well as haematological.", 0, StaleAfterDays: 240),
+        new(MetricKeys.Folate, "Folate", "ng/mL", GroupLabs, Tiers.Sparse, "lab",
+            "Read alongside B12: treating one while the other is low is a known way to mask a problem.", 1, StaleAfterDays: 240),
+
+        // Computed from one draw. They sit in the Labs group because that is where a
+        // person looks for them, and carry Source "computed" because nobody measured
+        // them.
+        new(MetricKeys.NonHdl, "Non-HDL cholesterol", "mg/dL", GroupLabs, Tiers.Sparse, "computed",
+            "Total cholesterol minus HDL: everything carried in particles that can lodge in an artery wall. Needs no fasting and predicts at least as well as LDL.", 0, StaleAfterDays: 240),
+        new(MetricKeys.HomaIr, "HOMA-IR", "index", GroupLabs, Tiers.Sparse, "computed",
+            "Fasting glucose and fasting insulin read together as an estimate of insulin resistance. Needs both, from the same fasting draw, and the direction over several draws says far more than any single value.", 2, StaleAfterDays: 240),
+        new(MetricKeys.Egfr, "Kidney function (eGFR)", "mL/min/1.73m²", GroupLabs, Tiers.Sparse, "computed",
+            "Creatinine read against your age and sex using the CKD-EPI 2021 equation. The standard measure of how well the kidneys are filtering.", 0, StaleAfterDays: 240),
     ];
 
     public static readonly IReadOnlyList<string> Groups =

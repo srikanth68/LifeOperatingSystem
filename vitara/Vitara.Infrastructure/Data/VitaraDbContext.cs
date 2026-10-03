@@ -272,6 +272,11 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
         await AddColumnIfMissingAsync(db, "Meals", "Source", "TEXT NOT NULL DEFAULT 'manual'");
         await AddColumnIfMissingAsync(db, "Measurements", "LabPanelId", "TEXT");
 
+        // Nullable on purpose: every panel already stored was entered before anyone
+        // was asked, and backfilling those to "not fasting" would be inventing an
+        // answer that changes how their glucose reads.
+        await AddColumnIfMissingAsync(db, "LabPanels", "Fasting", "INTEGER");
+
         // Renamed rather than added: the column holds Oura's 0-100 readiness contributor
         // and was called RestingHeartRate, which is how it ended up served as bpm and fed
         // to the bio-age model as a pulse. The data is kept -- it is a real score -- and
@@ -360,6 +365,7 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
                 DrawnOnLocal TEXT NOT NULL,
                 LabName TEXT,
                 Notes TEXT,
+                Fasting INTEGER,
                 CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
             );
 
@@ -497,6 +503,17 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
     {
         var conn = db.Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync();
+
+        // A table that does not exist yet is not a failure. These migrations run before
+        // the CREATE TABLE block below, so on a brand-new database the table arrives
+        // moments later already carrying the column -- and pragma_table_info returns no
+        // rows for a missing table, which is indistinguishable from a missing column
+        // unless it is checked separately.
+        await using var table_exists = conn.CreateCommand();
+        table_exists.CommandText =
+            $"SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '{table}'";
+        if (Convert.ToInt64(await table_exists.ExecuteScalarAsync()) == 0) return;
+
         await using var check = conn.CreateCommand();
         check.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = '{column}'";
         var exists = Convert.ToInt64(await check.ExecuteScalarAsync()) > 0;
