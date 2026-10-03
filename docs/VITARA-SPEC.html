@@ -343,8 +343,8 @@
     <div class="masthead-meta">
       <span><b>Modules</b> vitara · vitara-worker · vitara-insight</span>
       <span><b>Store</b> one SQLite file, 28 tables</span>
-      <span><b>Tests</b> 375</span>
-      <span><b>Read from</b> 77aeab7</span>
+      <span><b>Tests</b> 423</span>
+      <span><b>Read from</b> 2a5ebba</span>
     </div>
   </header>
 
@@ -1515,6 +1515,11 @@ GET    /api/oura/status            linked? expired?
 GET    /api/oura/auth              start OAuth
 POST   /api/oura/sync              force a sync
 
+GET    /api/labs                  draws, each result against its range and the last draw
+POST   /api/labs                  enter a panel: one date, many analytes
+GET    /api/labs/analytes         what can be entered, with ranges
+DELETE /api/labs/{id}             removes the draw and its results
+
 GET    /api/measurements           manual readings
 GET    /api/measurements/metrics   what the form offers + context per metric
 POST   /api/measurements           record one
@@ -1535,6 +1540,7 @@ GET /api/health/derived        z-scores, ratios, slopes, with inputs
 GET /api/health/correlations   with the caveat and the method
 GET /api/health/metrics        one row per metric, including the empty ones
 GET /api/health/illness-eval   the illness detector scored against marked illness
+GET /api/health/visit-brief    what to take to a doctor, and what this cannot see
 GET /api/health/signature      the bio signature: clock, week, recovery, responses
 GET /api/health/signature/export  the same, portable: statistics and weights, no readings
 GET /api/health/forecast       tomorrow for four targets, each with its own record
@@ -1758,6 +1764,75 @@ GET /api/health/simulate       what if I had slept more, and what cannot be answ
         has never caught anything should say so where the reader can see it.
       </p>
 
+      <h3>Blood work, and the one population number</h3>
+      <p>
+        Every other metric here earns a personal normal from ninety days of readings.
+        Labs arrive twice a year, so there is nothing to learn from: four points over two
+        years is a sequence to annotate, and a z-score from three of them is a confident
+        number built on nothing. A lab value is therefore read against the only two
+        things meaningful at that density &mdash; <b>the range a laboratory prints, and
+        the previous draw</b>. It is the single place in Vitara that uses a population
+        number at all, and it is labelled as such wherever it appears.
+      </p>
+      <p>
+        A panel is entered as a unit, because twelve analytes off one needle share a
+        date, a lab and a fasting state. The draw owns its readings, so deleting it takes
+        them with it. An analyte nobody enumerated is stored and reported back as
+        unrecognised rather than dropped &mdash; somebody's panel will always carry one
+        more thing than the catalogue does.
+      </p>
+      <p>
+        Range selection is most-specific-wins (lab, then sex, then age), and a
+        sex-specific range is never applied to someone it does not belong to: a woman
+        handed the male HDL range is told 45 is fine when her own range says it is not.
+        A move is judged against the <em>width of the range</em> rather than as a
+        percentage &mdash; twenty per cent of a TSH is noise and twenty per cent of an
+        LDL is a different person's cardiovascular risk.
+      </p>
+      <div class="why trap">
+        <span class="tag">Never "high"</span>
+        <p>
+          A lab finding is capped at <code>notable</code> however far outside the range
+          it sits. <code>high</code> means act today, and a blood result is a conversation
+          with a doctor rather than an emergency this system is competent to declare.
+          Every lab finding ends by saying it is a reference range and not a diagnosis.
+        </p>
+      </div>
+
+      <h3>The consult that refuses to be one</h3>
+      <p>
+        <code>/api/health/visit-brief</code> is the closest thing here to an AI doctor and
+        is deliberately not one. The hard part of a ten-minute appointment is not
+        diagnosis: it is that nobody remembers when it started, nobody knows their resting
+        heart rate has climbed four beats since spring, and they leave without asking what
+        they came in for. All three are recall problems.
+      </p>
+      <p>
+        So it produces a sheet &mdash; what is off, <b>ordered by how long it has been
+        true</b> rather than by severity, because three mornings is a bad week and forty
+        days is what earns the appointment &mdash; and the questions those facts raise,
+        templated from the finding type rather than generated, since a model writing them
+        would eventually write one that reads as a diagnosis.
+      </p>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Refusal</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td><b>Names no condition</b></td><td>"Resting heart rate up 4 bpm over six weeks" is a measurement. "You might have a thyroid problem" is a diagnosis, and the gap between them is a medical degree.</td></tr>
+            <tr><td><b>Lists what it cannot see</b></td><td>No symptoms, medications, family history, examination or imaging. A brief that reads as complete invites its absences to be taken as reassurance.</td></tr>
+            <tr><td><b>Declares what has no normal</b></td><td>"Nothing is flagged" over eleven settled metrics and thirty unsettled ones is a sentence that misleads by being true.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        The model half is <code>MedicalBoundary</code> in San, appended to the system
+        prompt and deliberately <em>not</em> part of the editable prompt text. The failure
+        it guards is not a fabricated diagnosis &mdash; a local Gemma will not volunteer
+        one. It is that asked "should I be worried about my resting heart rate", the model
+        writes a fluent, confident paragraph containing a likely cause and a reassurance,
+        all invented, with no way for the reader to separate it from their own data.
+      </p>
+
       <h3>The forecast has to beat the dull answer</h3>
       <p>
         The bio signature has two halves. <code>Signature</code> is the portrait &mdash;
@@ -1837,8 +1912,7 @@ GET /api/health/simulate       what if I had slept more, and what cannot be answ
         <table>
           <thead><tr><th>Gap</th><th>Status</th></tr></thead>
           <tbody>
-            <tr><td><b>Lab reference ranges</b></td><td><code>LabPanels</code> and <code>ReferenceRanges</code> exist, <code>lab_anchor</code> is a defined finding type, nothing populates or reads them. Lab values can be entered manually; they are stored but not interpreted.</td></tr>
-            <tr><td><b>Validated clinical models</b></td><td>None implemented. No PREVENT, ASCVD, FINDRISC, PhenoAge, eGFR/CKD-EPI or metabolic syndrome. All need lab data that has not been ingested.</td></tr>
+            <tr><td><b>Validated clinical models</b></td><td>None implemented. No PREVENT, ASCVD, FINDRISC, PhenoAge, eGFR/CKD-EPI or metabolic syndrome. Lab ingestion now exists, so these are no longer blocked on data &mdash; only on the models themselves, each of which needs analytes beyond the twelve currently catalogued.</td></tr>
 
             <tr><td><b>What-if, in San</b></td><td><code>health_forecast</code> and <code>health_signature</code> are wired; <code>/api/health/simulate</code> and <code>/api/health/illness-eval</code> are not. Both are one line each — left out because catalogue size measurably costs tool-selection accuracy (see SAN-EVALS §4), so each addition is a decision rather than a default. Anything wrapping simulate has to carry the refusals through: a scenario with no precedent is the answer, not an error.</td></tr>
             <tr><td><b>Model summarisation</b></td><td>Findings are shown to the model as evidence; there is no prompt that turns a set of findings into prose.</td></tr>
@@ -1870,8 +1944,8 @@ GET /api/health/simulate       what if I had slept more, and what cannot be answ
 
   <footer>
     <span>docs · Vitara + Insight</span>
-    <span>read from 77aeab7 · 2026-09-24</span>
-    <span>375 Vitara tests</span>
+    <span>read from 2a5ebba · 2026-10-03</span>
+    <span>423 Vitara tests</span>
   </footer>
 
 </div>
