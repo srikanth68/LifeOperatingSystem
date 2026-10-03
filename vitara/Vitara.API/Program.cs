@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Vitara.Application.Interfaces;
 using Vitara.Infrastructure.Data;
+using Vitara.Domain.Health;
 using Vitara.Infrastructure.Oura;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -44,6 +45,12 @@ using (var scope = app.Services.CreateScope())
     await db.Database.EnsureCreatedAsync();
     await VitaraDbContext.CreateMissingTablesAsync(db);
     await NormalizeDayColumnsAsync(db);
+
+    // Reference ranges, inserted only where missing. A range edited to match the user's
+    // own lab report has to survive every restart, so this never updates a row it finds.
+    var repo = scope.ServiceProvider.GetRequiredService<IVitaraRepository>();
+    var seeded = await repo.SeedReferenceRangesAsync(ReferenceRanges.Seed);
+    if (seeded > 0) app.Logger.LogInformation("Seeded {Count} laboratory reference ranges.", seeded);
 }
 
 app.UseCors();

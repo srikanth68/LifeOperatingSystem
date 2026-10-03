@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Vitara.Application.Interfaces;
 using Vitara.Domain.Entities;
+using Vitara.Domain.Health;
 
 namespace Vitara.Infrastructure.Data;
 
@@ -482,5 +483,68 @@ public class VitaraRepository(VitaraDbContext db) : IVitaraRepository
 
         var candidates = new[] { sleepMax, readMax, actMax }.Where(d => d.HasValue).Select(d => d!.Value).ToList();
         return candidates.Count > 0 ? candidates.Min() : null;
+    }
+
+    // ── Labs ────────────────────────────────────────────────────────────────────
+
+    public async Task<LabPanel> SaveLabPanelAsync(LabPanel panel, IEnumerable<Measurement> results)
+    {
+        db.LabPanels.Add(panel);
+
+        foreach (var r in results)
+        {
+            r.LabPanelId = panel.Id;
+            r.Day = panel.DrawnOnLocal;
+            r.Tier = Tiers.Sparse;
+            r.Source = "lab";
+            db.Measurements.Add(r);
+        }
+
+        await db.SaveChangesAsync();
+        return panel;
+    }
+
+    public async Task<List<LabPanel>> GetLabPanelsAsync(int limit = 50) =>
+        await db.LabPanels
+            .OrderByDescending(p => p.DrawnOnLocal)
+            .Take(Math.Clamp(limit, 1, 500))
+            .ToListAsync();
+
+    public async Task<bool> DeleteLabPanelAsync(Guid id)
+    {
+        var panel = await db.LabPanels.FindAsync(id);
+        if (panel is null) return false;
+
+        // The readings go with it. A draw entered against the wrong date is wrong in
+        // every row it produced, and leaving twelve orphans behind to be deleted one at
+        // a time is how a correction becomes an afternoon.
+        var results = await db.Measurements.Where(m => m.LabPanelId == id).ToListAsync();
+        db.Measurements.RemoveRange(results);
+        db.LabPanels.Remove(panel);
+
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<List<ReferenceRange>> GetReferenceRangesAsync() =>
+        await db.ReferenceRanges.OrderBy(r => r.Metric).ToListAsync();
+
+    // Seeded once and then left alone. A range the user has edited to match their own
+    // lab's report must survive every restart, so this only inserts what is missing on
+    // (metric, sex, lab) and never updates a row that is already there.
+    public async Task<int> SeedReferenceRangesAsync(IEnumerable<ReferenceRange> ranges)
+    {
+        var have = (await db.ReferenceRanges
+                .Select(r => new { r.Metric, r.Sex, r.LabName })
+                .ToListAsync())
+            .Select(r => (r.Metric, r.Sex, r.LabName))
+            .ToHashSet();
+
+        var missing = ranges.Where(r => !have.Contains((r.Metric, r.Sex, r.LabName))).ToList();
+        if (missing.Count == 0) return 0;
+
+        db.ReferenceRanges.AddRange(missing);
+        await db.SaveChangesAsync();
+        return missing.Count;
     }
 }

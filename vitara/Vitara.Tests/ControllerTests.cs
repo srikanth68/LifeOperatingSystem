@@ -205,6 +205,46 @@ public class FakeRepo : IVitaraRepository
         return Task.FromResult(true);
     }
 
+    // ── Labs ──
+    public List<LabPanel> LabPanelData { get; } = [];
+    public List<ReferenceRange> RangeData { get; } = [];
+
+    public Task<LabPanel> SaveLabPanelAsync(LabPanel panel, IEnumerable<Measurement> results)
+    {
+        LabPanelData.Add(panel);
+        foreach (var r in results)
+        {
+            r.LabPanelId = panel.Id;
+            r.Day = panel.DrawnOnLocal;
+            r.Tier = "sparse";
+            r.Source = "lab";
+            MeasurementData.Add(r);
+        }
+        return Task.FromResult(panel);
+    }
+
+    public Task<List<LabPanel>> GetLabPanelsAsync(int limit = 50) =>
+        Task.FromResult(LabPanelData.OrderByDescending(p => p.DrawnOnLocal).Take(limit).ToList());
+
+    public Task<bool> DeleteLabPanelAsync(Guid id)
+    {
+        var panel = LabPanelData.FirstOrDefault(p => p.Id == id);
+        if (panel is null) return Task.FromResult(false);
+        MeasurementData.RemoveAll(m => m.LabPanelId == id);
+        LabPanelData.Remove(panel);
+        return Task.FromResult(true);
+    }
+
+    public Task<List<ReferenceRange>> GetReferenceRangesAsync() => Task.FromResult(RangeData.ToList());
+
+    public Task<int> SeedReferenceRangesAsync(IEnumerable<ReferenceRange> ranges)
+    {
+        var have = RangeData.Select(r => (r.Metric, r.Sex, r.LabName)).ToHashSet();
+        var missing = ranges.Where(r => !have.Contains((r.Metric, r.Sex, r.LabName))).ToList();
+        RangeData.AddRange(missing);
+        return Task.FromResult(missing.Count);
+    }
+
     public List<MetricCorrelation> CorrelationData { get; } = [];
 
     public Task SaveCorrelationsAsync(IEnumerable<MetricCorrelation> correlations, DateOnly computedOn)

@@ -51,5 +51,13 @@ public class Measurement
     // when they look back.
     public string? Note { get; set; }
 
+    // The draw this came from, when it came from one.
+    //
+    // Twelve analytes off one blood draw are twelve measurements and ONE event, and the
+    // difference matters twice: a panel is deleted or corrected as a unit, and "LDL
+    // moved" only means anything against the previous DRAW rather than against whatever
+    // row happens to be chronologically before it.
+    public Guid? LabPanelId { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

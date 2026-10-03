@@ -130,6 +130,103 @@ public static class FindingDetectors
         };
     }
 
+
+    // ── Lab anchor ──────────────────────────────────────────────────────────────
+    //
+    // The sparse tier cannot be treated like the others. Two or four points a year is
+    // not a distribution: there is no personal baseline to be outside of, no trend to
+    // fit, and a z-score computed from three readings is a confident number built on
+    // nothing. So a lab value is read against the only two things that mean anything
+    // at this density -- the range a laboratory prints, and the previous draw.
+    //
+    // Deliberately quiet about what it means. "Above the usual range" is a fact about
+    // an interval. "You have a thyroid problem" is a diagnosis, and this system does
+    // not make one, which is why every summary here ends at the number and the
+    // direction and hands off to a person qualified to interpret it.
+    public static Finding? LabAnchor(
+        string metric,
+        string label,
+        double value,
+        DateOnly drawnOn,
+        double? previous,
+        DateOnly? previousDrawnOn,
+        ReferenceRange? range,
+        DateOnly today,
+        int staleAfterDays = 400)
+    {
+        // A draw from two years ago is history, not news. It stays readable on the labs
+        // page; it does not get to open a finding this morning.
+        if (today.DayNumber - drawnOn.DayNumber > staleAfterDays) return null;
+
+        var standing = ReferenceRanges.Where(value, range);
+        var outside = standing is ReferenceRanges.Standing.Below or ReferenceRanges.Standing.Above;
+
+        // A move worth mentioning, measured against the width of the normal range
+        // rather than as a percentage. Twenty per cent of a TSH is noise; twenty per
+        // cent of an LDL is a different person's cardiovascular risk, and the range
+        // width is the only scale that knows the difference.
+        double? shift = null;
+        var moved = false;
+
+        if (previous is { } before)
+        {
+            shift = value - before;
+            var width = range is { Low: { } lo, High: { } hi } ? hi - lo : (double?)null;
+
+            moved = width is { } w and > 0
+                ? Math.Abs(shift.Value) >= w * 0.5
+                : Math.Abs(shift.Value) >= Math.Abs(before) * 0.25;
+        }
+
+        if (!outside && !moved) return null;
+
+        var direction = outside
+            ? standing == ReferenceRanges.Standing.Above ? "high" : "low"
+            : shift > 0 ? "rising" : "falling";
+
+        var sentence = outside
+            ? $"{label} came back at {Number(value)}{Unit(range)}, {ReferenceRanges.Describe(standing, range)}."
+            : $"{label} moved from {Number(previous!.Value)} to {Number(value)}{Unit(range)} since your last draw" +
+              (previousDrawnOn is { } p ? $" on {p:d MMM yyyy}" : "") + ".";
+
+        var alsoMoved = outside && moved
+            ? $" It has moved {(shift > 0 ? "up" : "down")} {Number(Math.Abs(shift!.Value))} since the previous draw."
+            : "";
+
+        return new Finding
+        {
+            Key = Key(FindingTypes.LabAnchor, metric, direction),
+            Type = FindingTypes.LabAnchor,
+            Metric = metric,
+            Direction = direction,
+
+            // Never "high" severity, however far outside the range it sits. High here
+            // means act today, and a blood result is a conversation with a doctor
+            // rather than an emergency this app is competent to declare.
+            Severity = outside ? "notable" : "info",
+            Confidence = range is null ? 0.5 : 0.8,
+            Summary = sentence + alsoMoved +
+                      " Worth raising at your next appointment; this is a reference range, not a diagnosis.",
+            EvidenceJson = JsonSerializer.Serialize(new
+            {
+                value,
+                previous,
+                drawnOn = drawnOn.ToString("yyyy-MM-dd"),
+                previousDrawnOn = previousDrawnOn?.ToString("yyyy-MM-dd"),
+                range = range is null ? null : new { range.Low, range.High, range.Unit, range.Sex, range.LabName },
+                standing = standing.ToString().ToLowerInvariant(),
+            }),
+            FirstDetectedLocal = drawnOn,
+            LastDetectedLocal = today,
+        };
+    }
+
+    private static string Number(double v) =>
+        v == Math.Floor(v) ? ((long)v).ToString() : v.ToString("0.##");
+
+    private static string Unit(ReferenceRange? r) =>
+        string.IsNullOrWhiteSpace(r?.Unit) ? "" : " " + r!.Unit;
+
     // ── Regime change ───────────────────────────────────────────────────────────
     // A finding either way. An unexplained step change is the MORE interesting one --
     // an explained one has already been accounted for by the thing that explains it.

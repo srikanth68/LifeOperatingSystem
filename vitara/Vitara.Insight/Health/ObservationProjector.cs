@@ -190,6 +190,11 @@ public static class ObservationProjector
             ContextJson = m.ContextJson,
             BaselineSignature = BaselineKeys.Signature(m.Metric, context),
             EligibleForBaseline = true,
+
+            // Carried so an analyte can be read against the previous DRAW rather than
+            // the previous row. For someone who also measures glucose at home, those
+            // are different questions with the same metric key.
+            LabPanelId = m.LabPanelId,
         };
     }
 

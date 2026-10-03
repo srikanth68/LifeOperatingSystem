@@ -229,12 +229,19 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
         // Re-read rather than passed down: the detector must weigh a step change against
         // the same recorded context the baseline did, and reading it here keeps this
         // method's inputs to "what is stored", like the rest of the pass.
+        var profile = await repo.GetProfileAsync();
+
         var findings = FindingRun.Detect(new FindingRunInputs(
             observations, baselines, derived, asOf,
             await repo.GetInterventionsAsync(),
             await repo.GetExcludedPeriodsAsync(),
             await repo.GetTravelPeriodsAsync(),
-            await repo.GetDevicesAsync()));
+            await repo.GetDevicesAsync(),
+            // Labs are read against a printed range rather than a learned one, and sex
+            // selects between rows for the analytes that have more than one.
+            await repo.GetReferenceRangesAsync(),
+            profile?.BiologicalSex,
+            profile?.Age));
         var sync = await repo.SyncFindingsAsync(findings, asOf);
 
         // Opened and resolved are events; continued is a condition that is still true

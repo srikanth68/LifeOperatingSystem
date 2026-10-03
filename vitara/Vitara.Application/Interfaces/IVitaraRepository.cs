@@ -130,6 +130,18 @@ public interface IVitaraRepository
     Task<List<Measurement>> GetMeasurementsAsync(DateOnly from, DateOnly to, string? metric = null);
     Task<bool> DeleteMeasurementAsync(Guid id);
 
+    // ── Labs ──
+    //
+    // A panel is the draw; its analytes are Measurements carrying its id. Deleting the
+    // panel takes its readings with it, because a blood draw entered with the wrong
+    // date is wrong in twelve rows at once.
+    Task<LabPanel> SaveLabPanelAsync(LabPanel panel, IEnumerable<Measurement> results);
+    Task<List<LabPanel>> GetLabPanelsAsync(int limit = 50);
+    Task<bool> DeleteLabPanelAsync(Guid id);
+
+    Task<List<ReferenceRange>> GetReferenceRangesAsync();
+    Task<int> SeedReferenceRangesAsync(IEnumerable<ReferenceRange> ranges);
+
     // Replaces the whole set for a day. A rerun must not leave two answers for the
     // same pair, and which one a later read picked would be arbitrary.
     Task SaveCorrelationsAsync(IEnumerable<MetricCorrelation> correlations, DateOnly computedOn);

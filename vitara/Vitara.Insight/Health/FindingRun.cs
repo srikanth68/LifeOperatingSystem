@@ -16,7 +16,13 @@ public record FindingRunInputs(
     IReadOnlyList<Intervention>? Interventions = null,
     IReadOnlyList<ExcludedPeriod>? Excluded = null,
     IReadOnlyList<TravelPeriod>? Travel = null,
-    IReadOnlyList<Device>? Devices = null);
+    IReadOnlyList<Device>? Devices = null,
+
+    // Labs read against a printed range rather than a learned one, so the ranges have
+    // to come in. Sex and age select between rows where an analyte has more than one.
+    IReadOnlyList<ReferenceRange>? ReferenceRangeRows = null,
+    string? BiologicalSex = null,
+    int? Age = null);
 
 // Running every detector over one day's worth of computed state.
 //
@@ -190,6 +196,45 @@ public static class FindingRun
             if (points.Count < HealthThresholds.DriftMinDays) continue;
 
             var found = FindingDetectors.Drift(metric, trend, DriftWindowDays, asOf);
+            if (found is not null) findings.Add(found);
+        }
+
+        // ── Labs ──────────────────────────────────────────────────────────────────
+        //
+        // Last draw against the one before it, per analyte. Nothing is fitted and no
+        // baseline is consulted: at two readings a year there is no personal normal to
+        // have, and pretending otherwise is how a sparse metric gets a confident
+        // z-score built on three points.
+        foreach (var group in input.Observations
+                     .Where(o => o.Tier == Tiers.Sparse)
+                     .GroupBy(o => o.Metric))
+        {
+            var draws = group
+                .Where(o => o.LabPanelId is not null)
+                .GroupBy(o => o.LabPanelId!.Value)
+                .Select(g => g.OrderByDescending(o => o.ObservedDateLocal).First())
+                .OrderBy(o => o.ObservedDateLocal)
+                .ToList();
+
+            if (draws.Count == 0) continue;
+
+            var latest = draws[^1];
+            var previous = draws.Count > 1 ? draws[^2] : null;
+            var info = MetricCatalogue.Find(group.Key);
+
+            var range = ReferenceRanges.For(
+                input.ReferenceRangeRows ?? [], group.Key, input.BiologicalSex, input.Age);
+
+            var found = FindingDetectors.LabAnchor(
+                group.Key,
+                info?.Label ?? group.Key,
+                latest.Value,
+                latest.ObservedDateLocal,
+                previous?.Value,
+                previous?.ObservedDateLocal,
+                range,
+                asOf);
+
             if (found is not null) findings.Add(found);
         }
 

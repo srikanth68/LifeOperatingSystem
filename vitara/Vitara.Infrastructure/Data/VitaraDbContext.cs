@@ -270,6 +270,7 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
         await AddColumnIfMissingAsync(db, "Tokens", "LastSyncError", "TEXT");
 
         await AddColumnIfMissingAsync(db, "Meals", "Source", "TEXT NOT NULL DEFAULT 'manual'");
+        await AddColumnIfMissingAsync(db, "Measurements", "LabPanelId", "TEXT");
 
         // Renamed rather than added: the column holds Oura's 0-100 readiness contributor
         // and was called RestingHeartRate, which is how it ended up served as bpm and fed
