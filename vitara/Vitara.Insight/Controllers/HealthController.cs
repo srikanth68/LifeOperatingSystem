@@ -597,6 +597,59 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         return rows;
     }
 
+    // The sheet you take to an appointment.
+    //
+    // The nearest thing here to what people mean by an AI doctor, and deliberately not
+    // one. The hard part of a ten-minute consultation is not diagnosis: it is that
+    // nobody can remember when it started, nobody knows their resting heart rate has
+    // climbed four beats since spring, and they leave without asking what they came in
+    // for. All three are recall problems, and a system holding two years of daily
+    // measurements is very good at recall.
+    //
+    // So this names no condition, recommends no treatment, and says in the payload what
+    // it structurally cannot see — symptoms, medications, family history, an
+    // examination. A brief that reads as complete invites its own absences to be taken
+    // as reassurance, which is the one way a sheet like this could do harm.
+    [HttpGet("visit-brief")]
+    public async Task<IActionResult> Brief()
+    {
+        var today = LocalTime.Today;
+
+        var findings = await repo.GetFindingsAsync(activeOnly: true, limit: 50);
+        var panels = await repo.GetLabPanelsAsync(10);
+        var ranges = await repo.GetReferenceRangesAsync();
+        var profile = await repo.GetProfileAsync();
+        var baselineDay = await repo.GetLatestBaselineDayAsync();
+        var baselines = baselineDay is null ? [] : await repo.GetBaselinesAsync(baselineDay.Value);
+
+        var oldestPanel = panels.Count > 0 ? panels.Min(p => p.DrawnOnLocal) : today;
+        var labResults = panels.Count > 0
+            ? (await repo.GetMeasurementsAsync(oldestPanel, today)).Where(m => m.LabPanelId is not null).ToList()
+            : [];
+
+        var brief = VisitBrief.Build(
+            findings, labResults, panels, ranges, baselines,
+            profile?.BiologicalSex, profile?.Age, today);
+
+        return Ok(new
+        {
+            generatedOn = today.ToString("yyyy-MM-dd"),
+            brief.Scope,
+            brief.Verdict,
+
+            bring = brief.Bring.Select(b => new { b.Topic, b.What, b.Since, b.Severity, b.Ask }),
+            questions = brief.Questions,
+
+            // Named rather than implied. Everything this cannot see, in the payload, so
+            // a caller summarising it cannot quietly drop the caveat.
+            notLookedAt = brief.NotLookedAt,
+            brief.Coverage,
+            brief.Disclaimer,
+
+            analysedThrough = baselineDay?.ToString("yyyy-MM-dd"),
+        });
+    }
+
     // Did the early-illness signal actually work?
     //
     // The one detector here with ground truth available: the user marks the days they

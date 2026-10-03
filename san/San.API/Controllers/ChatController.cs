@@ -190,9 +190,17 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         // So everything stable lives in the system prompt, and everything that changes
         // per turn — recalled memory, the time line, the module snapshot — rides in the
         // newest user message instead, landing after the cached region.
+        // The one rule that must survive the prompt being edited, and the one that is
+        // only paid for when it is relevant. Health is a minority of turns and this
+        // block is ~230 tokens; "is that bad?" counts as a health question when the
+        // previous reply was about a heart rate, so the last exchange is matched too.
+        var medical = MedicalBoundary.Applies(req.Content, turns.LastOrDefault()?.Content)
+            ? MedicalBoundary.Text
+            : null;
+
         var systemPrompt = string.Join("\n\n",
             new[] { basePrompt, factsBlock, toolInstructions, capabilities,
-                    SanOutputConventions.Text, spoken ? SanOutputConventions.Voice : null }
+                    SanOutputConventions.Text, medical, spoken ? SanOutputConventions.Voice : null }
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
 
         var liveContext = string.Join("\n\n",
@@ -231,7 +239,8 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
             ChatWindow.EstimateTokens(timeContext),
             ChatWindow.EstimateTokens(context),
             ChatWindow.EstimateTokens(ownContext),
-            ChatWindow.EstimateTokens(SanOutputConventions.Text) + ChatWindow.EstimateTokens(capabilities),
+            ChatWindow.EstimateTokens(SanOutputConventions.Text) + ChatWindow.EstimateTokens(capabilities)
+                + ChatWindow.EstimateTokens(medical),
             tools.Sum(t => ChatWindow.EstimateTokens(t.Name + t.Description)
                            + t.Parameters.Sum(p => ChatWindow.EstimateTokens(p.Key + p.Value.Description))),
             tools.Count,

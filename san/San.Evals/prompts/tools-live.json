@@ -848,5 +848,10 @@
     "name": "health_signature",
     "description": "How this user's body runs, from months of their own data: when they sleep and how far free nights drift, which weekday is weakest, how long they take to come back from a hard day, and what their numbers move with. For \"what kind of sleeper am I\", \"which day is my worst\", \"how long do I take to recover\", \"what affects my sleep\". Relationships here moved TOGETHER in their data - say so rather than implying cause. Each part is absent until there is enough history, and absent means not enough data, not zero. Today's readings -> vitara_health; what is off baseline -> health_findings.",
     "parameters": []
+  },
+  {
+    "name": "health_visit_brief",
+    "description": "What to take to a doctor: what is outside a reference range or off this user's own usual, how long each has been true, and the questions those facts raise. For \"should I see a doctor\", \"what should I ask my GP\", \"is this worth worrying about\", \"prepare me for my appointment\". NOT a diagnosis and NOT advice - report what it says and nothing beyond it. It also lists what the system cannot see (symptoms, medications, family history, any examination) and which measurements have no baseline yet: never let an empty list read as reassurance.",
+    "parameters": []
   }
 ]

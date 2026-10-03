@@ -118,6 +118,13 @@ public sealed class ModuleTools(ModuleGateway gw)
     // over months. Nothing in it is compared with a population, and the relationships
     // are associations in one person's history -- which the payload's own caveat says,
     // and which must survive being summarised.
+    // The sheet for an appointment, and the right answer to most "should I be worried"
+    // questions: not reassurance and not a diagnosis, but what changed, how long it has
+    // been true, and what to ask someone qualified.
+    [McpServerTool(Name = "health_visit_brief")]
+    [Description("What to take to a doctor: what is outside a reference range or off this user's own usual, how long each has been true, and the questions those facts raise. For \"should I see a doctor\", \"what should I ask my GP\", \"is this worth worrying about\", \"prepare me for my appointment\". NOT a diagnosis and NOT advice - report what it says and nothing beyond it. It also lists what the system cannot see (symptoms, medications, family history, any examination) and which measurements have no baseline yet: never let an empty list read as reassurance.")]
+    public Task<string> HealthVisitBrief() => gw.GetAsync("insight", "/api/health/visit-brief");
+
     [McpServerTool(Name = "health_signature")]
     [Description("How this user's body runs, from months of their own data: when they sleep and how far free nights drift, which weekday is weakest, how long they take to come back from a hard day, and what their numbers move with. For \"what kind of sleeper am I\", \"which day is my worst\", \"how long do I take to recover\", \"what affects my sleep\". Relationships here moved TOGETHER in their data - say so rather than implying cause. Each part is absent until there is enough history, and absent means not enough data, not zero. Today's readings -> vitara_health; what is off baseline -> health_findings.")]
     public Task<string> HealthSignature() => gw.GetAsync("insight", "/api/health/signature");
