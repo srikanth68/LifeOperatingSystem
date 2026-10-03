@@ -163,6 +163,17 @@ interface Forecasts {
   timeAsleep: Forecast | null;
 }
 
+interface VisitBrief {
+  generatedOn: string;
+  scope: string;
+  verdict: string;
+  bring: { topic: string; what: string; since: string | null; severity: string; ask: string | null }[];
+  questions: string[];
+  notLookedAt: string[];
+  coverage: string;
+  disclaimer: string;
+}
+
 interface IllnessEval {
   windowDays: number;
   daysEvaluated: number;
@@ -751,6 +762,66 @@ function Correlations() {
   );
 }
 
+// ── The sheet for an appointment ─────────────────────────────────
+
+// The closest thing here to what people mean by an AI doctor, and deliberately not
+// one. It names no condition and recommends nothing; it remembers, which is the part
+// a ten-minute appointment actually fails at.
+function VisitBriefSection() {
+  const { data } = useQuery({
+    queryKey: ['visit-brief'],
+    queryFn: () => get<VisitBrief>(`${API}/api/health/visit-brief`),
+  });
+  if (!data) return null;
+
+  return (
+    <section className="insight-section">
+      <h2 className="insight-h2">
+        Take to your doctor
+        <Info label="What this is and is not">
+          {data.scope} {data.disclaimer}
+        </Info>
+      </h2>
+
+      <p className="insight-muted insight-lede">{data.verdict}</p>
+
+      {data.bring.length > 0 && (
+        <ul className="insight-findings" style={{ marginBottom: '0.9rem' }}>
+          {data.bring.map(b => (
+            <li key={b.topic + b.what} className={`insight-finding sev-${b.severity}`}>
+              <div className="insight-finding-head">
+                <SeverityIcon severity={b.severity} />
+                <span className="insight-metric">{b.topic}</span>
+                {b.since && <span className="insight-type">{b.since}</span>}
+              </div>
+              <p className="insight-summary">{b.what}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="insight-top">
+        <div className="insight-card">
+          <p className="insight-eyebrow">Questions worth asking</p>
+          <ul className="insight-asks">
+            {data.questions.map(q => <li key={q}>{q}</li>)}
+          </ul>
+        </div>
+
+        <div className="insight-card">
+          {/* The most important panel on the page. A sheet that reads as complete
+              invites its own gaps to be taken as reassurance. */}
+          <p className="insight-eyebrow">What this does not look at</p>
+          <ul className="insight-asks insight-asks-muted">
+            {data.notLookedAt.map(x => <li key={x}>{x}</li>)}
+          </ul>
+          <p className="insight-muted" style={{ marginTop: '0.6rem', fontSize: '0.75rem' }}>{data.coverage}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ── Tomorrow, and how this body runs ────────────────────────────────────
 
 // The one number on this page that can be wrong in public, so it is shown with its own
@@ -1167,6 +1238,7 @@ function InsightPage() {
         </div>
 
         <Findings />
+        <VisitBriefSection />
         <BioSignatureSection />
         <WhatIf />
         <TodayVsNormal />

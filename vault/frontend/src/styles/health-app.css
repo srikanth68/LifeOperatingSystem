@@ -645,3 +645,24 @@
   font-size: 0.76rem; font-weight: 600; color: var(--text);
   font-variant-numeric: tabular-nums; width: 1.8rem; text-align: right;
 }
+
+/* ── Entering a draw ─────────────────────────────────────────────────────────
+   The range sits under the box it will be read against: a number typed without
+   it is a number the person cannot interpret while they are typing it. */
+
+.hx-analyte {
+  display: flex; flex-direction: column; gap: 0.25rem;
+  background: var(--surface3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.6rem 0.7rem;
+}
+.hx-analyte-name { font-size: 0.76rem; font-weight: 600; color: var(--text2); display: inline-flex; align-items: center; }
+.hx-analyte-input { display: flex; align-items: baseline; gap: 0.35rem; }
+.hx-analyte-input input {
+  width: 100%; min-width: 0;
+  font-size: 1rem; font-variant-numeric: tabular-nums;
+  padding: 0.3rem 0.45rem; border-radius: 8px;
+}
+.hx-analyte-input em { font-style: normal; font-size: 0.72rem; color: var(--text3); white-space: nowrap; }
+.hx-analyte-range { font-size: 0.68rem; color: var(--text3); }

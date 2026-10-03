@@ -8,6 +8,7 @@ import {
 import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
 import { VitaraMetricsCatalogue } from '../components/VitaraMetricsCatalogue';
+import { VitaraLabs } from '../components/VitaraLabs';
 import { Shell as HxShell, Tabs as HxTabs, Card, Ring, Stat, Chip, Delta as HxDelta, SectionHead, Empty, Info, Panel, Spark, RailCard, Row, HX_SERIES } from '../components/health/HealthKit';
 import '../styles/modules.css';
 import '../styles/vitara.css';
@@ -2437,7 +2438,7 @@ class PanelBoundary extends Component<{ name: string; children: ReactNode }, { e
 
 // ── ROOT ──────────────────────────────────────────────────────────────────────
 
-type Page = 'today' | 'all' | 'sleep' | 'body' | 'activity' | 'readiness' | 'protocols' | 'nutrition' | 'import' | 'measure';
+type Page = 'today' | 'all' | 'sleep' | 'body' | 'activity' | 'readiness' | 'labs' | 'protocols' | 'nutrition' | 'import' | 'measure';
 
 const PAGES: { id: Page; label: string }[] = [
   { id: 'today',     label: 'Today' },
@@ -2447,6 +2448,7 @@ const PAGES: { id: Page; label: string }[] = [
   { id: 'activity',  label: 'Activity' },
   { id: 'body',      label: 'Body' },
   { id: 'nutrition', label: 'Food' },
+  { id: 'labs',      label: 'Labs' },
   { id: 'protocols', label: 'Protocols' },
   { id: 'measure',   label: 'Record a reading' },
   { id: 'import',    label: 'Import' },
@@ -2500,6 +2502,7 @@ function VitaraInner() {
             {page === 'activity'  && <ActivityPage/>}
             {page === 'readiness' && <ReadinessPage/>}
             {page === 'nutrition' && <NutritionPage/>}
+            {page === 'labs'      && <VitaraLabs/>}
             {page === 'protocols' && <ProtocolsPage/>}
             {page === 'measure'   && <MeasurePanel/>}
             {page === 'import'    && <><XmlImportPanel/><ImportPanel/></>}
