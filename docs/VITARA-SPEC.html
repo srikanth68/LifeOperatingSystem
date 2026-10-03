@@ -343,8 +343,8 @@
     <div class="masthead-meta">
       <span><b>Modules</b> vitara · vitara-worker · vitara-insight</span>
       <span><b>Store</b> one SQLite file, 28 tables</span>
-      <span><b>Tests</b> 423</span>
-      <span><b>Read from</b> 2a5ebba</span>
+      <span><b>Tests</b> 498</span>
+      <span><b>Read from</b> 44d3387</span>
     </div>
   </header>
 
@@ -1222,7 +1222,8 @@ UNIQUE (Driver, Outcome, LagDays, ComputedOnLocal)</code></pre>
             <tr><td class="m">strain_risk</td><td>ACWR outside 0.8–1.3, or sleep debt ≥ 300 minutes</td><td><b>info only</b></td></tr>
             <tr><td class="m">drift</td><td>A 90-day trend that passed Mann–Kendall at p &lt; 0.01</td><td>info</td></tr>
             <tr><td class="m">staleness</td><td>An expected daily metric missing for &gt; 3 days</td><td>info</td></tr>
-            <tr><td class="m">lab_anchor</td><td><span class="muted">Defined, not implemented</span></td><td>—</td></tr>
+            <tr><td class="m">lab_anchor</td><td>A draw outside its printed range, or moved from the previous draw by half the width of that range</td><td><b>notable</b> at most, however far outside &mdash; see &sect;17</td></tr>
+            <tr><td class="m">pattern</td><td>Two or more related measures moving the same way at once, and at least half of those actually being measured</td><td><b>notable</b>, or <b>info</b> when the direction is the good one</td></tr>
           </tbody>
         </table>
       </div>
@@ -1497,6 +1498,22 @@ UNIQUE (Driver, Outcome, LagDays, ComputedOnLocal)</code></pre>
           </tbody>
         </table>
       </div>
+
+      <p>
+        Three more are compiled rather than environment-set, because each one is a
+        statement about what the analysis means rather than a sensitivity dial, and a
+        box where they differ is a box producing different claims under the same name.
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Constant</th><th class="num">Value</th><th>Controls</th></tr></thead>
+          <tbody>
+            <tr><td class="m">Patterns.MinRelativeChange</td><td class="num">2%</td><td>How far a trend must actually move a number before it counts as movement &mdash; see &sect;17</td></tr>
+            <tr><td class="m">InterventionEval.RunInDays</td><td class="num">14</td><td>Days after a start that are not counted at all</td></tr>
+            <tr><td class="m">InterventionEval.WindowDays</td><td class="num">28</td><td>The before window, the after window, and the window a rebound is measured over &mdash; all three the same length on purpose</td></tr>
+        </table>
+      </div>
     </section>
 
     <!-- 14 ───────────────────────────────────────────── -->
@@ -1520,6 +1537,12 @@ POST   /api/labs                  enter a panel: one date, many analytes
 GET    /api/labs/analytes         what can be entered, with ranges
 DELETE /api/labs/{id}             removes the draw and its results
 
+GET    /api/interventions          what was started, with its declared target
+POST   /api/interventions          start one: name, kind, target metric, date
+GET    /api/interventions/targets  metrics with a better and a worse direction
+POST   /api/interventions/{id}/stop  ended, not deleted
+DELETE /api/interventions/{id}
+
 GET    /api/measurements           manual readings
 GET    /api/measurements/metrics   what the form offers + context per metric
 POST   /api/measurements           record one
@@ -1540,6 +1563,9 @@ GET /api/health/derived        z-scores, ratios, slopes, with inputs
 GET /api/health/correlations   with the caveat and the method
 GET /api/health/metrics        one row per metric, including the empty ones
 GET /api/health/illness-eval   the illness detector scored against marked illness
+GET /api/health/patterns       several measures read together, including the quiet ones
+GET /api/health/interventions  did the thing you changed change anything
+GET /api/health/evidence       every claim this system makes, graded A to D
 GET /api/health/visit-brief    what to take to a doctor, and what this cannot see
 GET /api/health/signature      the bio signature: clock, week, recovery, responses
 GET /api/health/signature/export  the same, portable: statistics and weights, no readings
@@ -1833,6 +1859,171 @@ GET /api/health/simulate       what if I had slept more, and what cannot be answ
         all invented, with no way for the reader to separate it from their own data.
       </p>
 
+      <h3>The grade travels with the claim</h3>
+      <p>
+        Vitara computes numbers of four very different kinds and, until recently,
+        presented them in one voice. A blood pressure read against a published range
+        and a biological-age estimate are not the same sort of claim, and the only
+        thing separating them was the wording of a sentence somebody wrote once.
+      </p>
+      <p>
+        The failure this guards against is specific, and it is the standard shape of
+        longevity software: a handful of genuinely established measures get surrounded
+        by fashionable derived scores, everything renders in the same card with the
+        same confidence, and the reader ends up weighting an undisclosed vendor
+        estimate exactly as heavily as their LDL. The established numbers are not made
+        better by the company they keep &mdash; the experimental ones are made to look
+        like medicine.
+      </p>
+      <p>
+        So every claim carries a grade, attached in code rather than in copy, and a
+        concept with no grade fails a test. The grade is about the strength of the
+        <em>evidence</em>, not confidence in the measurement: a well-measured number
+        resting on a contested theory is still a C.
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Grade</th><th>Means</th><th>Examples</th></tr></thead>
+          <tbody>
+            <tr><td><b>A</b> established</td><td>Large, replicated, outcome-based evidence, and in clinical use. Stated plainly.</td><td>LDL, HbA1c, blood pressure, non-HDL, eGFR, waist-to-height</td></tr>
+            <tr><td><b>B</b> context-dependent</td><td>The association is solid; what it means depends on who you are, or the measure is noisy for one person on one day.</td><td>ApoB, HOMA-IR, fasting insulin, HRV, VO&#8322; max, BMI, Lp(a)</td></tr>
+            <tr><td><b>C</b> emerging</td><td>Real literature, genuine disagreement, no settled threshold. Never stated without its caveat.</td><td>The illness detector, sleep debt, ACWR, the forecast, the composite patterns, vitamin D beyond bone health</td></tr>
+            <tr><td><b>D</b> experimental</td><td>A plausible construct with no validated mapping to outcomes. Shown because it is asked for, never allowed to outrank anything above.</td><td>Biological age, Oura's cardiovascular age, readiness score, sleep score</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="why trap">
+        <span class="tag">Pinned by tests</span>
+        <p>
+          A test asserts that no summary score outranks its own inputs &mdash; a
+          readiness score built from HRV and resting heart rate cannot be better
+          evidenced than the things it is built from, with an undisclosed weighting on
+          top. Another asserts that age-equivalents are graded D and must always be
+          qualified. A third fails if any computed metric, any lab analyte or any named
+          method has no grade at all, because an ungraded row in a graded table reads as
+          an omission rather than as something nobody argues about.
+        </p>
+      </div>
+
+      <h3>Several measures moving the same way at once</h3>
+      <p>
+        Every other detector asks a question about one metric. That is the right
+        question for an acute signal and the wrong one for a slow correlated drift,
+        where each component sits, on its own, well inside the range where nobody would
+        mention it. Weight up four kilos is a bad year. Weight up, waist up,
+        triglycerides up and fasting insulin up is a direction, and no single-metric
+        detector can see it.
+      </p>
+      <p>
+        Five patterns: metabolic drift, the lipid panel, recovery measures drifting
+        over months, weight loss taking lean mass with it, and weight loss that is not.
+        <b>The last one fires too.</b> "Weight down, waist down, lean mass holding" is
+        the most useful sentence this system can produce, and a detector that only
+        speaks when something is wrong teaches people to dread opening it. It requires
+        lean mass to be <em>measured</em>: the scale alone cannot tell a good loss from
+        a bad one, so an unmeasured lean mass withholds the good news rather than
+        assuming it.
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Rule</th><th>Without it</th></tr></thead>
+          <tbody>
+            <tr><td><b>Correlated measures do not vote twice</b></td><td>Non-HDL is total minus HDL; HOMA-IR is glucose and insulin. Counting a derived value beside its own inputs turns one blood draw into three votes, and three votes is a pattern. They are still shown, just not counted.</td></tr>
+            <tr><td><b>Unmeasured is not steady</b></td><td>Three of four never taken is not "one of four moving", it is one of one &mdash; and the output names the tests that would make it answerable. Collapsing the two turns a gap into reassurance.</td></tr>
+            <tr><td><b>The window follows the cadence</b></td><td>Ninety days for a ring metric, a year for a waist, the previous draw for a lab. Four tape measurements over ninety days is not a trend, and running a trend test on two blood draws a year is arithmetic without meaning.</td></tr>
+            <tr><td><b>A count <em>and</em> a proportion</b></td><td>Two of eight is what eight measures do; two of three is a direction. Without the proportion, adding an analyte to a pattern would make it easier to fire, which is backwards.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="why trap">
+        <span class="tag">Two defects found by running it, not by reasoning</span>
+        <p>
+          The lab rule &mdash; a move counts at half the width of the reference range
+          &mdash; called a <b>doubling of fasting insulin "steady"</b>, because its
+          printed range runs 2.6 to 24.9 and half that width is 11. A range that wide
+          cannot be the only scale, so the pattern path takes the smaller of half-width
+          or a quarter of the previous value. The lab detector keeps the stricter rule:
+          there, one analyte is deciding whether to raise a finding alone, and being
+          conservative costs nothing.
+        </p>
+        <p>
+          Mann&ndash;Kendall called a <b>0.2 bpm creep over ninety days a trend</b>,
+          because it tests monotonicity and not magnitude &mdash; a perfectly clean tiny
+          slope is as statistically certain as a large one. Real data is noisy enough to
+          hide this most of the time, which is exactly what makes it a bad thing to rely
+          on. A component must now move the number by at least two per cent of itself,
+          and otherwise reads "drifting up, but only by 0.2 across 3 months".
+        </p>
+      </div>
+
+      <h3>Did it work, and the rebound that says probably not</h3>
+      <p>
+        The only question in this system whose answer can embarrass it, and the reason
+        it is worth asking: everything else describes what happened, and this checks
+        whether a decision was any good. A health app that never grades its own
+        suggestions is one whose suggestions never have to be right.
+      </p>
+      <p>
+        A naive before-and-after comparison reports that everything works. Not often
+        &mdash; <b>always</b>. Nobody begins a sleep protocol during a good month; they
+        begin it after two bad weeks, which is to say at a low point selected precisely
+        for being low, and an unusually bad stretch is usually followed by an ordinary
+        one. The comparison credits the intervention every single time, for every
+        intervention. A feature that always says yes is worse than no feature, because
+        it launders noise into confidence.
+      </p>
+      <p>
+        So the verdict turns on a <b>rebound estimate</b>: find the stretches in this
+        person's own history that were as far below par as the one that prompted this,
+        where nothing was started, and see what happened next without intervention. The
+        median of those is what doing nothing looks like from here, and an improvement
+        has to beat it. It is an estimate from a handful of windows and it is not a
+        control group &mdash; it is the difference between a verdict that means
+        something and one that always says yes.
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Verdict</th><th>When</th></tr></thead>
+          <tbody>
+            <tr><td class="m">no_target</td><td>Nothing was declared as the thing this should change. The target is named when the intervention <em>starts</em>; choosing it afterwards means looking at thirty metrics and finding the one that improved, and one of thirty always improves.</td></tr>
+            <tr><td class="m">too_early</td><td>Inside the first six weeks. The date a verdict becomes possible is given rather than withheld.</td></tr>
+            <tr><td class="m">cannot_separate</td><td>Something else started within four weeks. Refused outright rather than reported with a caveat nobody reads &mdash; attributing a change to one of two simultaneous causes is a guess dressed as a result.</td></tr>
+            <tr><td class="m">would_have_anyway</td><td><b>The verdict this exists to be able to give.</b> The improvement is real, it is reported, and the <em>attribution</em> is refused because it sits inside what this person's own history rebounds by unaided.</td></tr>
+            <tr><td class="m">improved</td><td>Bigger than the rebound. Confidence is capped at moderate, and drops to low where there was not enough history to estimate a rebound at all.</td></tr>
+            <tr><td class="m">worsened</td><td>The verdict a health app is least inclined to give and most needs to.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="why trap">
+        <span class="tag">The guard that disappeared silently</span>
+        <p>
+          Two defects here were found by running the evaluator against a seeded history
+          rather than by reasoning about it, and the second is the worst thing this file
+          could do.
+        </p>
+        <p>
+          The rebound sampler stepped weekly and walked past most window alignments,
+          finding two episodes in a history that plainly contained four. It now steps
+          daily and skips a full window on each hit, so one bad month does not arrive as
+          thirty "independent" examples.
+        </p>
+        <p>
+          And the "at least as bad as this one" comparison was exact. Noise moved the
+          pre-window's median a point low, every nominally identical dip in the history
+          fell just short and was discarded, the estimate dropped below its
+          three-window minimum &mdash; and the verdict flipped from "cannot be told
+          apart from normal recovery" to <b>"improved"</b>. <b>The guard failing towards
+          flattery, leaving no trace, is the failure mode that matters</b>; it now
+          matches within half the spread of the window it is matching.
+        </p>
+      </div>
+
       <h3>The forecast has to beat the dull answer</h3>
       <p>
         The bio signature has two halves. <code>Signature</code> is the portrait &mdash;
@@ -1912,7 +2103,9 @@ GET /api/health/simulate       what if I had slept more, and what cannot be answ
         <table>
           <thead><tr><th>Gap</th><th>Status</th></tr></thead>
           <tbody>
-            <tr><td><b>Validated clinical models</b></td><td>None implemented. No PREVENT, ASCVD, FINDRISC, PhenoAge, eGFR/CKD-EPI or metabolic syndrome. Lab ingestion now exists, so these are no longer blocked on data &mdash; only on the models themselves, each of which needs analytes beyond the twelve currently catalogued.</td></tr>
+            <tr><td><b>Validated clinical risk models</b></td><td>eGFR by CKD-EPI 2021 is implemented. PREVENT, ASCVD, FINDRISC, PhenoAge and metabolic syndrome are not, and are no longer blocked on data &mdash; they are blocked on their coefficients. Reproducing a published risk equation from memory is precisely the thing the brief said not to do, so each needs its tables supplied from the source rather than recalled. Several also need profile fields nobody is asked for: smoking status, blood-pressure medication, family history.</td></tr>
+            <tr><td><b>Nutrition in the relationships</b></td><td>Daily nutrition totals are stored and the correlation driver list contains no nutrition metric at all &mdash; no protein, fibre, alcohol or meal timing. Cheap to add and probably the highest-yield pair in the set, since alcohol against next-day sleep is the most reliable relationship in consumer health data.</td></tr>
+            <tr><td><b>Body composition, analysed</b></td><td>Body fat and lean mass are catalogued, enterable and wired into two patterns. Nothing yet reads strength or physical function alongside them, which is what the brief asks for and what distinguishes a loss worth having from one that costs independence later.</td></tr>
 
             <tr><td><b>What-if, in San</b></td><td><code>health_forecast</code> and <code>health_signature</code> are wired; <code>/api/health/simulate</code> and <code>/api/health/illness-eval</code> are not. Both are one line each — left out because catalogue size measurably costs tool-selection accuracy (see SAN-EVALS §4), so each addition is a decision rather than a default. Anything wrapping simulate has to carry the refusals through: a scenario with no precedent is the answer, not an error.</td></tr>
             <tr><td><b>Model summarisation</b></td><td>Findings are shown to the model as evidence; there is no prompt that turns a set of findings into prose.</td></tr>
@@ -1944,8 +2137,8 @@ GET /api/health/simulate       what if I had slept more, and what cannot be answ
 
   <footer>
     <span>docs · Vitara + Insight</span>
-    <span>read from 2a5ebba · 2026-10-03</span>
-    <span>423 Vitara tests</span>
+    <span>read from 44d3387 · 2026-10-03</span>
+    <span>498 Vitara tests</span>
   </footer>
 
 </div>
