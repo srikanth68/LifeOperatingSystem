@@ -73,6 +73,28 @@ public class PatternTests
         LabPanelId = Guid.NewGuid(),
     };
 
+    // A ramp that stopped. The existing Ramp always runs up to today, which is why
+    // nothing here caught the staleness bug for months.
+    private static List<Observation> StoppedRamp(
+        string metric, double from, double to, int days, int everyDays, string tier, int stoppedDaysAgo)
+    {
+        var points = days / everyDays;
+        return Enumerable.Range(0, points)
+            .Select(i =>
+            {
+                var daysAgo = stoppedDaysAgo + (points - 1 - i) * everyDays;
+                return new Observation
+                {
+                    Metric = metric,
+                    Value = from + (to - from) * i / (double)(points - 1),
+                    ObservedDateLocal = Today.AddDays(-daysAgo),
+                    ObservedAtLocal = Today.AddDays(-daysAgo).ToDateTime(new TimeOnly(8, 0)),
+                    Tier = tier,
+                };
+            })
+            .ToList();
+    }
+
     private static PatternResult Find(IEnumerable<Observation> observations, string key) =>
         Patterns.Run(observations.ToList(), Today, ReferenceRanges.Seed, "male", 44)
             .First(p => p.Key == key);
@@ -385,6 +407,93 @@ public class PatternTests
         Assert.Contains("only by", rhr.Detail);
         Assert.Equal(1, pattern.Moving);
         Assert.False(pattern.Fires);
+    }
+
+    // ── A series that stopped ───────────────────────────────────────────────────
+
+    [Fact]
+    public void ATrendThatEndedTwoMonthsAgoIsNotReportedInThePresentTense()
+    {
+        // THE BUG A LAPSED SCALE HABIT EXPOSED. A metric entered by hand is read over
+        // a 365-day window, so somebody who weighed themselves regularly until two
+        // months ago still has hundreds of readings inside it. The trend test runs,
+        // passes, and says "up about 0.6 a month" about a period that is over.
+        var observations = StoppedRamp(
+            MetricKeys.WeightKg, 78, 85, 300, 3, Tiers.Medium, stoppedDaysAgo: 62);
+
+        var pattern = Find(observations, "metabolic_drift");
+        var weight = pattern.Components.First(c => c.Metric == MetricKeys.WeightKg);
+
+        Assert.Equal(Movement.Unmeasured, weight.Movement);
+        Assert.Contains("last measured 62 days ago", weight.Detail);
+        Assert.Equal(0, pattern.Moving);
+    }
+
+    [Fact]
+    public void AnOrdinaryGapDoesNotBlankTheComponent()
+    {
+        // Generous on purpose. Weight is expected weekly and the bar is four times
+        // that, so missing a fortnight is normal and must not read as having stopped
+        // -- a staleness rule that fires on ordinary life is one that blanks the
+        // dashboard permanently.
+        var observations = StoppedRamp(
+            MetricKeys.WeightKg, 78, 85, 300, 3, Tiers.Medium, stoppedDaysAgo: 12);
+
+        var weight = Find(observations, "metabolic_drift")
+            .Components.First(c => c.Metric == MetricKeys.WeightKg);
+
+        Assert.Equal(Movement.Unfavourable, weight.Movement);
+    }
+
+    [Fact]
+    public void ADrawFromThreeYearsAgoIsHistoryRatherThanNews()
+    {
+        // The lab detector already refuses to open a finding on one this old. A
+        // pattern leaning on it would report the same stale result through a
+        // different door.
+        var old = new List<Observation>
+        {
+            Panel(MetricKeys.Triglycerides, 110, Today.AddDays(-1200)),
+            Panel(MetricKeys.Triglycerides, 240, Today.AddDays(-900)),
+        };
+
+        var trigs = Find(old, "metabolic_drift")
+            .Components.First(c => c.Metric == MetricKeys.Triglycerides);
+
+        Assert.Equal(Movement.Unmeasured, trigs.Movement);
+        Assert.Contains("last drawn", trigs.Detail);
+    }
+
+    [Fact]
+    public void BodyCompositionParticipatesOnceTheScaleIsUsedAgain()
+    {
+        // The whole point of importing body fat: weight down and waist down is not a
+        // result until lean mass says which kind of loss it was.
+        var observations = Ramp(MetricKeys.WeightKg, 92, 85, days: 365, everyDays: 10, tier: Tiers.Medium)
+            .Concat(Ramp(MetricKeys.WaistCircumferenceCm, 104, 96, days: 365, everyDays: 20, tier: Tiers.Medium))
+            .Concat(Flat(MetricKeys.LeanMassKg, 62, days: 365, everyDays: 10, tier: Tiers.Medium))
+            .Concat(Ramp(MetricKeys.BodyFatPct, 28, 22, days: 365, everyDays: 10, tier: Tiers.Medium));
+
+        var pattern = Find(observations, "favourable_body_change");
+
+        Assert.True(pattern.Fires);
+        Assert.Contains("Body fat", pattern.Statement);
+    }
+
+    [Fact]
+    public void AScaleLeftInACupboardWithholdsTheGoodNewsRatherThanAssumingIt()
+    {
+        // Weight and waist both falling, lean mass measured until two months ago and
+        // not since. The honest answer is that nobody can say which kind of loss this
+        // was, which is the same answer as never having measured it.
+        var observations = Ramp(MetricKeys.WeightKg, 92, 85, days: 365, everyDays: 10, tier: Tiers.Medium)
+            .Concat(Ramp(MetricKeys.WaistCircumferenceCm, 104, 96, days: 365, everyDays: 20, tier: Tiers.Medium))
+            .Concat(StoppedRamp(MetricKeys.LeanMassKg, 62, 62, 200, 5, Tiers.Medium, stoppedDaysAgo: 70));
+
+        var pattern = Find(observations, "favourable_body_change");
+
+        Assert.False(pattern.Fires);
+        Assert.Contains("lean mass", pattern.HeldBecause);
     }
 
     // ── What it produces ────────────────────────────────────────────────────────

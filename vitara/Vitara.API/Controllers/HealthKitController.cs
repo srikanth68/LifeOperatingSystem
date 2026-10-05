@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Vitara.Application.Interfaces;
 using Vitara.Domain.Entities;
+using Vitara.Domain.Health;
+using Vitara.Application;
 
 namespace Vitara.API.Controllers;
 
@@ -80,6 +82,41 @@ public class HealthKitController(IVitaraRepository repo) : ControllerBase
             applied.Add("weight");
         }
 
+        // ── Body composition ──
+        //
+        // Stored as measurements rather than on the weigh-in, because WeighIn is Oura's
+        // and the scale's shape for a weight and these are a different reading that
+        // happens to arrive at the same moment. The projector picks them up from there
+        // like any other manual entry.
+        var composition = new (double? Value, string Metric, string Unit)[]
+        {
+            (req.BodyFatPct, MetricKeys.BodyFatPct, "%"),
+            (req.LeanMassKg, MetricKeys.LeanMassKg, "kg"),
+        };
+
+        foreach (var (value, metric, unit) in composition)
+        {
+            if (value is not > 0) continue;
+
+            // Same fraction trap as the XML path: HealthKit percent is a fraction, and
+            // an 0.18 that reaches the database is a plausible-looking lie.
+            var reading = metric == MetricKeys.BodyFatPct && value <= 1 ? value.Value * 100 : value.Value;
+            if (!HealthXmlImport.IsPlausible(metric, reading)) continue;
+
+            var at = DateTime.UtcNow;
+            await repo.UpsertMeasurementsAsync([new Measurement
+            {
+                Metric = metric,
+                Value = Math.Round(reading, 2),
+                Unit = unit,
+                ObservedAtLocal = at,
+                Day = DateOnly.FromDateTime(at),
+                Tier = Tiers.Medium,
+                Source = "apple_health",
+            }]);
+            applied.Add(metric);
+        }
+
         // ── Workouts (last week) — upsert by start time ──
         if (req.Workouts is { Count: > 0 })
         {
@@ -130,6 +167,8 @@ public record HealthKitPayload(
     // Richer fields from the iOS app's full Vitara sync (all optional — the
     // original context-push snapshot omits them and still works unchanged).
     double? WeightKg = null,
+    double? BodyFatPct = null,
+    double? LeanMassKg = null,
     List<HealthKitWorkout>? Workouts = null,
     List<HealthKitDailyActivity>? DailyActivity = null);
 

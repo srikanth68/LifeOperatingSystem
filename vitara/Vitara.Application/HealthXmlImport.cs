@@ -68,6 +68,13 @@ public static class HealthXmlImport
         ["HKQuantityTypeIdentifierRespiratoryRate"] = (MetricKeys.BreathingRate, false),
         ["HKQuantityTypeIdentifierOxygenSaturation"] = (MetricKeys.Spo2Average, false),
         ["HKQuantityTypeIdentifierBodyMass"] = (MetricKeys.WeightKg, false),
+
+        // Body composition. A smart scale writes all three and Vitara read only the
+        // first, so the two numbers that distinguish a good loss from a bad one were
+        // parsed and discarded on every import -- weight alone cannot tell them apart,
+        // which is the whole point of the body-composition patterns.
+        ["HKQuantityTypeIdentifierBodyFatPercentage"] = (MetricKeys.BodyFatPct, false),
+        ["HKQuantityTypeIdentifierLeanBodyMass"] = (MetricKeys.LeanMassKg, false),
         ["HKQuantityTypeIdentifierVO2Max"] = (MetricKeys.Vo2Max, false),
         ["HKQuantityTypeIdentifierBloodPressureSystolic"] = (MetricKeys.SystolicBp, false),
         ["HKQuantityTypeIdentifierBloodPressureDiastolic"] = (MetricKeys.DiastolicBp, false),
@@ -116,13 +123,22 @@ public static class HealthXmlImport
         [MetricKeys.ActiveCalories] = (1, 10_000),
 
         [MetricKeys.WeightKg] = (25, 300),
+
+        // Three per cent is below the floor for a living person and seventy is above
+        // the ceiling. The bounds exist to catch a fraction that escaped the
+        // conversion below, not to judge anybody's composition.
+        [MetricKeys.BodyFatPct] = (3, 70),
+        [MetricKeys.LeanMassKg] = (20, 150),
         [MetricKeys.Vo2Max] = (10, 90),
         [MetricKeys.SystolicBp] = (60, 260),
         [MetricKeys.DiastolicBp] = (30, 160),
         [MetricKeys.WaistCircumferenceCm] = (40, 200),
     };
 
-    internal static bool IsPlausible(string metric, double value) =>
+    // Public because the live ingest from the phone needs the same bounds. Two copies
+    // of "what a reading can be" is how one path quietly accepts what the other
+    // rejects, and the import path is not the only way a scale reaches this database.
+    public static bool IsPlausible(string metric, double value) =>
         !Plausible.TryGetValue(metric, out var range) || (value >= range.Min && value <= range.Max);
 
     private sealed class Bucket
@@ -290,8 +306,19 @@ public static class HealthXmlImport
     {
         var u = unit.Trim().ToLowerInvariant();
 
-        if (metric == MetricKeys.WeightKg)
+        if (metric is MetricKeys.WeightKg or MetricKeys.LeanMassKg)
             return u is "lb" or "lbs" or "pound" or "pounds" ? value / 2.20462 : value;
+
+        // The same trap as oxygen saturation below, and a worse one here because the
+        // result stays plausible. HealthKit's percent unit is a FRACTION -- a body fat
+        // of eighteen per cent can arrive as 0.18 or as 18 depending on which app
+        // wrote it, and 0.18 stored as a percentage is a reading no scale has ever
+        // produced sitting quietly in a series that otherwise looks fine.
+        //
+        // Nothing alive is under one per cent body fat, so a value at or below 1 is
+        // unambiguously a fraction. Decided on the value rather than the unit
+        // attribute because both forms carry unit="%".
+        if (metric == MetricKeys.BodyFatPct && value > 0 && value <= 1) return value * 100;
 
         // Apple stores oxygen saturation as a fraction with a "%" unit attached: 0.97
         // rather than 97. Storing the fraction would put every reading two orders of

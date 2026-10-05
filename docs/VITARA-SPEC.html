@@ -1510,6 +1510,7 @@ UNIQUE (Driver, Outcome, LagDays, ComputedOnLocal)</code></pre>
           <thead><tr><th>Constant</th><th class="num">Value</th><th>Controls</th></tr></thead>
           <tbody>
             <tr><td class="m">Patterns.MinRelativeChange</td><td class="num">2%</td><td>How far a trend must actually move a number before it counts as movement &mdash; see &sect;17</td></tr>
+            <tr><td class="m">Patterns.StaleWindowMultiple</td><td class="num">4&times;</td><td>Multiples of a metric's own stale-after window before its trend stops describing the present</td></tr>
             <tr><td class="m">InterventionEval.RunInDays</td><td class="num">14</td><td>Days after a start that are not counted at all</td></tr>
             <tr><td class="m">InterventionEval.WindowDays</td><td class="num">28</td><td>The before window, the after window, and the window a rebound is measured over &mdash; all three the same length on purpose</td></tr>
         </table>
@@ -1935,6 +1936,7 @@ GET /api/health/simulate       what if I had slept more, and what cannot be answ
             <tr><td><b>Unmeasured is not steady</b></td><td>Three of four never taken is not "one of four moving", it is one of one &mdash; and the output names the tests that would make it answerable. Collapsing the two turns a gap into reassurance.</td></tr>
             <tr><td><b>The window follows the cadence</b></td><td>Ninety days for a ring metric, a year for a waist, the previous draw for a lab. Four tape measurements over ninety days is not a trend, and running a trend test on two blood draws a year is arithmetic without meaning.</td></tr>
             <tr><td><b>A count <em>and</em> a proportion</b></td><td>Two of eight is what eight measures do; two of three is a direction. Without the proportion, adding an analyte to a pattern would make it easier to fire, which is backwards.</td></tr>
+            <tr><td><b>A series that stopped is not a series that is steady</b></td><td>The window for a hand-entered metric is a year, so somebody who weighed themselves regularly until two months ago still has hundreds of readings inside it: the trend test runs, passes, and reports movement in the present tense about a period that is over. A component whose newest reading is older than four times its own expected cadence reads "last measured 62 days ago" instead. Labs borrow the lab detector's own 400-day cutoff, so the same draw cannot be current in one view and stale in another.</td></tr>
           </tbody>
         </table>
       </div>
@@ -2104,7 +2106,7 @@ GET /api/health/simulate       what if I had slept more, and what cannot be answ
           <thead><tr><th>Gap</th><th>Status</th></tr></thead>
           <tbody>
             <tr><td><b>Validated clinical risk models</b></td><td>eGFR by CKD-EPI 2021 is implemented. PREVENT, ASCVD, FINDRISC, PhenoAge and metabolic syndrome are not, and are no longer blocked on data &mdash; they are blocked on their coefficients. Reproducing a published risk equation from memory is precisely the thing the brief said not to do, so each needs its tables supplied from the source rather than recalled. Several also need profile fields nobody is asked for: smoking status, blood-pressure medication, family history.</td></tr>
-            <tr><td><b>Body composition, analysed</b></td><td>Body fat and lean mass are catalogued, enterable and wired into two patterns. Nothing yet reads strength or physical function alongside them, which is what the brief asks for and what distinguishes a loss worth having from one that costs independence later.</td></tr>
+            <tr><td><b>Strength and physical function</b></td><td>Body fat and lean mass now arrive from a smart scale through both Apple Health paths and feed two patterns. Nothing reads strength or physical function alongside them, which is what the brief asks for and what distinguishes a loss worth having from one that costs independence later. Nothing measures either, so this is blocked on input rather than on analysis.</td></tr>
 
             <tr><td><b>What-if, in San</b></td><td><code>health_forecast</code> and <code>health_signature</code> are wired; <code>/api/health/simulate</code> and <code>/api/health/illness-eval</code> are not. Both are one line each — left out because catalogue size measurably costs tool-selection accuracy (see SAN-EVALS §4), so each addition is a decision rather than a default. Anything wrapping simulate has to carry the refusals through: a scenario with no precedent is the answer, not an error.</td></tr>
             <tr><td><b>Model summarisation</b></td><td>Findings are shown to the model as evidence; there is no prompt that turns a set of findings into prose.</td></tr>

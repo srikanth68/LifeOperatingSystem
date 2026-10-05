@@ -50,6 +50,8 @@ struct HealthKitIngestRequest: Codable {
     let sleepEnd: Date?
     let timestamp: Date
     let weightKg: Double?
+    let bodyFatPct: Double?
+    let leanMassKg: Double?
     let workouts: [WorkoutPayload]?
     let dailyActivity: [DailyActivityPayload]?
 }
@@ -73,6 +75,8 @@ struct DailyActivityPayload: Codable {
 struct HealthKitBundle {
     let snapshot: HealthPayload
     let weightKg: Double?
+    let bodyFatPct: Double?
+    let leanMassKg: Double?
     let workouts: [WorkoutPayload]
     let dailyActivity: [DailyActivityPayload]
 }

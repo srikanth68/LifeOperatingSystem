@@ -103,6 +103,28 @@ public static class Patterns
     // centimetres a year.
     private const double MinRelativeChange = 0.02;
 
+    // How far past a metric's own expected cadence its last reading may sit before the
+    // window stops describing the present.
+    //
+    // A trend is computed over the whole window -- a year, for anything entered by
+    // hand -- and nothing anywhere checked WHEN the readings in it stopped. Somebody
+    // who weighed themselves regularly until two months ago still has three hundred
+    // readings inside a 365-day window, so the trend test runs, passes, and reports
+    // "Weight, unfavourable, up about 0.6 a month" as a fact about today. It is a fact
+    // about a period that ended in August.
+    //
+    // The catalogue already knows how often each metric should arrive, so this scales
+    // that rather than inventing a second number: four times the stale-after window.
+    // Weight is expected weekly, so a month of silence; body fat fortnightly, so two
+    // months; a waist monthly, so four. Generous on purpose -- missing a week is
+    // normal and should not blank the component.
+    private const int StaleWindowMultiple = 4;
+
+    // Labs are the exception and borrow the lab detector's own number. A draw older
+    // than this is history rather than news, and the two places must agree or the same
+    // result is current in one view and stale in the other.
+    private const int SparseStaleDays = 400;
+
     // A derived value does not get a vote of its own while anything it is derived from
     // is also in the pattern and measured. It is still reported.
     private static readonly Dictionary<string, string[]> Derivations = new()
@@ -318,8 +340,9 @@ public static class Patterns
         var denseEnough = observations.Count(o => o.Metric == metric && o.LabPanelId is null) >= 10;
 
         return info?.Tier == Tiers.Sparse || (fromDraws && !denseEnough)
-            ? Sparse(metric, label, polarity, observations, ranges, sex, age)
-            : Dense(metric, label, polarity, info?.Tier ?? Tiers.Dense, observations, asOf, info?.Decimals ?? 1);
+            ? Sparse(metric, label, polarity, observations, ranges, sex, age, asOf)
+            : Dense(metric, label, polarity, info?.Tier ?? Tiers.Dense, observations, asOf,
+                info?.Decimals ?? 1, info?.StaleAfterDays ?? 3);
     }
 
     // Dense and medium: a significance-tested trend over the window the cadence
@@ -328,7 +351,7 @@ public static class Patterns
     // to noise returns a line.
     private static PatternComponent Dense(
         string metric, string label, int polarity, string tier,
-        IReadOnlyList<Observation> observations, DateOnly asOf, int decimals)
+        IReadOnlyList<Observation> observations, DateOnly asOf, int decimals, int staleAfterDays)
     {
         var window = tier == Tiers.Medium ? MediumWindowDays : DenseWindowDays;
         var months = window / 30;
@@ -341,6 +364,18 @@ public static class Patterns
             .ToList();
 
         var basis = $"{months}-month trend";
+
+        // Stopped, rather than steady. A series that ran for a year and ended two
+        // months ago still passes every test in here, and every statement built on it
+        // is in the present tense about a period that is over.
+        var newest = observations
+            .Where(o => o.Metric == metric)
+            .Select(o => (DateOnly?)o.ObservedDateLocal)
+            .Max();
+
+        if (newest is { } last && asOf.DayNumber - last.DayNumber > staleAfterDays * StaleWindowMultiple)
+            return new PatternComponent(metric, label, Movement.Unmeasured,
+                $"last measured {asOf.DayNumber - last.DayNumber} days ago", basis, true);
 
         if (Statistics.Trend(points) is not { } trend)
             return new PatternComponent(metric, label, Movement.Unmeasured,
@@ -382,7 +417,7 @@ public static class Patterns
     private static PatternComponent Sparse(
         string metric, string label, int polarity,
         IReadOnlyList<Observation> observations,
-        IReadOnlyList<ReferenceRange> ranges, string? sex, int? age)
+        IReadOnlyList<ReferenceRange> ranges, string? sex, int? age, DateOnly asOf)
     {
         const string basis = "against the previous draw";
 
@@ -400,6 +435,14 @@ public static class Patterns
 
         var latest = draws[^1];
         var previous = draws[^2];
+
+        // A draw from three years ago is history. The lab detector already refuses to
+        // open a finding on one that old, and a pattern leaning on it would be
+        // reporting the same stale result through a different door.
+        if (asOf.DayNumber - latest.ObservedDateLocal.DayNumber > SparseStaleDays)
+            return new PatternComponent(metric, label, Movement.Unmeasured,
+                $"last drawn {latest.ObservedDateLocal:MMM yyyy}", basis, true);
+
         var shift = latest.Value - previous.Value;
 
         var range = ReferenceRanges.For(ranges, metric, sex, age);

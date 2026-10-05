@@ -95,6 +95,63 @@ public class HealthXmlImportTests
     public void AlreadyPercentageValuesAreNotMultipliedAgain()
         => Assert.Equal(97, HealthXmlImport.Convert(MetricKeys.Spo2Average, 97, "%"), 1);
 
+    // ── Body composition: the half the importer used to throw away ─────────────
+
+    [Fact]
+    public void ASmartScalesBodyFatIsKeptRatherThanIgnored()
+    {
+        // Weight was mapped and these two were not, so every import parsed the numbers
+        // that distinguish a good loss from a bad one and binned them. Weight alone
+        // cannot tell those apart, which is the entire premise of the body-composition
+        // patterns.
+        var r = Scan("""
+        <Record type="HKQuantityTypeIdentifierBodyFatPercentage" sourceName="Withings" unit="%" startDate="2026-09-01 07:00:00 -0400" endDate="2026-09-01 07:00:00 -0400" value="18.4"/>
+        <Record type="HKQuantityTypeIdentifierLeanBodyMass" sourceName="Withings" unit="kg" startDate="2026-09-01 07:00:00 -0400" endDate="2026-09-01 07:00:00 -0400" value="62.5"/>
+        """);
+
+        Assert.Equal(18.4, Value(r, MetricKeys.BodyFatPct), 1);
+        Assert.Equal(62.5, Value(r, MetricKeys.LeanMassKg), 1);
+    }
+
+    [Fact]
+    public void BodyFatArrivingAsAFractionBecomesAPercentage()
+    {
+        // The same trap as oxygen saturation and a nastier one, because the result
+        // stays plausible. HealthKit's percent unit is a fraction: eighteen per cent
+        // can arrive as 0.18 or as 18 depending on which app wrote it, and both carry
+        // unit="%". Stored raw, 0.18 is a reading no scale has ever produced sitting
+        // quietly in a series that otherwise looks fine.
+        var r = Scan("""
+        <Record type="HKQuantityTypeIdentifierBodyFatPercentage" sourceName="Withings" unit="%" startDate="2026-09-01 07:00:00 -0400" endDate="2026-09-01 07:00:00 -0400" value="0.184"/>
+        """);
+
+        Assert.Equal(18.4, Value(r, MetricKeys.BodyFatPct), 1);
+    }
+
+    [Fact]
+    public void ARealPercentageIsNotMultipliedAgain()
+    {
+        // The boundary decision: nothing alive is under one per cent body fat, so a
+        // value at or below 1 is unambiguously a fraction and anything above it is
+        // already a percentage.
+        Assert.Equal(18.4, HealthXmlImport.Convert(MetricKeys.BodyFatPct, 18.4, "%"), 1);
+        Assert.Equal(40, HealthXmlImport.Convert(MetricKeys.BodyFatPct, 0.4, "%"), 1);
+    }
+
+    [Fact]
+    public void LeanMassInPoundsBecomesKilograms()
+    {
+        var r = Scan("""
+        <Record type="HKQuantityTypeIdentifierLeanBodyMass" sourceName="Withings" unit="lb" startDate="2026-09-01 07:00:00 -0400" endDate="2026-09-01 07:00:00 -0400" value="137.8"/>
+        """);
+
+        Assert.Equal(62.5, Value(r, MetricKeys.LeanMassKg), 1);
+    }
+
+    [Fact]
+    public void ABodyFatNoBodyCouldHaveIsDropped()
+        => Assert.False(HealthXmlImport.IsPlausible(MetricKeys.BodyFatPct, 0.4));
+
     [Fact]
     public void HeightInInchesBecomesMetres()
     {

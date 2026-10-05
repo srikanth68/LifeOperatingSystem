@@ -68,6 +68,8 @@ final class APIClient {
             sleepEnd: health.sleepEnd,
             timestamp: .now,
             weightKg: bundle.weightKg,
+            bodyFatPct: bundle.bodyFatPct,
+            leanMassKg: bundle.leanMassKg,
             workouts: bundle.workouts.isEmpty ? nil : bundle.workouts,
             dailyActivity: bundle.dailyActivity.isEmpty ? nil : bundle.dailyActivity
         )

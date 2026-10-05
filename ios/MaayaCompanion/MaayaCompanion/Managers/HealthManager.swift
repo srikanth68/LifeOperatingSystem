@@ -14,6 +14,12 @@ final class HealthManager {
             HKQuantityType(.heartRate),
             HKQuantityType(.activeEnergyBurned),
             HKQuantityType(.bodyMass),
+
+            // A smart scale writes all three. Reading only the weight is what left
+            // the server unable to tell a good loss from a bad one -- the scale
+            // already knows, and nobody was asking it.
+            HKQuantityType(.bodyFatPercentage),
+            HKQuantityType(.leanBodyMass),
             HKQuantityType(.distanceWalkingRunning),
             HKCategoryType(.sleepAnalysis),
             HKObjectType.workoutType()
@@ -68,22 +74,68 @@ final class HealthManager {
     func fetchRichBundle(historyDays: Int = 7) async -> HealthKitBundle {
         let snapshot = await fetchTodayData()
         guard isAuthorized else {
-            return HealthKitBundle(snapshot: snapshot, weightKg: nil, workouts: [], dailyActivity: [])
+            return HealthKitBundle(
+                snapshot: snapshot, weightKg: nil, bodyFatPct: nil, leanMassKg: nil,
+                workouts: [], dailyActivity: []
+            )
         }
 
         async let weight = fetchLatestWeightKg()
+        async let bodyFat = fetchLatestBodyFatPct()
+        async let leanMass = fetchLatestLeanMassKg()
         async let workouts = fetchRecentWorkouts(days: historyDays)
         async let daily = fetchDailyActivity(days: historyDays)
 
         return HealthKitBundle(
             snapshot: snapshot,
             weightKg: await weight,
+            bodyFatPct: await bodyFat,
+            leanMassKg: await leanMass,
             workouts: await workouts,
             dailyActivity: await daily
         )
     }
 
     // MARK: - Private Fetch Methods
+
+    // Percent, as a percentage.
+    //
+    // HealthKit's percent unit is a FRACTION -- .percent() returns 0.184 for a body
+    // fat of 18.4%. Multiplying here rather than on the server would be the obvious
+    // place, except the XML import path has to cope with both forms anyway (different
+    // apps write it differently), so the server normalises and this sends what the
+    // unit actually means. The server treats anything at or below 1 as a fraction.
+    private func fetchLatestBodyFatPct() async -> Double? {
+        await latestQuantity(HKQuantityType(.bodyFatPercentage)) { sample in
+            sample.quantity.doubleValue(for: .percent()) * 100
+        }
+    }
+
+    private func fetchLatestLeanMassKg() async -> Double? {
+        await latestQuantity(HKQuantityType(.leanBodyMass)) { sample in
+            sample.quantity.doubleValue(for: .gramUnit(with: .kilo))
+        }
+    }
+
+    // The most recent sample of one type, rounded to a tenth. Factored out because
+    // three copies of the same continuation dance is three places for the sort
+    // descriptor to be wrong in.
+    private func latestQuantity(
+        _ type: HKQuantityType,
+        _ value: @escaping (HKQuantitySample) -> Double
+    ) async -> Double? {
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(sampleType: type, predicate: nil, limit: 1, sortDescriptors: [sort]) { _, samples, _ in
+                guard let sample = samples?.first as? HKQuantitySample else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: (value(sample) * 10).rounded() / 10)
+            }
+            store.execute(query)
+        }
+    }
 
     private func fetchLatestWeightKg() async -> Double? {
         let type = HKQuantityType(.bodyMass)
