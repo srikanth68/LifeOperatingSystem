@@ -2104,14 +2104,57 @@ GET /api/health/simulate       what if I had slept more, and what cannot be answ
           <thead><tr><th>Gap</th><th>Status</th></tr></thead>
           <tbody>
             <tr><td><b>Validated clinical risk models</b></td><td>eGFR by CKD-EPI 2021 is implemented. PREVENT, ASCVD, FINDRISC, PhenoAge and metabolic syndrome are not, and are no longer blocked on data &mdash; they are blocked on their coefficients. Reproducing a published risk equation from memory is precisely the thing the brief said not to do, so each needs its tables supplied from the source rather than recalled. Several also need profile fields nobody is asked for: smoking status, blood-pressure medication, family history.</td></tr>
-            <tr><td><b>Nutrition in the relationships</b></td><td>Daily nutrition totals are stored and the correlation driver list contains no nutrition metric at all &mdash; no protein, fibre, alcohol or meal timing. Cheap to add and probably the highest-yield pair in the set, since alcohol against next-day sleep is the most reliable relationship in consumer health data.</td></tr>
             <tr><td><b>Body composition, analysed</b></td><td>Body fat and lean mass are catalogued, enterable and wired into two patterns. Nothing yet reads strength or physical function alongside them, which is what the brief asks for and what distinguishes a loss worth having from one that costs independence later.</td></tr>
 
             <tr><td><b>What-if, in San</b></td><td><code>health_forecast</code> and <code>health_signature</code> are wired; <code>/api/health/simulate</code> and <code>/api/health/illness-eval</code> are not. Both are one line each — left out because catalogue size measurably costs tool-selection accuracy (see SAN-EVALS §4), so each addition is a decision rather than a default. Anything wrapping simulate has to carry the refusals through: a scenario with no precedent is the answer, not an error.</td></tr>
             <tr><td><b>Model summarisation</b></td><td>Findings are shown to the model as evidence; there is no prompt that turns a set of findings into prose.</td></tr>
-            <tr><td><b>Nutrition analysis</b></td><td>Meals and daily totals are stored. No adequacy, balance or exposure algorithms.</td></tr>
+            <tr><td><b>Nutrition, entirely</b></td><td><b>Zero days of data.</b> The tables exist, the MyFitnessPal sync exists, the USDA search exists, and nothing has ever been logged. Nutrition is also absent from the projector, so no nutrition value reaches Observations and therefore none reaches baselines, patterns or correlations. Deliberately left alone &mdash; see below.</td></tr>
           </tbody>
         </table>
+      </div>
+
+      <div class="why trap">
+        <span class="tag">Decided: not built, because the input does not exist</span>
+        <p>
+          Adding nutrition metrics to the correlation driver list looks like a
+          one-line change and is the obvious next feature. It was costed and declined,
+          twice over.
+        </p>
+        <p>
+          <b>It would be inert.</b> A pair needs thirty overlapping days before it is
+          tested at all. At zero days every nutrition pair is skipped before any
+          statistics run &mdash; and because Benjamini&ndash;Hochberg raises the bar
+          across the whole run, the only measurable effect of adding them would be
+          making the relationships that <em>do</em> work harder to detect. Roughly
+          doubling the test count moves the bar for the single strongest result from
+          p &lt; 0.0022 to p &lt; 0.0011.
+        </p>
+        <p>
+          <b>And the friction is structural, not a bug.</b> USDA FoodData Central is a
+          United States database; the food actually eaten here is either missing from
+          it or present as "Restaurant, Indian, chicken curry". It returns nutrients
+          per 100g and serving sizes inconsistently, and
+          <code>FoodSearchController</code> passes both through raw, so the
+          reconciliation lands on the person at every single entry. There is no
+          personal food list, no remembered portion per food and no local cache, so
+          the same thirty items are searched and resolved from scratch forever.
+        </p>
+        <p>
+          The honest order, if this is ever picked up: fix logging before analysis
+          &mdash; a personal food list, a portion remembered once per food
+          ("1 roti = 40g"), a local cache ahead of USDA, and a hand-seeded table for
+          Indian food, since IFCT has no free API. That is a logging-UX project, not a
+          health-analysis one.
+        </p>
+        <p>
+          Worth recording separately: for this system's analysis the macro totals were
+          never the valuable part. The nutrition variables with a real next-day effect
+          on HRV, resting heart rate and sleep are <b>alcohol, caffeine timing and the
+          time of the last meal</b> &mdash; none of which need a food database, a
+          serving size or a search box. Protein and fibre matter over months, which is
+          already the patterns detector's job. If nutrition returns, those three
+          fields are where it should start.
+        </p>
       </div>
 
       <div class="why">
