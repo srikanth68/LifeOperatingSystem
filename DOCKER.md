@@ -202,3 +202,35 @@ Calendar dates and instants are different things: `2026-10-03` is a day and must
 `2026-10-04T03:00:00Z` is a moment and is shown in the configured zone. Vault's database layer
 tags every `DateTime` as UTC, including transaction *dates*, so use `formatDay` for those and
 `formatInstant` for moments.
+
+## Profiles (more than one person)
+
+Vitara and Insight can hold more than one person. **Each person has their own SQLite file.**
+
+```
+deploy/data/vitara/vitara.db            the original — now the profile called "default"
+deploy/data/vitara/profiles/p-3f9a01bc.db   everyone else, one file each (opaque id, never a name)
+```
+
+Nothing about an existing install changes: `vitara.db` is not renamed, moved or opened any
+differently, and a request that names no profile (the phone app, the assistant's tools, the web
+app before anyone adds a second person) still reaches it.
+
+- **Choosing a person.** The web app sends `X-Profile-Id: <id>` to both Vitara (5100) and Insight
+  (5110); the profile menu in the shared header sets it. Linking an Oura ring is a browser
+  navigation and cannot carry a header, so that one request carries `?profile=<id>`, which rides
+  through Oura as OAuth `state` and comes back to the callback.
+- **Background work loops over people.** The Oura sync and the analysis worker run once per profile,
+  each against its own file, and one person's failure (an expired token) does not stop the others.
+- **Only the original profile gets food sync.** MyFitnessPal is configured by environment, for one
+  account. The phone's HealthKit ingest (`X-Device-Key`) also targets the original profile.
+- **Backups already cover it.** `maaya-backup.sh` finds `*.db` recursively and snapshots each with
+  `VACUUM INTO`, so `vitara/profiles/*.db` is included with no change.
+- **Deleting a person is deleting their file** (`DELETE /api/profiles/<id>?confirm=<id>`; the
+  original profile is refused). There is no table to sweep and nothing to forget.
+
+Databases created by EF Core are in WAL mode, so a profile can have `-wal` and `-shm` beside it.
+That is normal; copy a database with `VACUUM INTO` or the backup script, never with `cp`.
+
+This is *profiles*, not *accounts*: they sit under the one household login. Separate logins per
+person are a layer on top of this, not a replacement for it.

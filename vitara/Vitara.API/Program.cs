@@ -6,6 +6,7 @@ using Vitara.Application.Interfaces;
 using Vitara.Infrastructure.Data;
 using Vitara.Domain.Health;
 using Vitara.Infrastructure.Oura;
+using Vitara.Infrastructure.Profiles;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,8 +29,9 @@ builder.Configuration["Oura:RedirectUri"]  = Environment.GetEnvironmentVariable(
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
 builder.Services.AddMaayaAuth();
-builder.Services.AddDbContext<VitaraDbContext>(o =>
-    o.UseSqlite($"Data Source={Path.Combine(Directory.GetCurrentDirectory(), "..", "vitara.db")}"));
+// One database file per person. The original vitara.db is the profile called "default" and
+// is what every request without a profile still reaches, so nothing existing changes.
+builder.Services.AddVitaraProfiles();
 builder.Services.AddScoped<IVitaraRepository, VitaraRepository>();
 builder.Services.AddScoped<IOuraClient, OuraClient>();
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
@@ -39,22 +41,47 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<VitaraDbContext>();
-    await db.Database.EnsureCreatedAsync();
-    await VitaraDbContext.CreateMissingTablesAsync(db);
-    await NormalizeDayColumnsAsync(db);
+// Everybody's database is brought up to the current schema, not only the original: a column
+// added in this release has to exist in every file. Reference ranges are inserted only where
+// missing, so a range edited to match somebody's own lab report survives every restart.
+await ProfileDatabases.EnsureAllAsync(app.Services, app.Logger);
 
-    // Reference ranges, inserted only where missing. A range edited to match the user's
-    // own lab report has to survive every restart, so this never updates a row it finds.
-    var repo = scope.ServiceProvider.GetRequiredService<IVitaraRepository>();
-    var seeded = await repo.SeedReferenceRangesAsync(ReferenceRanges.Seed);
-    if (seeded > 0) app.Logger.LogInformation("Seeded {Count} laboratory reference ranges.", seeded);
-}
+// The one-off day-format repair is for data written before ISO days existed, which only the
+// original database can contain.
+using (var scope = app.Services.CreateScope())
+    await NormalizeDayColumnsAsync(scope.ServiceProvider.GetRequiredService<VitaraDbContext>());
 
 app.UseCors();
 app.UseMaayaAuth();
+
+// Which person is this request about. Before anything that opens a database, because the
+// connection is chosen when the context is created. No profile means the original one.
+app.Use(async (ctx, next) =>
+{
+    var resolved = ProfileResolver.Resolve(
+        ctx.Request.Headers["X-Profile-Id"].FirstOrDefault(),
+        ctx.Request.Query["profile"].FirstOrDefault(),
+        ctx.Request.Query["state"].FirstOrDefault(),
+        ctx.Request.Path.Value ?? "");
+
+    if (resolved.Error is not null)
+    {
+        ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+        await ctx.Response.WriteAsJsonAsync(new { error = resolved.Error });
+        return;
+    }
+
+    if (!ctx.RequestServices.GetRequiredService<ProfileCatalog>().Exists(resolved.Id))
+    {
+        ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+        await ctx.Response.WriteAsJsonAsync(new { error = "There is no such profile." });
+        return;
+    }
+
+    ctx.RequestServices.GetRequiredService<ProfileContext>().Use(resolved.Id);
+    await next();
+});
+
 app.MapControllers();
 app.Run(Environment.GetEnvironmentVariable("BIND_URL") ?? "http://localhost:5100");
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { authHeaders } from '../services/auth';
+import { vitaraHeaders } from '../services/profile';
 import { moduleApi } from '../services/apiHost';
 import { Info } from './health/HealthKit';
 
@@ -176,7 +176,7 @@ export function VitaraMetricsCatalogue() {
   const { data, isPending, isError, error, refetch } = useQuery<CatalogueResult>({
     queryKey: ['vitara-metric-catalogue'],
     queryFn: async () => {
-      const res = await fetch(`${INSIGHT}/api/health/metrics`, { headers: authHeaders() });
+      const res = await fetch(`${INSIGHT}/api/health/metrics`, { headers: vitaraHeaders() });
       if (!res.ok) throw new Error(`${res.status}`);
       return res.json();
     },

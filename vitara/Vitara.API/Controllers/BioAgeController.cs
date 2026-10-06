@@ -36,7 +36,7 @@ public class BioAgeController(IVitaraRepository repo) : ControllerBase
         if (sleep.Count < 3 && readiness.Count < 3)
             return Ok(new BioAgeResult(null, 0, null, new BioAgeFactors(null, null, null, null, null), "insufficient"));
 
-        var chronoAge = profile?.Age ?? 30;
+        var chronoAge = profile?.CurrentAge ?? 30;
         var quality   = sleep.Count >= 14 && readiness.Count >= 14 ? "good" : "limited";
 
         // Use Oura cardiovascular age if available
@@ -143,7 +143,7 @@ public class BioAgeController(IVitaraRepository repo) : ControllerBase
             disclaimer = Disclaimer,
             method = Method,
             dataQuality = quality,
-            ageSource = profile?.Age != null ? "oura" : "config",
+            ageSource = profile?.CurrentAge != null ? "oura" : "config",
         });
     }
 
@@ -157,7 +157,7 @@ public class BioAgeController(IVitaraRepository repo) : ControllerBase
         var from = to.AddDays(-days);
         var cvAge = await repo.GetCardiovascularAgeAsync(from, to);
         var vo2   = await repo.GetVo2MaxAsync(from, to);
-        var chrono = (await repo.GetProfileAsync())?.Age;
+        var chrono = (await repo.GetProfileAsync())?.CurrentAge;
 
         return Ok(new
         {

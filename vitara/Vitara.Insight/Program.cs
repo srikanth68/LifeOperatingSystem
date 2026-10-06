@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Vitara.Application.Interfaces;
 using Vitara.Infrastructure.Data;
 using Vitara.Insight;
+using Vitara.Infrastructure.Profiles;
 
 // Vitara Insight — the computation half of health, as its own process.
 //
@@ -29,8 +30,10 @@ using Vitara.Insight;
 //                                              DerivedMetrics, Findings)
 //
 // Both read everything. Nothing writes the same row as anything else, so SQLite in WAL
-// mode serialises the writes it has to and never has two processes fighting over a
-// table. The same pattern already runs between vitara and vitara-worker.
+// mode serialises the writes it has to and never has two processes fighting over a table.
+// (WAL is not set anywhere in this code: EF Core puts a SQLite database into WAL when it
+// CREATES it, and the setting lives in the file, so it applies to every profile database
+// made the same way.) The same pattern already runs between vitara and vitara-worker.
 //
 // No schema creation here, deliberately. Vitara.API owns the schema and runs
 // EnsureCreated plus the hand-written migrations at startup; a second process racing to
@@ -40,8 +43,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddMaayaAuth();
-builder.Services.AddDbContext<VitaraDbContext>(o =>
-    o.UseSqlite($"Data Source={Path.Combine(Directory.GetCurrentDirectory(), "..", "vitara.db")}"));
+// One database per person; see ProfileServices. The original vitara.db is "default".
+builder.Services.AddVitaraProfiles();
 builder.Services.AddScoped<IVitaraRepository, VitaraRepository>();
 
 builder.Services.AddHostedService<DerivedMetricsWorker>();
@@ -55,6 +58,36 @@ var app = builder.Build();
 
 app.UseCors();
 app.UseMaayaAuth();
+
+// Which person is this request about. Identical to the API's, because Vitara and Insight are
+// one product with two backends: the same header means the same person in both, and the
+// browser sends it to both. No profile means the original one.
+app.Use(async (ctx, next) =>
+{
+    var resolved = ProfileResolver.Resolve(
+        ctx.Request.Headers["X-Profile-Id"].FirstOrDefault(),
+        ctx.Request.Query["profile"].FirstOrDefault(),
+        ctx.Request.Query["state"].FirstOrDefault(),
+        ctx.Request.Path.Value ?? "");
+
+    if (resolved.Error is not null)
+    {
+        ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+        await ctx.Response.WriteAsJsonAsync(new { error = resolved.Error });
+        return;
+    }
+
+    if (!ctx.RequestServices.GetRequiredService<ProfileCatalog>().Exists(resolved.Id))
+    {
+        ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+        await ctx.Response.WriteAsJsonAsync(new { error = "There is no such profile." });
+        return;
+    }
+
+    ctx.RequestServices.GetRequiredService<ProfileContext>().Use(resolved.Id);
+    await next();
+});
+
 app.MapControllers();
 
 app.Run(Environment.GetEnvironmentVariable("BIND_URL") ?? "http://localhost:5110");

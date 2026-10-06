@@ -5,6 +5,7 @@ using Vitara.Insight.Health;
 using Vitara.Application.Interfaces;
 using Vitara.Domain.Entities;
 using Vitara.Domain.Health;
+using Vitara.Infrastructure.Profiles;
 
 namespace Vitara.Insight;
 
@@ -37,7 +38,7 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
 
         while (!ct.IsCancellationRequested)
         {
-            try { await RunIfNewDataAsync(ct); }
+            try { await ProfileScopes.ForEachAsync(services, (scope, id) => RunIfNewDataAsync(scope, id, ct), logger); }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
             catch (Exception ex) { logger.LogError(ex, "Derived metrics pass failed."); }
 
@@ -45,9 +46,10 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
         }
     }
 
-    private async Task RunIfNewDataAsync(CancellationToken ct)
+    // Once per person, each against their own database. A profile that has never synced a
+    // ring has no observations and costs one empty query.
+    private async Task RunIfNewDataAsync(IServiceScope scope, string profileId, CancellationToken ct)
     {
-        using var scope = services.CreateScope();
         var repo = scope.ServiceProvider.GetRequiredService<IVitaraRepository>();
 
         // Project first: observations are derived from the typed tables, so anything the
@@ -71,8 +73,8 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
             return;
         }
 
-        logger.LogInformation("Derived metrics: computing through {Day} ({Projected} new observations).",
-            latestData, projected);
+        logger.LogInformation("Derived metrics for {Profile}: computing through {Day} ({Projected} new observations).",
+            profileId, latestData, projected);
 
         await ComputeAsync(repo, latestData.Value, ct);
     }
@@ -241,7 +243,7 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
             // selects between rows for the analytes that have more than one.
             await repo.GetReferenceRangesAsync(),
             profile?.BiologicalSex,
-            profile?.Age));
+            profile?.CurrentAge));
         var sync = await repo.SyncFindingsAsync(findings, asOf);
 
         // Opened and resolved are events; continued is a condition that is still true

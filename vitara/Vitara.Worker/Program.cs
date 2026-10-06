@@ -4,6 +4,7 @@ using Vitara.Infrastructure.Nutrition;
 using Vitara.Infrastructure.Data;
 using Vitara.Infrastructure.Oura;
 using Vitara.Worker;
+using Vitara.Infrastructure.Profiles;
 
 // Load .env
 var envFile = Path.Combine(Directory.GetCurrentDirectory(), "..", ".env");
@@ -25,8 +26,8 @@ builder.Configuration["Oura:RedirectUri"]  = Environment.GetEnvironmentVariable(
     ?? "http://localhost:5100/api/oura/callback";
 
 builder.Services.AddHttpClient();
-builder.Services.AddDbContext<VitaraDbContext>(o =>
-    o.UseSqlite($"Data Source={Path.Combine(Directory.GetCurrentDirectory(), "..", "vitara.db")}"));
+// One database per person; see ProfileServices. The original vitara.db is "default".
+builder.Services.AddVitaraProfiles();
 builder.Services.AddScoped<IVitaraRepository, VitaraRepository>();
 builder.Services.AddScoped<IOuraClient, OuraClient>();
 builder.Services.AddScoped<INutritionSource, MfpNutritionClient>();
@@ -36,11 +37,7 @@ builder.Services.AddHostedService<NutritionSyncWorker>();
 
 var host = builder.Build();
 
-using (var scope = host.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<VitaraDbContext>();
-    await db.Database.EnsureCreatedAsync();
-    await VitaraDbContext.CreateMissingTablesAsync(db);
-}
+// Everybody's file, not only the original: a column added in this release has to exist in all.
+await ProfileDatabases.EnsureAllAsync(host.Services);
 
 await host.RunAsync();

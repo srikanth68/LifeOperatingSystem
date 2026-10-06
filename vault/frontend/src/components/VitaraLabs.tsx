@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { authHeaders } from '../services/auth';
+import { vitaraHeaders } from '../services/profile';
 import { moduleApi } from '../services/apiHost';
 import { Panel, Chip, Empty, Info, Row } from './health/HealthKit';
 
@@ -75,7 +75,7 @@ interface LabPanelRow {
 }
 
 const get = async <T,>(url: string): Promise<T> => {
-  const r = await fetch(url, { headers: authHeaders() });
+  const r = await fetch(url, { headers: vitaraHeaders() });
   if (!r.ok) throw new Error(`${r.status}`);
   return r.json();
 };
@@ -106,7 +106,7 @@ export function VitaraLabs() {
     mutationFn: async () => {
       const res = await fetch(`${API}/api/labs`, {
         method: 'POST',
-        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        headers: { ...vitaraHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({
           drawnOn,
           labName: labName.trim() || null,
@@ -131,7 +131,7 @@ export function VitaraLabs() {
   });
 
   const remove = useMutation({
-    mutationFn: (id: string) => fetch(`${API}/api/labs/${id}`, { method: 'DELETE', headers: authHeaders() }),
+    mutationFn: (id: string) => fetch(`${API}/api/labs/${id}`, { method: 'DELETE', headers: vitaraHeaders() }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['labs'] }),
   });
 

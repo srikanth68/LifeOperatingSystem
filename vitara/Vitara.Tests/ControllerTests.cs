@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Vitara.API.Controllers;
 using Vitara.Application.Interfaces;
 using Vitara.Domain.Entities;
+using Vitara.Infrastructure.Profiles;
 
 // Controllers return anonymous objects which serialize PascalCase by default.
 // Use case-insensitive JSON to match both camelCase and PascalCase.
@@ -413,7 +414,7 @@ public class ProfileControllerTests
     [Fact]
     public async Task Profile_ReturnsNotSynced_WhenEmpty()
     {
-        var ctrl = new ProfileController(new FakeRepo());
+        var ctrl = new ProfileController(new FakeRepo(), new ProfileContext());
         var ok = Assert.IsType<OkObjectResult>(await ctrl.Get());
         var json = JsonSerializer.Serialize(ok.Value, Opts);
         Assert.Contains("\"synced\":false", json);
@@ -423,7 +424,7 @@ public class ProfileControllerTests
     public async Task Profile_ReturnsSynced_WithData()
     {
         var repo = new FakeRepo { Profile = new UserProfile { Id = "p", Age = 25 } };
-        var ok = Assert.IsType<OkObjectResult>(await new ProfileController(repo).Get());
+        var ok = Assert.IsType<OkObjectResult>(await new ProfileController(repo, new ProfileContext()).Get());
         var json = JsonSerializer.Serialize(ok.Value, Opts);
         Assert.Contains("\"synced\":true", json);
         Assert.Contains("\"age\":25", json);

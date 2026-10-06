@@ -829,6 +829,44 @@ SPARSE   hba1c · total_cholesterol · ldl · hdl · triglycerides
         process: the tables below are marked with which one writes them.
       </p>
 
+      <h3>One database per person</h3>
+      <p>
+        More than one person can use Vitara, and each has <b>their own database file</b>. The
+        original <code>vitara.db</code> is the profile called <code>default</code>; everyone else
+        lives in <code>profiles/&lt;id&gt;.db</code> beside it. A request names its person in an
+        <code>X-Profile-Id</code> header, absent meaning the original, and the connection is chosen
+        when the database context is created &mdash; the one place a path is ever decided.
+      </p>
+      <div class="why">
+        <span class="tag">Why not a profile column on every table</span>
+        <p>
+          That was the first design and it was costed and rejected on the data. Eleven of the
+          tables are keyed by <b>the date itself</b> &mdash; a weigh-in's primary key is
+          <code>2026-10-03</code> &mdash; so two people weighing in on the same day would collide,
+          and every unique index would need rebuilding, all on the only copy of the data. Separate
+          files need none of that. They cannot leak between people because there is no shared table
+          to forget a filter on; the original database is untouched byte for byte; and "delete
+          everything about me" is deleting one file. The cost is that queries across people are
+          harder, which at this scale nothing needs.
+        </p>
+      </div>
+      <p>
+        The id arrives from a browser and becomes a file path, so it is a security boundary: lowercase
+        letters, digits and hyphens, forty characters at most, checked again against the resolved
+        path. Generated ids are opaque (<code>p-3f9a01bc</code>), never a slug of a name, because a
+        name is personal data and file names end up in logs. A malformed id is a <code>400</code> and
+        an unknown one a <code>404</code> &mdash; never a silent fall back to somebody's real data.
+      </p>
+      <p>
+        <b>Who owns each field.</b> A profile is written by two parties: the person, through a form,
+        and the Oura sync, every night. The sync used to save its answer over the whole row, so a
+        height typed in was erased the first night Oura had none to offer. Ownership is now per field:
+        a field entered by hand is <em>locked</em> and no automatic source overrides it; a field nobody
+        touched is the sync's to fill, and the sync only ever fills &mdash; an empty value from Oura
+        means "Oura does not know", never "this should now be empty". Age is worked out from a date
+        of birth when there is one, instead of being stored and left to go stale.
+      </p>
+
       <h3>Ingestion tables (written by vitara / vitara-worker)</h3>
 
       <div class="schema">
@@ -1537,6 +1575,12 @@ GET    /api/labs                  draws, each result against its range and the l
 POST   /api/labs                  enter a panel: one date, many analytes
 GET    /api/labs/analytes         what can be entered, with ranges
 DELETE /api/labs/{id}             removes the draw and its results
+
+GET    /api/profiles               who exists (not scoped: it is how you pick one)
+POST   /api/profiles               add a person: name, sex, date of birth, height
+DELETE /api/profiles/{id}?confirm={id}  delete a person and all their data; never the original
+GET    /api/profile                the current person, with who set each field
+PUT    /api/profile                edit the current person; filled fields are locked against sync
 
 GET    /api/interventions          what was started, with its declared target
 POST   /api/interventions          start one: name, kind, target metric, date

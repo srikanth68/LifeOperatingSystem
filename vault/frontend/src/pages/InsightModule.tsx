@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { makeModuleQueryClient } from '../services/moduleQuery';
 import { Shell, Info, Chip, Row } from '../components/health/HealthKit';
-import { authHeaders } from '../services/auth';
+import { vitaraHeaders, useProfileKey } from '../services/profile';
 import { moduleApi } from '../services/apiHost';
 import '../styles/modules.css';
 import '../styles/insight.css';
@@ -22,7 +22,6 @@ import { todayInTz } from '../services/timezone';
 // then the slower-moving relationships and the raw baseline numbers.
 const API = moduleApi(5110);
 const VITARA = moduleApi(5100);
-const qc  = makeModuleQueryClient(5 * 60_000);
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -305,7 +304,7 @@ interface BioAge {
 // ── Fetching ─────────────────────────────────────────────────────────────────
 
 async function get<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: authHeaders() });
+  const res = await fetch(url, { headers: vitaraHeaders() });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json() as Promise<T>;
 }
@@ -979,7 +978,7 @@ function InterventionsSection() {
     mutationFn: async () => {
       const r = await fetch(`${VITARA}/api/interventions`, {
         method: 'POST',
-        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        headers: { ...vitaraHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, kind, targetMetric: target || null, startedOn }),
       });
       const json = await r.json();
@@ -995,7 +994,7 @@ function InterventionsSection() {
 
   const stop = useMutation({
     mutationFn: (id: string) =>
-      fetch(`${VITARA}/api/interventions/${id}/stop`, { method: 'POST', headers: authHeaders() }),
+      fetch(`${VITARA}/api/interventions/${id}/stop`, { method: 'POST', headers: vitaraHeaders() }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['interventions'] }),
   });
 
@@ -1376,7 +1375,7 @@ function ExportButton() {
   const save = async () => {
     setBusy(true);
     try {
-      const res = await fetch(`${API}/api/health/signature/export`, { headers: authHeaders() });
+      const res = await fetch(`${API}/api/health/signature/export`, { headers: vitaraHeaders() });
       if (!res.ok) throw new Error(`${res.status}`);
 
       const url = URL.createObjectURL(new Blob([JSON.stringify(await res.json(), null, 2)], { type: 'application/json' }));
@@ -1695,8 +1694,12 @@ function InsightPage() {
 }
 
 export default function InsightModule() {
+  // The same person as Vitara -- one choice, read by both -- and a fresh cache when it changes.
+  const profileKey = useProfileKey();
+  const client = useMemo(() => makeModuleQueryClient(5 * 60_000), [profileKey]);
+
   return (
-    <QueryClientProvider client={qc}>
+    <QueryClientProvider client={client} key={profileKey}>
       <InsightPage />
     </QueryClientProvider>
   );

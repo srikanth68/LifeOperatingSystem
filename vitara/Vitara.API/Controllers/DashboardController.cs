@@ -64,7 +64,7 @@ public class DashboardController(IVitaraRepository repo) : ControllerBase
         return Ok(new
         {
             date = today.ToString("yyyy-MM-dd"),
-            profile = profile is not null ? new { profile.Age, profile.Weight, profile.Height, profile.BiologicalSex } : null,
+            profile = profile is not null ? new { Age = profile.CurrentAge, profile.Weight, profile.Height, profile.BiologicalSex, profile.Name } : null,
             sleep = todaySleep is null ? null : new
             {
                 day = todaySleep.Day.ToString("yyyy-MM-dd"),

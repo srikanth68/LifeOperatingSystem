@@ -1,11 +1,11 @@
-import { useState, Component } from 'react';
+import { useMemo, useState, Component } from 'react';
 import type { ReactNode } from 'react';
 import { QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { makeModuleQueryClient } from '../services/moduleQuery';
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
-import { authHeaders } from '../services/auth';
+import { vitaraHeaders, profileQuery, useProfileKey } from '../services/profile';
 import { moduleApi } from '../services/apiHost';
 import { VitaraMetricsCatalogue } from '../components/VitaraMetricsCatalogue';
 import { VitaraLabs } from '../components/VitaraLabs';
@@ -15,7 +15,6 @@ import '../styles/vitara.css';
 
 import { todayInTz, addDays, formatInstant, formatClock, zoned } from '../services/timezone';
 const API = moduleApi(5100);
-const qc  = makeModuleQueryClient(5 * 60_000);
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -96,10 +95,10 @@ interface ProtocolResult {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const get = <T,>(url: string): Promise<T> =>
-  fetch(url, { headers: authHeaders() }).then(r => { if (!r.ok) throw new Error(r.status.toString()); return r.json(); });
+  fetch(url, { headers: vitaraHeaders() }).then(r => { if (!r.ok) throw new Error(r.status.toString()); return r.json(); });
 
 const send = async <T = unknown,>(url: string, method: string, body?: unknown): Promise<T> => {
-  const opts: RequestInit = { method, headers: { ...authHeaders(), 'Content-Type': 'application/json' } };
+  const opts: RequestInit = { method, headers: { ...vitaraHeaders(), 'Content-Type': 'application/json' } };
   if (body !== undefined) opts.body = JSON.stringify(body);
   const r = await fetch(url, opts);
   if (!r.ok) throw new Error(r.status.toString());
@@ -160,7 +159,7 @@ function NotLinked() {
       </div>
       <h2>Connect Oura Ring</h2>
       <p>Link your Oura Ring to unlock sleep architecture, readiness scores, cardiovascular age, stress tracking, and biological age intelligence.</p>
-      <a href={`${API}/api/oura/auth`} target="_blank" rel="noreferrer" className="btn-primary">Link Oura Ring</a>
+      <a href={`${API}/api/oura/auth${profileQuery()}`} target="_blank" rel="noreferrer" className="btn-primary">Link Oura Ring</a>
     </div>
   );
 }
@@ -176,7 +175,7 @@ function OuraExpiredBanner() {
       background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)',
     }}>
       <span style={{ fontSize: '0.9rem' }}>Your Oura session expired or couldn't refresh. Re-link to resume syncing.</span>
-      <a href={`${API}/api/oura/auth`} target="_blank" rel="noreferrer" className="btn-primary">Re-link Oura</a>
+      <a href={`${API}/api/oura/auth${profileQuery()}`} target="_blank" rel="noreferrer" className="btn-primary">Re-link Oura</a>
     </div>
   );
 }
@@ -289,7 +288,7 @@ function TodayPage({ status }: { status: OuraStatus }) {
   const { data: labs } = useQuery<Measurement[]>({ queryKey: ['measurements', 120], queryFn: () => get(`${API}/api/measurements?days=120`) });
 
   const sync = useMutation({
-    mutationFn: () => fetch(`${API}/api/oura/sync`, { method: 'POST', headers: authHeaders() }).then(r => { if (!r.ok) throw new Error(r.status.toString()); return r.json(); }),
+    mutationFn: () => fetch(`${API}/api/oura/sync`, { method: 'POST', headers: vitaraHeaders() }).then(r => { if (!r.ok) throw new Error(r.status.toString()); return r.json(); }),
     onSuccess: () => qClient.invalidateQueries(),
   });
 
@@ -1105,7 +1104,7 @@ function BodyPage() {
                   empty="Nothing recorded yet"
                   spark={<Spark color="var(--hx-4)" data={weightSeries}/>}/>
         <RailCard label="BMI" icon="📐" value={latestBmi != null ? latestBmi.toFixed(1) : null}
-                  sub={heightM ? 'weight against height' : 'Set your height on the Record tab'}
+                  sub={heightM ? 'weight against height' : 'Add your height from the profile menu, top right'}
                   info="Weight against height. It says nothing about muscle or about where fat sits, which is why waist-to-height is the better guide."
                   empty="Needs weight and height"/>
       </aside>
@@ -1905,7 +1904,7 @@ function MeasurePanel() {
   const { data: specs } = useQuery({
     queryKey: ['measurement-metrics'],
     queryFn: async () => {
-      const res = await fetch(`${API}/api/measurements/metrics`, { headers: authHeaders() });
+      const res = await fetch(`${API}/api/measurements/metrics`, { headers: vitaraHeaders() });
       return (await res.json()) as MetricSpec[];
     },
     staleTime: 60 * 60_000,
@@ -1914,7 +1913,7 @@ function MeasurePanel() {
   const { data: recent } = useQuery({
     queryKey: ['measurements'],
     queryFn: async () => {
-      const res = await fetch(`${API}/api/measurements?days=120`, { headers: authHeaders() });
+      const res = await fetch(`${API}/api/measurements?days=120`, { headers: vitaraHeaders() });
       return (await res.json()) as Measurement[];
     },
   });
@@ -1939,7 +1938,7 @@ function MeasurePanel() {
 
       const res = await fetch(`${API}/api/measurements`, {
         method: 'POST',
-        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        headers: { ...vitaraHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
 
@@ -1958,7 +1957,7 @@ function MeasurePanel() {
 
   const remove = useMutation({
     mutationFn: (id: string) =>
-      fetch(`${API}/api/measurements/${id}`, { method: 'DELETE', headers: authHeaders() }),
+      fetch(`${API}/api/measurements/${id}`, { method: 'DELETE', headers: vitaraHeaders() }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['measurements'] }),
   });
 
@@ -2105,7 +2104,7 @@ function XmlImportPanel() {
       const body = new FormData();
       body.append('file', file);
       const res = await fetch(`${API}/api/healthimport/xml`, {
-        method: 'POST', headers: authHeaders(), body,
+        method: 'POST', headers: vitaraHeaders(), body,
       });
       const json = await res.json();
       if (!res.ok) { setError(json?.error ?? `${res.status}`); return; }
@@ -2128,7 +2127,7 @@ function XmlImportPanel() {
     try {
       const res = await fetch(`${API}/api/healthimport/xml/commit`, {
         method: 'POST',
-        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        headers: { ...vitaraHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: scan.token, sources: [...chosen], setHeight }),
       });
       const json = await res.json();
@@ -2296,7 +2295,7 @@ function ImportPanel() {
       body.append('file', file);
       const res = await fetch(`${API}/api/healthimport/${endpoint}`, {
         method: 'POST',
-        headers: authHeaders(),
+        headers: vitaraHeaders(),
         body,
       });
 
@@ -2513,5 +2512,9 @@ function VitaraInner() {
 }
 
 export default function VitaraModule() {
-  return <QueryClientProvider client={qc}><VitaraInner/></QueryClientProvider>;
+  // Keyed on the person: switching discards every cached query and all local state, so a screen
+  // can never show one person's numbers under another person's name while a refetch is in flight.
+  const profileKey = useProfileKey();
+  const client = useMemo(() => makeModuleQueryClient(5 * 60_000), [profileKey]);
+  return <QueryClientProvider client={client} key={profileKey}><VitaraInner/></QueryClientProvider>;
 }

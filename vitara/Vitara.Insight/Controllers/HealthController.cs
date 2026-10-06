@@ -297,7 +297,7 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
 
         var result = SelfCheck.Run(new SelfCheck.Inputs(
             observations, derived, baselines, findings, interventions, days, ranges,
-            today, profile?.BiologicalSex, profile?.Age));
+            today, profile?.BiologicalSex, profile?.CurrentAge));
 
         return Ok(new
         {
@@ -439,7 +439,7 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         var ranges = await repo.GetReferenceRangesAsync();
         var profile = await repo.GetProfileAsync();
 
-        var patterns = Patterns.Run(observations, today, ranges, profile?.BiologicalSex, profile?.Age);
+        var patterns = Patterns.Run(observations, today, ranges, profile?.BiologicalSex, profile?.CurrentAge);
         var note = Evidence.For(Evidence.CompositePattern);
 
         return Ok(new
@@ -916,7 +916,7 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
 
         var brief = VisitBrief.Build(
             findings, labResults, panels, ranges, baselines,
-            profile?.BiologicalSex, profile?.Age, today);
+            profile?.BiologicalSex, profile?.CurrentAge, today);
 
         return Ok(new
         {

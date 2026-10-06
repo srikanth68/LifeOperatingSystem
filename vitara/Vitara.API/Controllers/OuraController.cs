@@ -5,11 +5,12 @@ using System.Text.Json.Serialization;
 using Vitara.Application.Interfaces;
 using Vitara.Domain.Entities;
 using Vitara.Domain.Health;
+using Vitara.Infrastructure.Profiles;
 
 namespace Vitara.API.Controllers;
 
 [ApiController, Route("api/oura")]
-public class OuraController(IOuraClient client, IVitaraRepository repo, IConfiguration cfg) : ControllerBase
+public class OuraController(IOuraClient client, IVitaraRepository repo, IConfiguration cfg, ProfileContext profile) : ControllerBase
 {
     [AllowAnonymous]
     [HttpGet("auth")]
@@ -18,6 +19,15 @@ public class OuraController(IOuraClient client, IVitaraRepository repo, IConfigu
         var clientId    = cfg["Oura:ClientId"];
         var redirectUri = Uri.EscapeDataString(cfg["Oura:RedirectUri"] ?? "http://localhost:5100/api/oura/callback");
         var url = $"https://cloud.ouraring.com/oauth/authorize?response_type=code&client_id={clientId}&redirect_uri={redirectUri}&scope=daily+personal+session+tag+workout";
+
+        // Linking a ring is a full-page navigation, which cannot carry a custom header, so the
+        // person is named in the URL (?profile=) and handed to Oura as `state`. Oura gives the
+        // browser back exactly what it was sent, and the callback reads it from there --
+        // without this the token would be filed under whoever the default profile is, and
+        // the second person's ring would silently become the first person's.
+        if (profile.ProfileId != ProfileIds.Default)
+            url += "&state=" + Uri.EscapeDataString(profile.ProfileId);
+
         return Redirect(url);
     }
 

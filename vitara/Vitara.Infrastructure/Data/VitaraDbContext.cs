@@ -155,6 +155,9 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
         var sql = """
             CREATE TABLE IF NOT EXISTS Profiles (
                 Id TEXT PRIMARY KEY,
+                Name TEXT,
+                DateOfBirth TEXT,
+                LockedFields TEXT,
                 Age INTEGER,
                 Weight REAL,
                 Height REAL,
@@ -281,6 +284,14 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
         // gets no verdict, which is the correct answer for it: picking a target now
         // would be picking it after seeing the result.
         await AddColumnIfMissingAsync(db, "Interventions", "TargetMetric", "TEXT");
+
+        // A person, not just a row of Oura's fields. Name and date of birth are what the
+        // profile form collects, and LockedFields records which of the synced fields were
+        // set by hand so the nightly sync stops overwriting them. All nullable: a profile
+        // from before this existed simply has none of them yet.
+        await AddColumnIfMissingAsync(db, "Profiles", "Name", "TEXT");
+        await AddColumnIfMissingAsync(db, "Profiles", "DateOfBirth", "TEXT");
+        await AddColumnIfMissingAsync(db, "Profiles", "LockedFields", "TEXT");
 
         // Renamed rather than added: the column holds Oura's 0-100 readiness contributor
         // and was called RestingHeartRate, which is how it ended up served as bpm and fed

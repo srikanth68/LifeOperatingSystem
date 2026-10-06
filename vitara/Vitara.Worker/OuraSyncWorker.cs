@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Vitara.Application.Interfaces;
 using Vitara.Domain.Health;
+using Vitara.Infrastructure.Profiles;
 
 namespace Vitara.Worker;
 
@@ -68,16 +69,35 @@ public class OuraSyncWorker(IServiceProvider services, ILogger<OuraSyncWorker> l
     }
 
     // Returns true when at least one collection came back with data.
+    // Everyone with a linked ring, each against their own database.
+    //
+    // Succeeds if ANY profile wrote data, which keeps the retry behaviour exactly as it was
+    // for one person: the worker comes back soon after a failure, and stays quiet after a
+    // success. A profile with no ring linked is not a failure and says nothing.
     private async Task<bool> SyncAsync(CancellationToken ct)
     {
-        logger.LogInformation("Starting Oura sync at {time}", DateTimeOffset.UtcNow);
+        var outcomes = new List<bool?>();
 
-        using var scope = services.CreateScope();
+        await ProfileScopes.ForEachAsync(services,
+            async (scope, id) => outcomes.Add(await SyncProfileAsync(scope, id, ct)), logger);
+
+        return outcomes.Any(o => o == true);
+    }
+
+    // null means "no ring linked for this person", which is not a failure.
+    private async Task<bool?> SyncProfileAsync(IServiceScope scope, string profileId, CancellationToken ct)
+    {
         var repo = scope.ServiceProvider.GetRequiredService<IVitaraRepository>();
         var client = scope.ServiceProvider.GetRequiredService<IOuraClient>();
 
         var token = await repo.GetTokenAsync();
-        if (token is null) { logger.LogWarning("No Oura token — skipping sync"); return false; }
+        if (token is null)
+        {
+            logger.LogDebug("Profile {Profile} has no Oura ring linked — skipping.", profileId);
+            return null;
+        }
+
+        logger.LogInformation("Starting Oura sync for profile {Profile} at {time}", profileId, DateTimeOffset.UtcNow);
 
         // Recorded before anything can go wrong, so an attempt that dies halfway still
         // leaves a trace. An attempt far newer than the last success is what tells the
@@ -123,9 +143,14 @@ public class OuraSyncWorker(IServiceProvider services, ILogger<OuraSyncWorker> l
 
         await SafeSync("profile", async () =>
         {
-            var profile = await client.GetPersonalInfoAsync(token.AccessToken);
-            await repo.SaveProfileAsync(profile);
-            logger.LogInformation("Profile synced: age={a}", profile.Age);
+            var incoming = await client.GetPersonalInfoAsync(token.AccessToken);
+
+            // MERGED, not overwritten. This used to save Oura's answer over the whole row, so
+            // a height entered by hand was erased the first night Oura had none to offer. The
+            // sync now only fills what the person has not set themselves, and never writes an
+            // empty value over a real one. See ProfileMerge.
+            await repo.SaveProfileAsync(ProfileMerge.FromSync(await repo.GetProfileAsync(), incoming));
+            logger.LogInformation("Profile synced: age={a}", incoming.Age);
         }, failures);
 
         var sleep = await SafeSync("sleep", () => client.GetSleepAsync(token.AccessToken, From("sleep"), to), failures);

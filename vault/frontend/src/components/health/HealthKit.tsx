@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import '../../styles/health-app.css';
 
+import { ProfileMenu } from './ProfileMenu';
 // The shared pieces of the health app: the shell, the tiles, and the empty states.
 //
 // Vitara and Insight are heading for a product of their own, so they stop borrowing
@@ -34,7 +35,7 @@ export function Shell({ title, subtitle, icon, right, tabs, accent, accentWash, 
           <h1>{title}</h1>
           <p>{subtitle}</p>
         </div>
-        {right && <div className="hx-top-right">{right}</div>}
+        <div className="hx-top-right">{right}<ProfileMenu /></div>
       </header>
       {tabs}
       {children}

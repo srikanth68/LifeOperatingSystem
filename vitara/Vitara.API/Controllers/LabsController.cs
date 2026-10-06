@@ -60,11 +60,11 @@ public class LabsController(IVitaraRepository repo) : ControllerBase
                 .GroupBy(m => m.Metric)
                 .ToDictionary(g => g.Key, g => g.OrderBy(m => m.CreatedAt).Last().Value);
 
-            var derived = DerivedLabs.From(values, panel.Fasting, profile?.BiologicalSex, profile?.Age);
+            var derived = DerivedLabs.From(values, panel.Fasting, profile?.BiologicalSex, profile?.CurrentAge);
 
             (string Word, string Text, object? Band) Standing(string metric, double value)
             {
-                var range = ReferenceRanges.For(ranges, metric, profile?.BiologicalSex, profile?.Age, panel.LabName);
+                var range = ReferenceRanges.For(ranges, metric, profile?.BiologicalSex, profile?.CurrentAge, panel.LabName);
                 var where = ReferenceRanges.Where(value, range);
 
                 return (where.ToString().ToLowerInvariant(),
@@ -129,7 +129,7 @@ public class LabsController(IVitaraRepository repo) : ControllerBase
                 results = results.Select(m =>
                 {
                     var info = MetricCatalogue.Find(m.Metric);
-                    var range = ReferenceRanges.For(ranges, m.Metric, profile?.BiologicalSex, profile?.Age, panel.LabName);
+                    var range = ReferenceRanges.For(ranges, m.Metric, profile?.BiologicalSex, profile?.CurrentAge, panel.LabName);
                     var standing = ReferenceRanges.Where(m.Value, range);
                     var previous = Previous(m.Metric);
 
@@ -171,7 +171,7 @@ public class LabsController(IVitaraRepository repo) : ControllerBase
             .Where(m => m.Group is "Labs" or "Vitals")
             .Select(m =>
             {
-                var range = ReferenceRanges.For(ranges, m.Key, profile?.BiologicalSex, profile?.Age);
+                var range = ReferenceRanges.For(ranges, m.Key, profile?.BiologicalSex, profile?.CurrentAge);
                 return new
                 {
                     m.Key,
