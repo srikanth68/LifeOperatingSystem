@@ -163,6 +163,30 @@ interface Forecasts {
   timeAsleep: Forecast | null;
 }
 
+// An audit of the software rather than of the body. Three states, never two: every
+// other surface here renders "nothing is happening" and "I cannot see" identically,
+// as silence, and those are opposite facts.
+interface CapabilityRow {
+  key: string;
+  group: string;
+  label: string;
+  state: 'speaking' | 'quiet' | 'blind';
+  says: string;
+  needs: string[];
+  everSaid: number;
+  grade: string | null;
+}
+
+interface SelfCheck {
+  asOf: string;
+  speaking: number;
+  quiet: number;
+  blind: number;
+  headline: string[];
+  capabilities: CapabilityRow[];
+  coverage: { metric: string; label: string; group: string; readings: number; last: string | null; daysSinceLast: number | null; baseline: string; state: string }[];
+}
+
 // Grading your own decisions. The verdict is often "cannot say", and those are the
 // honest answers far more often than a result is.
 interface Target { key: string; label: string; unit: string; group: string; better: string }
@@ -835,6 +859,97 @@ function Correlations() {
 // The closest thing here to what people mean by an AI doctor, and deliberately not
 // one. It names no condition and recommends nothing; it remembers, which is the part
 // a ten-minute appointment actually fails at.
+function SelfCheckSection() {
+  const { data } = useQuery({
+    queryKey: ['self-check'],
+    queryFn: () => get<SelfCheck>(`${API}/api/health/self-check`),
+  });
+  const [open, setOpen] = useState(false);
+  if (!data) return null;
+
+  const groups = [...new Set(data.capabilities.map(c => c.group))];
+
+  return (
+    <section className="insight-section">
+      <h2 className="insight-h2">
+        What this can actually see
+        <Info label="Why this page exists">
+          Every other section here shows you something about your body. This one is about the software:
+          whether each part of it is finding nothing, or cannot look. Those are opposite facts and they
+          look identical everywhere else.
+        </Info>
+      </h2>
+
+      <div className="insight-top" style={{ marginBottom: '0.9rem' }}>
+        <div className="insight-card">
+          <p className="insight-eyebrow">Right now</p>
+          <p className="insight-summary" style={{ fontSize: '1rem' }}>
+            <b>{data.speaking}</b> speaking · <b>{data.quiet}</b> quiet · <b>{data.blind}</b> blind
+          </p>
+          {/* No total and no percentage. A single number summarising how well this is
+              working would be the same kind of composite the app grades as
+              experimental everywhere else. */}
+          <ul className="insight-asks insight-asks-muted" style={{ marginTop: '0.6rem' }}>
+            {data.headline.map(h => <li key={h}>{h}</li>)}
+          </ul>
+        </div>
+      </div>
+
+      {groups.map(g => (
+        <div key={g} className="insight-card" style={{ marginBottom: '0.7rem' }}>
+          <p className="insight-eyebrow">{g}</p>
+          <div className="hx-rows">
+            {data.capabilities.filter(c => c.group === g).map(c => (
+              <Row
+                key={c.key}
+                tone={c.state === 'speaking' ? 'good' : c.state === 'blind' ? 'warn' : undefined}
+                title={c.label}
+                note={
+                  <>
+                    {c.says}
+                    {c.needs.length > 0 && (
+                      <> <b>Needs:</b> {c.needs.slice(0, 3).join('; ')}{c.needs.length > 3 ? ` and ${c.needs.length - 3} more` : ''}</>
+                    )}
+                  </>
+                }
+                right={
+                  c.state === 'speaking' ? <Chip tone="good">speaking</Chip>
+                  : c.state === 'blind' ? <Chip tone="warn">blind</Chip>
+                  : <Chip>quiet</Chip>
+                }
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+
+      <button className="hx-btn" onClick={() => setOpen(o => !o)} style={{ marginTop: '0.4rem' }}>
+        {open ? 'Hide every metric' : `Show all ${data.coverage.length} metrics`}
+      </button>
+
+      {open && (
+        <div className="insight-card" style={{ marginTop: '0.7rem' }}>
+          <div className="hx-rows">
+            {data.coverage.map(m => (
+              <Row
+                key={m.metric}
+                tone={m.state === 'current' ? 'good' : m.state === 'never' ? undefined : 'warn'}
+                title={m.label}
+                note={
+                  m.readings === 0
+                    ? 'never recorded'
+                    : `${m.readings.toLocaleString()} readings · last ${m.daysSinceLast === 0 ? 'today' : `${m.daysSinceLast} days ago`} · baseline ${m.baseline}`
+                }
+                right={<Chip>{m.state}</Chip>}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // The only question here whose answer can embarrass the app, and the reason it is
 // worth asking: everything else describes what happened, and this checks whether a
 // decision was any good.
@@ -1572,6 +1687,7 @@ function InsightPage() {
         <Correlations />
         <IllnessRecord />
         <BaselineTable />
+        <SelfCheckSection />
       </div>
     </Shell>
   );

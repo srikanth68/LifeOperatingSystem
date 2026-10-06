@@ -266,6 +266,66 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         });
     }
 
+    // What does this system actually have to say about this body?
+    //
+    // A question about the software rather than about health, and the only honest way
+    // to find out whether the analysis layer is doing anything. Every other surface
+    // renders "nothing is happening" and "I cannot see" identically, as silence, and
+    // those are opposite facts.
+    //
+    // Expected to be unflattering, which is the point. A detector that has never fired
+    // because no baseline ever settled is a fact worth knowing before anything is
+    // built on top of it.
+    [HttpGet("self-check")]
+    public async Task<IActionResult> SelfCheckRun()
+    {
+        var today = LocalTime.Today;
+        var from = today.AddDays(-1200);
+
+        var observations = await repo.GetObservationsAsync(from, today);
+        var derived = await repo.GetDerivedMetricsAsync(from, today);
+        var baselineDay = await repo.GetLatestBaselineDayAsync();
+        var baselines = baselineDay is null ? [] : await repo.GetBaselinesAsync(baselineDay.Value);
+
+        // Resolved ones included: what a detector has EVER said is the question, not
+        // what it is saying this morning.
+        var findings = await repo.GetFindingsAsync(activeOnly: false, limit: 5000);
+        var interventions = await repo.GetInterventionsAsync();
+        var ranges = await repo.GetReferenceRangesAsync();
+        var profile = await repo.GetProfileAsync();
+        var days = await DayRows(today.AddDays(-400), today);
+
+        var result = SelfCheck.Run(new SelfCheck.Inputs(
+            observations, derived, baselines, findings, interventions, days, ranges,
+            today, profile?.BiologicalSex, profile?.Age));
+
+        return Ok(new
+        {
+            asOf = result.AsOf.ToString("yyyy-MM-dd"),
+            computedThrough = baselineDay?.ToString("yyyy-MM-dd"),
+
+            // Three counts and no total. See the note in SelfCheck on why there is no
+            // single figure here.
+            result.Speaking,
+            result.Quiet,
+            result.Blind,
+            result.Headline,
+
+            capabilities = result.Capabilities.Select(c => new
+            {
+                c.Key, c.Group, c.Label, c.State, c.Says, c.Needs, c.EverSaid, c.Grade,
+            }),
+
+            coverage = result.Coverage.Select(c => new
+            {
+                c.Metric, c.Label, c.Group, c.Tier, c.Source, c.Readings,
+                first = c.First?.ToString("yyyy-MM-dd"),
+                last = c.Last?.ToString("yyyy-MM-dd"),
+                c.DaysSinceLast, c.SpanDays, c.Baseline, c.State,
+            }),
+        });
+    }
+
     // Did the thing you changed actually change anything.
     //
     // The only question in this system whose answer can embarrass it, and the reason

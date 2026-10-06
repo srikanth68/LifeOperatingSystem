@@ -54,7 +54,7 @@ public static class Correlations
     // Things the user does, and things that respond. Lagged one way only: today's
     // training can affect tomorrow's HRV, and tomorrow's HRV cannot affect today's
     // training. Reversing that is how a correlation engine starts implying nonsense.
-    private static readonly string[] Drivers =
+    public static readonly string[] Drivers =
     [
         MetricKeys.ActiveCalories,
         MetricKeys.Steps,
@@ -62,7 +62,7 @@ public static class Correlations
         MetricKeys.StressHighSeconds,
     ];
 
-    private static readonly string[] Outcomes =
+    public static readonly string[] Outcomes =
     [
         MetricKeys.HrvRmssd,
         MetricKeys.RestingHeartRate,
@@ -75,7 +75,7 @@ public static class Correlations
     // Same day, and the day after. Nothing longer: the further out the lag, the more
     // tests and the weaker the mechanism, and a seven-day lag on daily data is mostly a
     // test of whether the user had a busy week.
-    private static readonly int[] Lags = [0, 1];
+    public static readonly int[] Lags = [0, 1];
 
     public static List<CorrelationResult> Run(
         IReadOnlyList<Observation> observations, DateOnly asOf, int windowDays = 90)

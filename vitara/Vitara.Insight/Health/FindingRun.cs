@@ -46,7 +46,7 @@ public static class FindingRun
     // So this is a curated list of the metrics where "unusually high or low for you"
     // is independently worth a sentence. The others are still measured, still
     // baselined, still visible on request; they just do not initiate a conversation.
-    private static readonly string[] DeviationMetrics =
+    public static readonly string[] DeviationMetrics =
     [
         MetricKeys.RestingHeartRate,
         MetricKeys.HrvRmssd,
@@ -71,7 +71,7 @@ public static class FindingRun
     ];
 
     // Slow movers, where a trend is meaningful and a day-to-day reading is not.
-    private static readonly string[] SlowMetrics =
+    public static readonly string[] SlowMetrics =
     [
         MetricKeys.RestingHeartRate,
         MetricKeys.HrvRmssd,
@@ -82,7 +82,7 @@ public static class FindingRun
     // Staleness applies to the dense tier only. A weight reading is entered by hand
     // every few days and a lab twice a year -- reporting either as "missing" would be
     // reporting the schedule, not a problem. A ring that stopped syncing is a problem.
-    private static readonly string[] DailyExpected =
+    public static readonly string[] DailyExpected =
     [
         MetricKeys.RestingHeartRate,
         MetricKeys.TotalSleepMinutes,
