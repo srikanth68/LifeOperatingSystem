@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Aasthi.Application;
 using Aasthi.Application.Interfaces;
 using Aasthi.Domain.Entities;
+using Maaya.Time;
 
 namespace Aasthi.API.Controllers;
 
@@ -143,7 +144,7 @@ public class LedgerController(IAasthiRepository repo, IVaultTransactions vault, 
     public async Task<IActionResult> Reconcile(
         [FromQuery] string? from = null, [FromQuery] string? to = null, CancellationToken ct = default)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = MaayaClock.Today;
         var start = DateOnly.TryParse(from, out var f) ? f : today.AddDays(-90);
         var end = DateOnly.TryParse(to, out var t) ? t : today;
 
@@ -218,7 +219,7 @@ public class LedgerController(IAasthiRepository repo, IVaultTransactions vault, 
     [HttpGet("unassigned")]
     public async Task<IActionResult> Unassigned([FromQuery] int days = 7, CancellationToken ct = default)
     {
-        var to = DateOnly.FromDateTime(DateTime.UtcNow);
+        var to = MaayaClock.Today;
         var from = to.AddDays(-Math.Clamp(days, 1, 120));
 
         var transactions = await vault.GetAsync(from, to, ct: ct);
@@ -340,7 +341,7 @@ public class LedgerController(IAasthiRepository repo, IVaultTransactions vault, 
     [HttpGet("unreceipted")]
     public async Task<IActionResult> Unreceipted([FromQuery] int year = 0)
     {
-        var y = year > 0 ? year : DateTime.UtcNow.Year;
+        var y = year > 0 ? year : MaayaClock.Today.Year;
         var all = await repo.GetFinancialsAsync(status: "confirmed");
 
         return Ok(all

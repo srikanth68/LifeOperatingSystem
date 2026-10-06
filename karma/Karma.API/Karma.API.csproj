@@ -9,6 +9,7 @@
     <ProjectReference Include="..\Karma.Application\Karma.Application.csproj" />
     <ProjectReference Include="..\Karma.Infrastructure\Karma.Infrastructure.csproj" />
     <ProjectReference Include="..\..\shared\Maaya.Auth\Maaya.Auth.csproj" />
+    <ProjectReference Include="..\..\shared\Maaya.Time\Maaya.Time.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />

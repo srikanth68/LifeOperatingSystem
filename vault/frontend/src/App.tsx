@@ -21,6 +21,7 @@ import type { ProbeResult } from './services/auth';
 import { useSystemStatus } from './services/systemStatus';
 import './styles/index.css';
 
+import { zonedNow } from './services/timezone';
 export type ModuleId = 'home' | 'vault' | 'vitara' | 'insight' | 'nexus' | 'aasthi' | 'san' | 'northstar' | 'karma' | 'sutra' | 'settings';
 
 /* ── SVG icon library ── */
@@ -292,7 +293,7 @@ export default function App() {
   }
 
   if (authState === 'greeting') {
-    const hour = new Date().getHours();
+    const hour = zonedNow().getHours();
     const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
     return <BootScreen message={`${greeting}, ${auth.getUsername() ?? 'Sir'}.`} ready />;
   }

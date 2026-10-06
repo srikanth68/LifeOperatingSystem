@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Vitara.Application.Interfaces;
 using Vitara.Domain.Entities;
+using Vitara.Domain.Health;
 
 namespace Vitara.API.Controllers;
 
@@ -140,7 +141,7 @@ public class OuraController(IOuraClient client, IVitaraRepository repo, IConfigu
             await repo.SaveTokenAsync(token);
         }
 
-        var to   = DateOnly.FromDateTime(DateTime.UtcNow);
+        var to   = LocalTime.Today;
         var from = to.AddDays(-30);
 
         var sleep     = await client.GetSleepAsync(token.AccessToken, from, to);

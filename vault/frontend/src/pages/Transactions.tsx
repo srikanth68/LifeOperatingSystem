@@ -4,6 +4,7 @@ import type { Transaction } from '@/types';
 import { usePropertyAssignments, PropertyCell } from '../components/PropertyAssign';
 import '../styles/transactions.css';
 
+import { todayInTz, addDays, formatDay } from '../services/timezone';
 // ── Category definitions ──────────────────────────────────────
 const CATALOG_GROUPS = [
   { group: 'ESSENTIALS', cats: ['Housing', 'Groceries', 'Utilities', 'Transport', 'Health & Fitness'] },
@@ -174,8 +175,8 @@ export default function Transactions() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [dateRange, setDateRange] = useState({
-    start: new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0],
-    end:   new Date().toISOString().split('T')[0],
+    start: addDays(todayInTz(), -30),
+    end:   todayInTz(),
   });
 
   // Property links come from Aasthi. If Aasthi is unreachable the column simply does
@@ -189,8 +190,8 @@ export default function Transactions() {
     try {
       setLoading(true);
       const res = await transactionsApi.getAll({
-        startDate: new Date(dateRange.start),
-        endDate:   new Date(dateRange.end),
+        startDate: dateRange.start,
+        endDate:   dateRange.end,
       });
       setTransactions(res.data);
     } catch { /* offline */ }
@@ -261,7 +262,7 @@ export default function Transactions() {
             <div className="txn-empty">No transactions found</div>
           ) : filtered.map(t => {
             const merchant = t.merchantName || t.description;
-            const dateFmt = new Date(t.transactionDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const dateFmt = formatDay(t.transactionDate, { month: 'short', day: 'numeric' });
             return (
               <div key={t.id} className="txn-row-new">
                 {/* Merchant */}

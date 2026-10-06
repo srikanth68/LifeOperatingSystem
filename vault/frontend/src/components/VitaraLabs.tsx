@@ -4,6 +4,7 @@ import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
 import { Panel, Chip, Empty, Info, Row } from './health/HealthKit';
 
+import { todayInTz } from '../services/timezone';
 const API = moduleApi(5100);
 
 // Blood work, entered as a draw rather than as readings.
@@ -84,7 +85,7 @@ export function VitaraLabs() {
   const { data: panels } = useQuery<LabPanelRow[]>({ queryKey: ['labs'], queryFn: () => get(`${API}/api/labs`) });
   const { data: analytes } = useQuery<Analyte[]>({ queryKey: ['analytes'], queryFn: () => get(`${API}/api/labs/analytes`) });
 
-  const [drawnOn, setDrawnOn] = useState(new Date().toISOString().slice(0, 10));
+  const [drawnOn, setDrawnOn] = useState(todayInTz());
   const [labName, setLabName] = useState('');
 
   // Three states, not a checkbox. "Nobody recorded it" is a real answer and the one

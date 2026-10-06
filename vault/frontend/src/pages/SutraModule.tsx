@@ -5,6 +5,7 @@ import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
 import '../styles/sutra.css';
 
+import { formatInstant } from '../services/timezone';
 const API = moduleApi(5400);
 
 const qc = makeModuleQueryClient(30_000);
@@ -40,7 +41,7 @@ const CAT_COLOR: Record<string, string> = Object.fromEntries(CATEGORIES.map(c =>
 const CAT_ICON: Record<string, string> = Object.fromEntries(CATEGORIES.map(c => [c.name, c.icon]));
 
 function fmtSize(b: number) { return b < 1024 ? `${b} B` : b < 1048576 ? `${(b/1024).toFixed(1)} KB` : `${(b/1048576).toFixed(1)} MB`; }
-function fmtDate(s: string) { return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+function fmtDate(s: string) { return formatInstant(s, { month: 'short', day: 'numeric', year: 'numeric' }); }
 function fileIcon(ct: string) { if (ct?.includes('pdf')) return '📄'; if (ct?.includes('image')) return '🖼️'; if (ct?.includes('spreadsheet') || ct?.includes('excel')) return '📊'; return '📎'; }
 
 const get = (url: string) => fetch(url, { headers: authHeaders() }).then(r => { if (!r.ok) throw new Error(r.status.toString()); return r.json(); });

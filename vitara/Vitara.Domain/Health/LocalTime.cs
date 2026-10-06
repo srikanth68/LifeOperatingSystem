@@ -1,3 +1,5 @@
+using Maaya.Time;
+
 namespace Vitara.Domain.Health;
 
 // The user's day, not the server's.
@@ -16,53 +18,38 @@ namespace Vitara.Domain.Health;
 // Oura itself reports a `day` field already in the user's local terms, so ingest
 // should prefer that over deriving one. This exists for everything else: manual
 // entries, "what is today", and the nightly job's notion of which day just ended.
+//
+// NOW A THIN LAYER OVER MaayaClock. This used to be its own implementation, which meant
+// Vitara agreed with itself and disagreed with every other module -- the controllers
+// that did not use it computed days from the UTC clock, and a weigh-in at 9pm was filed
+// under tomorrow. The zone is resolved once, in one place, for the whole system.
+// VITARA_TIMEZONE still wins when set, so an existing deployment keeps its behaviour.
 public static class LocalTime
 {
-    // IANA on Linux and macOS, Windows ids on Windows. .NET resolves both on modern
-    // runtimes, but not universally, so both spellings are tried before giving up.
-    private static readonly string[] Candidates = ["America/New_York", "Eastern Standard Time"];
-
-    private static readonly Lazy<TimeZoneInfo> Zone = new(() =>
+    static LocalTime()
     {
-        var configured = Environment.GetEnvironmentVariable("VITARA_TIMEZONE");
-        var ids = string.IsNullOrWhiteSpace(configured) ? Candidates : [configured, .. Candidates];
+        if (Environment.GetEnvironmentVariable("VITARA_TIMEZONE") is { Length: > 0 } configured)
+            MaayaClock.Configure(configured);
+    }
 
-        foreach (var id in ids)
-        {
-            try { return TimeZoneInfo.FindSystemTimeZoneById(id); }
-            catch (TimeZoneNotFoundException) { }
-            catch (InvalidTimeZoneException) { }
-        }
+    public static TimeZoneInfo TimeZone => MaayaClock.Zone;
 
-        // Falling back to the machine's own zone is wrong but recoverable; throwing
-        // here would take the whole module down over a timezone database. The container
-        // sets TZ anyway, so this is very nearly always correct in practice.
-        return TimeZoneInfo.Local;
-    });
+    public static DateTime Now => MaayaClock.Now;
 
-    public static TimeZoneInfo TimeZone => Zone.Value;
-
-    public static DateTime Now => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZone);
-
-    public static DateOnly Today => DateOnly.FromDateTime(Now);
+    public static DateOnly Today => MaayaClock.Today;
 
     // The day that has just finished, which is what a job running after midnight is
     // actually reporting on.
-    public static DateOnly Yesterday => Today.AddDays(-1);
+    public static DateOnly Yesterday => MaayaClock.Yesterday;
 
-    public static DateTime ToLocal(DateTime utc) =>
-        TimeZoneInfo.ConvertTimeFromUtc(utc.Kind == DateTimeKind.Utc ? utc : DateTime.SpecifyKind(utc, DateTimeKind.Utc), TimeZone);
+    public static DateTime ToLocal(DateTime utc) => MaayaClock.FromUtc(utc);
 
-    public static DateOnly DayOf(DateTime utc) => DateOnly.FromDateTime(ToLocal(utc));
+    public static DateOnly DayOf(DateTime utc) => MaayaClock.DayOf(utc);
 
-    // Midnight local, expressed in UTC — for querying stores that hold UTC instants.
-    public static DateTime StartOfDayUtc(DateOnly day)
-    {
-        var localMidnight = day.ToDateTime(TimeOnly.MinValue);
-        return TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(localMidnight, DateTimeKind.Unspecified), TimeZone);
-    }
+    // Midnight local, expressed in UTC -- for querying stores that hold UTC instants.
+    public static DateTime StartOfDayUtc(DateOnly day) => MaayaClock.StartOfDayUtc(day);
 
-    public static DateTime EndOfDayUtc(DateOnly day) => StartOfDayUtc(day.AddDays(1));
+    public static DateTime EndOfDayUtc(DateOnly day) => MaayaClock.EndOfDayUtc(day);
 
     // Which part of the day a reading belongs to, for the metrics that baseline on it.
     // Derived rather than asked for, so logging a blood pressure stays one tap --

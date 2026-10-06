@@ -3,6 +3,7 @@ using System.Text.Json;
 using Maaya.Auth;
 using NorthStar.Application.Interfaces;
 using NorthStar.Domain.Entities;
+using Maaya.Time;
 
 namespace NorthStar.API.Services;
 
@@ -74,7 +75,7 @@ public class ModuleSyncService(INorthStarRepository repo, IHttpClientFactory htt
                     var distilled = DistillKnowledge(mod, json);
                     if (distilled is not null)
                         await repo.UpsertDailyEntryAsync(mod, distilled.Value.Topic, distilled.Value.Summary, json,
-                            DateOnly.FromDateTime(DateTime.UtcNow));
+                            MaayaClock.Today);
                 }
                 catch { /* unexpected shape from a module — skip, snapshot still saved */ }
 

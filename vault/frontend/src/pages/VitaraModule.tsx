@@ -13,6 +13,7 @@ import { Shell as HxShell, Tabs as HxTabs, Card, Ring, Stat, Chip, Delta as HxDe
 import '../styles/modules.css';
 import '../styles/vitara.css';
 
+import { todayInTz, addDays, formatInstant, formatClock, zoned } from '../services/timezone';
 const API = moduleApi(5100);
 const qc  = makeModuleQueryClient(5 * 60_000);
 
@@ -84,7 +85,7 @@ function relTime(iso?: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.round(hrs / 24);
   if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return formatInstant(iso, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 interface ProtocolResult {
   name: string; icon: string; target: string; desc: string;
@@ -125,7 +126,7 @@ const avg = (arr: (number | undefined | null)[]) => {
   return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : undefined;
 };
 const fmtMin = (m: number) => { const h = Math.floor(m / 60), min = m % 60; return h > 0 ? `${h}h ${min}m` : `${min}m`; };
-const fmtClock = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+const fmtClock = (iso: string) => formatClock(iso);
 
 const TIMELINE_ANCHOR_HOUR = 18;
 const timelineAnchor = (d: Date) => { const a = new Date(d); a.setHours(TIMELINE_ANCHOR_HOUR, 0, 0, 0); if (d.getHours() < 12) a.setDate(a.getDate() - 1); return a; };
@@ -302,7 +303,7 @@ function TodayPage({ status }: { status: OuraStatus }) {
 
   const { line, sub } = greeting(d);
   const samples = d.heartRateSamples ?? [];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayInTz();
   const meal = food?.find(f => f.day === today) ?? food?.[0];
 
   const byDay = oneNightPerDay(nights ?? []);
@@ -529,7 +530,7 @@ function TodayPage({ status }: { status: OuraStatus }) {
               </div>
               {samples.length > 0 ? (
                 <ResponsiveContainer width="100%" height={120}>
-                  <AreaChart data={samples.map(h => ({ t: new Date(h.timestamp).toLocaleTimeString('en-US', { hour: 'numeric' }), bpm: h.bpm }))}
+                  <AreaChart data={samples.map(h => ({ t: formatInstant(h.timestamp, { hour: 'numeric' }), bpm: h.bpm }))}
                              margin={{ top: 14, right: 6, bottom: 0, left: 0 }}>
                     <defs>
                       <linearGradient id="hxHr" x1="0" y1="0" x2="0" y2="1">
@@ -812,7 +813,7 @@ function SleepPage() {
   const lastNight = nights[0];
 
   const rows = nights.map(s => {
-    const start2 = new Date(s.bedtimeStart), end2 = new Date(s.bedtimeEnd);
+    const start2 = zoned(s.bedtimeStart), end2 = zoned(s.bedtimeEnd);   // wall clock in the configured zone
     const anchor = timelineAnchor(start2);
     const offset = timelineOffset(anchor, start2);
     const duration = timelineOffset(anchor, end2) - offset;
@@ -1119,7 +1120,7 @@ const WORKOUT_TYPES = ['strength', 'running', 'cycling', 'walking', 'swimming', 
 function LogWorkoutForm() {
   const qClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ activity: 'strength', day: new Date().toISOString().slice(0, 10), calories: '', intensity: 'moderate', label: '' });
+  const [f, setF] = useState({ activity: 'strength', day: todayInTz(), calories: '', intensity: 'moderate', label: '' });
 
   const log = useMutation({
     mutationFn: () => send(`${API}/api/workouts`, 'POST', {
@@ -1539,7 +1540,7 @@ function scalePreview(food: FoodResult, qty: number, unit: string) {
 
 function NutritionPage() {
   const qClient = useQueryClient();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayInTz();
   const [day, setDay] = useState(today);
   const [search, setSearch] = useState('');
   const [results, setResults] = useState<FoodResult[]>([]);
@@ -1626,9 +1627,7 @@ function NutritionPage() {
   const hasMeals = mealsData?.meals && Object.values(mealsData.meals).some((v: unknown) => (v as MealItem[])?.length > 0);
 
   const shiftDay = (offset: number) => {
-    const d = new Date(day + 'T12:00:00');
-    d.setDate(d.getDate() + offset);
-    setDay(d.toISOString().slice(0, 10));
+    setDay(addDays(day, offset));
   };
 
   const preview = selected ? scalePreview(selected, parseFloat(qty) || 1, unit) : null;

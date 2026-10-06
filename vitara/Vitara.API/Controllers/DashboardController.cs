@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Vitara.Application.Interfaces;
+using Vitara.Domain.Health;
 
 namespace Vitara.API.Controllers;
 
@@ -9,7 +10,7 @@ public class DashboardController(IVitaraRepository repo) : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Get()
     {
-        var today   = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today   = LocalTime.Today;
         var weekAgo = today.AddDays(-7);
 
         var profile    = await repo.GetProfileAsync();

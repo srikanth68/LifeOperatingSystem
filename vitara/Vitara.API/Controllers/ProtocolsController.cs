@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Vitara.Application.DTOs;
 using Vitara.Application.Interfaces;
 using Vitara.Domain.Entities;
+using Vitara.Domain.Health;
 
 namespace Vitara.API.Controllers;
 
@@ -11,7 +12,7 @@ public class ProtocolsController(IVitaraRepository repo) : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Get()
     {
-        var to = DateOnly.FromDateTime(DateTime.UtcNow);
+        var to = LocalTime.Today;
 
         var activity  = await repo.GetActivityAsync(to.AddDays(-7), to);
         var sleep     = await repo.GetSleepAsync(to.AddDays(-7), to);

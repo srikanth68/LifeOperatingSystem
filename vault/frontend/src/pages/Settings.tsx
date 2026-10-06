@@ -3,6 +3,7 @@ import { plaidApi } from '@/services/api';
 import PlaidLinkButton from '@/components/PlaidLink';
 import '../styles/settings.css';
 
+import { formatInstant } from '../services/timezone';
 interface LinkedItem {
   id: string;
   institutionName: string;
@@ -49,7 +50,7 @@ export default function Settings() {
               <div key={item.id} className="linked-item">
                 <div>
                   <p className="linked-name">{item.institutionName}</p>
-                  <p className="text-muted">Linked {new Date(item.createdAt).toLocaleDateString()}</p>
+                  <p className="text-muted">Linked {formatInstant(item.createdAt, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                 </div>
                 <button className="btn-danger-ghost" onClick={() => handleUnlink(item.id, item.institutionName)}>
                   Unlink

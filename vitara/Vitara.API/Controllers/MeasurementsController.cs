@@ -90,8 +90,8 @@ public class MeasurementsController(IVitaraRepository repo, ILogger<Measurements
 
         // A reading dated in the future is a typo, and it would sit at the end of every
         // window pulling trends toward a day that has not happened.
-        var at = req.ObservedAtLocal ?? DateTime.Now;
-        if (at > DateTime.Now.AddDays(1))
+        var at = req.ObservedAtLocal ?? LocalTime.Now;
+        if (at > LocalTime.Now.AddDays(1))
             return BadRequest(new { error = "That reading is dated in the future." });
 
         var context = new MeasurementContext(

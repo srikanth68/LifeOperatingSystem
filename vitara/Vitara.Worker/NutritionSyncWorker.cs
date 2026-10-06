@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Vitara.Application.Interfaces;
 using Vitara.Domain.Entities;
+using Vitara.Domain.Health;
 
 namespace Vitara.Worker;
 
@@ -71,7 +72,7 @@ public class NutritionSyncWorker(IServiceProvider services, ILogger<NutritionSyn
         var state = await repo.GetSyncStateAsync(SourceName) ?? new SyncState { Source = SourceName };
         state.LastAttemptAt = DateTime.UtcNow;
 
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = LocalTime.Today;
         var failures = new List<string>();
         var daysWritten = 0;
         var mealsWritten = 0;

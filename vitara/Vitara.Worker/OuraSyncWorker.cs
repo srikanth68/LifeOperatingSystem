@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Vitara.Application.Interfaces;
+using Vitara.Domain.Health;
 
 namespace Vitara.Worker;
 
@@ -44,7 +45,7 @@ public class OuraSyncWorker(IServiceProvider services, ILogger<OuraSyncWorker> l
 
         while (!ct.IsCancellationRequested)
         {
-            var now = DateTime.Now;
+            var now = LocalTime.Now;
             var nextRunTime = GetNextRunTime(now);
             logger.LogInformation("Next Oura sync scheduled for {next:yyyy-MM-dd HH:mm:ss} (in {h:F1}h)",
                 nextRunTime, (nextRunTime - now).TotalHours);
@@ -56,7 +57,7 @@ public class OuraSyncWorker(IServiceProvider services, ILogger<OuraSyncWorker> l
 
             // Come back soon after a failure instead of tomorrow. The next scheduled run
             // still happens; this only adds attempts in between.
-            while (!ok && !ct.IsCancellationRequested && DateTime.Now < GetNextRunTime(DateTime.Now).AddDays(-1).AddHours(23))
+            while (!ok && !ct.IsCancellationRequested && LocalTime.Now < GetNextRunTime(LocalTime.Now).AddDays(-1).AddHours(23))
             {
                 logger.LogWarning("Sync did not succeed — retrying in {h}h.", RetryAfterFailure.TotalHours);
                 try { await Task.Delay(RetryAfterFailure, ct); }
@@ -110,7 +111,7 @@ public class OuraSyncWorker(IServiceProvider services, ILogger<OuraSyncWorker> l
             return false;
         }
 
-        var to = DateOnly.FromDateTime(DateTime.UtcNow);
+        var to = LocalTime.Today;
 
         // One window per collection, from its OWN newest day. A single shared watermark
         // taken across sleep/readiness/activity stranded the other six: once the core

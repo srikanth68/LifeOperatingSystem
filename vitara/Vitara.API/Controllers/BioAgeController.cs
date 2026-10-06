@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Vitara.Application.DTOs;
 using Vitara.Application.Interfaces;
+using Vitara.Domain.Health;
 
 namespace Vitara.API.Controllers;
 
@@ -23,7 +24,7 @@ public class BioAgeController(IVitaraRepository repo) : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Get()
     {
-        var to   = DateOnly.FromDateTime(DateTime.UtcNow);
+        var to   = LocalTime.Today;
         var from = to.AddDays(-30);
 
         var profile   = await repo.GetProfileAsync();
@@ -152,7 +153,7 @@ public class BioAgeController(IVitaraRepository repo) : ControllerBase
     [HttpGet("history")]
     public async Task<IActionResult> History([FromQuery] int days = 90)
     {
-        var to   = DateOnly.FromDateTime(DateTime.UtcNow);
+        var to   = LocalTime.Today;
         var from = to.AddDays(-days);
         var cvAge = await repo.GetCardiovascularAgeAsync(from, to);
         var vo2   = await repo.GetVo2MaxAsync(from, to);

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
 
+import { todayInTz, zonedNow } from '../services/timezone';
 // The money side of Aasthi: what was owed, what actually arrived, and what San thinks
 // belongs to a property but has not been agreed to yet.
 //
@@ -245,7 +246,7 @@ function Charges({ properties }: { properties: Property[] | undefined }) {
       amount: c.amount,
       frequency: c.frequency,
       dueDay: c.dueDay,
-      startDate: new Date().toISOString().slice(0, 10),
+      startDate: todayInTz(),
       matchHint: c.matchHint,
     }),
     onSuccess: invalidate,
@@ -336,7 +337,7 @@ function MissingReceipts({ properties }: { properties: Property[] | undefined })
   const qClient = useQueryClient();
   const [busy, setBusy] = useState<string | null>(null);
 
-  const year = new Date().getFullYear();
+  const year = zonedNow().getFullYear();
   const missingQ = useQuery<Entry[]>({
     queryKey: ['unreceipted', year],
     queryFn: () => get(`${API}/api/ledger/unreceipted?year=${year}`),

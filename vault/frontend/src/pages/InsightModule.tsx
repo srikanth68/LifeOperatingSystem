@@ -7,6 +7,7 @@ import { moduleApi } from '../services/apiHost';
 import '../styles/modules.css';
 import '../styles/insight.css';
 
+import { todayInTz } from '../services/timezone';
 // Vitara Insight — what the health data MEANS, as opposed to what it says.
 //
 // Deliberately a separate tab from Vitara rather than another panel inside it. Vitara
@@ -971,7 +972,7 @@ function InterventionsSection() {
   const [name, setName] = useState('');
   const [kind, setKind] = useState('protocol');
   const [target, setTarget] = useState('');
-  const [startedOn, setStartedOn] = useState(new Date().toISOString().slice(0, 10));
+  const [startedOn, setStartedOn] = useState(todayInTz());
   const [error, setError] = useState<string | null>(null);
 
   const add = useMutation({
@@ -1381,7 +1382,7 @@ function ExportButton() {
       const url = URL.createObjectURL(new Blob([JSON.stringify(await res.json(), null, 2)], { type: 'application/json' }));
       const link = document.createElement('a');
       link.href = url;
-      link.download = `bio-signature-${new Date().toISOString().slice(0, 10)}.json`;
+      link.download = `bio-signature-${todayInTz()}.json`;
       link.click();
       URL.revokeObjectURL(url);
     } catch {

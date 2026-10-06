@@ -1,5 +1,6 @@
 using Karma.Application;
 using Karma.Application.Interfaces;
+using Maaya.Time;
 
 namespace Karma.API.Services;
 
@@ -13,7 +14,7 @@ public class HabitNotificationService(IServiceProvider sp, ILogger<HabitNotifica
             catch (Exception ex) { log.LogError(ex, "Habit notification tick failed"); }
 
             // align to next full minute
-            var now = DateTime.Now;
+            var now = MaayaClock.Now;
             var delay = 60 - now.Second;
             await Task.Delay(TimeSpan.FromSeconds(delay), ct);
         }
@@ -26,7 +27,7 @@ public class HabitNotificationService(IServiceProvider sp, ILogger<HabitNotifica
         var sender = scope.ServiceProvider.GetRequiredService<INotificationSender>();
         if (!sender.IsConfigured) return;
 
-        var now = DateTime.Now;
+        var now = MaayaClock.Now;
         var today = DateOnly.FromDateTime(now);
 
         var habits = await repo.GetHabitsAsync(activeOnly: true);

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Aasthi.Application;
 using Aasthi.Application.Interfaces;
 using Aasthi.Domain.Entities;
+using Maaya.Time;
 
 namespace Aasthi.API.Controllers;
 
@@ -86,7 +87,7 @@ public class RecurringChargesController(IAasthiRepository repo, IVaultTransactio
     public async Task<IActionResult> Status(
         [FromQuery] Guid? propertyId = null, [FromQuery] string? from = null, [FromQuery] string? to = null)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = MaayaClock.Today;
         var start = DateOnly.TryParse(from, out var f) ? f : new DateOnly(today.Year, today.Month, 1);
         var end = DateOnly.TryParse(to, out var t) ? t : start.AddMonths(1).AddDays(-1);
 
@@ -139,7 +140,7 @@ public class RecurringChargesController(IAasthiRepository repo, IVaultTransactio
     [HttpGet("detect")]
     public async Task<IActionResult> Detect([FromQuery] int months = 12, CancellationToken ct = default)
     {
-        var to = DateOnly.FromDateTime(DateTime.UtcNow);
+        var to = MaayaClock.Today;
         var from = to.AddMonths(-Math.Clamp(months, 3, 36));
 
         var transactions = await vault.GetAsync(from, to, limit: 2000, ct: ct);

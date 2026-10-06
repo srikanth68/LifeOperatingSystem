@@ -7,6 +7,7 @@ import { moduleApi } from '../services/apiHost';
 import '../styles/modules.css';
 import '../styles/aasthi.css';
 
+import { todayInTz, formatDay } from '../services/timezone';
 const API = moduleApi(5200);
 const MC = 'var(--aasthi)';
 const style = { '--mc': MC } as React.CSSProperties;
@@ -57,7 +58,7 @@ interface TaskItem {
 const fmtMoney = (n: number) => '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 });
 const fmtPct = (n: number | null) => n == null ? '—' : `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
 const fmtBytes = (n: number) => n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
-const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+const fmtDate = (d: string | null) => formatDay(d, { year: 'numeric', month: 'short', day: 'numeric' });
 
 const DOC_CATEGORIES = ['deed', 'insurance', 'lease', 'tax', 'inspection', 'other'];
 const DOC_CATEGORY_COLOR: Record<string, string> = {
@@ -618,7 +619,7 @@ const FIN_CATEGORIES: Record<string, string[]> = {
   expense:  ['tax', 'insurance', 'repair', 'hoa', 'utility', 'other'],
   mortgage: ['mortgage_payment'],
 };
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => todayInTz();
 
 function FinancialsPage() {
   const qClient = useQueryClient();

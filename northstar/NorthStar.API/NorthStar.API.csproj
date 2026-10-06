@@ -5,6 +5,7 @@
     <ProjectReference Include="..\NorthStar.Application\NorthStar.Application.csproj" />
     <ProjectReference Include="..\NorthStar.Infrastructure\NorthStar.Infrastructure.csproj" />
     <ProjectReference Include="..\..\shared\Maaya.Auth\Maaya.Auth.csproj" />
+    <ProjectReference Include="..\..\shared\Maaya.Time\Maaya.Time.csproj" />
   </ItemGroup>
 
   <ItemGroup>

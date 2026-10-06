@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using San.Application;
 using San.Application.Interfaces;
+using Maaya.Time;
 
 namespace San.Worker;
 
@@ -62,7 +63,7 @@ public static class SettlementCloser
             // back months later as though it were still today.
             var amount = s.Amount is { } a ? $" of {a:0.00}" : "";
             await moduleContext.SaveMemoryAsync(
-                $"On {DateTime.UtcNow:yyyy-MM-dd}, email confirmed the {s.Vendor} {s.What ?? "obligation"}{amount} was settled.",
+                $"On {MaayaClock.Today:yyyy-MM-dd}, email confirmed the {s.Vendor} {s.What ?? "obligation"}{amount} was settled.",
                 "event", 3, ct);
         }
 

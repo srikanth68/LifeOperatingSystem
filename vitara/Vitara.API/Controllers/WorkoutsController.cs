@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Vitara.Application;
 using Vitara.Application.Interfaces;
 using Vitara.Domain.Entities;
+using Vitara.Domain.Health;
 
 namespace Vitara.API.Controllers;
 
@@ -16,7 +17,7 @@ public class WorkoutsController(IVitaraRepository repo) : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Get([FromQuery] int days = 30)
     {
-        var to = DateOnly.FromDateTime(DateTime.Now);
+        var to = LocalTime.Today;
         // +1 tolerates anything already filed under tomorrow by an earlier build.
         return Ok(await repo.GetWorkoutsAsync(to.AddDays(-days), to.AddDays(1)));
     }
@@ -28,7 +29,7 @@ public class WorkoutsController(IVitaraRepository repo) : ControllerBase
     [HttpGet("impact")]
     public async Task<IActionResult> Impact([FromQuery] int days = 90)
     {
-        var to = DateOnly.FromDateTime(DateTime.Now);
+        var to = LocalTime.Today;
         var from = to.AddDays(-days);
         var workouts = await repo.GetWorkoutsAsync(from, to.AddDays(1));
         // One day past the window on each side: a workout on the first day is only
@@ -45,7 +46,7 @@ public class WorkoutsController(IVitaraRepository repo) : ControllerBase
             return BadRequest($"Could not read '{req.Day}' as a date — use yyyy-MM-dd.");
 
         var day = string.IsNullOrWhiteSpace(req.Day)
-            ? DateOnly.FromDateTime(DateTime.Now)
+            ? LocalTime.Today
             : DateOnly.Parse(req.Day);
 
         var workout = new Workout

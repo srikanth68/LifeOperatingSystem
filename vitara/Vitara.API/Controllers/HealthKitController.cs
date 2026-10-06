@@ -24,7 +24,7 @@ public class HealthKitController(IVitaraRepository repo) : ControllerBase
         if (string.IsNullOrEmpty(deviceKey) || deviceKey != expectedKey)
             return Unauthorized(new { error = "Invalid or missing X-Device-Key header." });
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = LocalTime.Today;
         var applied = new List<string>();
 
         // ── Activity (steps + active calories) — merge into today's row, preserving any Oura fields ──
@@ -56,7 +56,7 @@ public class HealthKitController(IVitaraRepository repo) : ControllerBase
         // ── Sleep — needs real bedtime start/end from HealthKit ──
         if (req.SleepHours is > 0 && req.SleepStart.HasValue && req.SleepEnd.HasValue)
         {
-            var sleepDay = DateOnly.FromDateTime(req.SleepEnd.Value.ToLocalTime());
+            var sleepDay = LocalTime.DayOf(req.SleepEnd.Value);
             var session = new SleepSession
             {
                 Id = $"applehealth-{sleepDay:yyyy-MM-dd}",
@@ -72,7 +72,7 @@ public class HealthKitController(IVitaraRepository repo) : ControllerBase
         // ── Weight (latest reading, tagged to today) — richer iOS payload ──
         if (req.WeightKg is > 0)
         {
-            var wDay = DateOnly.FromDateTime(DateTime.UtcNow);
+            var wDay = LocalTime.Today;
             await repo.UpsertWeighInAsync(new WeighIn
             {
                 Id = wDay.ToString("yyyy-MM-dd"),
@@ -103,7 +103,10 @@ public class HealthKitController(IVitaraRepository repo) : ControllerBase
             var reading = metric == MetricKeys.BodyFatPct && value <= 1 ? value.Value * 100 : value.Value;
             if (!HealthXmlImport.IsPlausible(metric, reading)) continue;
 
-            var at = DateTime.UtcNow;
+            // LOCAL, like every other day boundary here. This was UtcNow, which filed a
+            // scale reading taken at 9pm under tomorrow and stamped a UTC instant into a
+            // field whose name says it is local.
+            var at = LocalTime.Now;
             await repo.UpsertMeasurementsAsync([new Measurement
             {
                 Metric = metric,
@@ -123,7 +126,7 @@ public class HealthKitController(IVitaraRepository repo) : ControllerBase
             var workouts = req.Workouts.Select(w => new Workout
             {
                 Id = $"applehealth-{w.Start.ToUniversalTime():yyyyMMddHHmmss}",
-                Day = DateOnly.FromDateTime(w.Start.ToLocalTime()),
+                Day = LocalTime.DayOf(w.Start),
                 Activity = w.Activity,
                 StartTime = w.Start.ToUniversalTime(),
                 EndTime = w.End.ToUniversalTime(),

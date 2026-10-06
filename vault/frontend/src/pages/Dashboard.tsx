@@ -4,16 +4,15 @@ import type { DashboardSummary, SyncStatus } from '@/types';
 import PlaidLinkButton from '@/components/PlaidLink';
 import '../styles/dashboard.css';
 
+import { formatDay, daysFromToday } from '../services/timezone';
 const fmt = (n: number) =>
   '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const fmtDate = (d: string) =>
-  new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+const fmtDate = (d: string) => formatDay(d, { month: 'short', day: 'numeric' });
 
-const daysUntil = (d: string) => {
-  const diff = new Date(d).getTime() - Date.now();
-  return Math.ceil(diff / 86400000);
-};
+// Whole calendar days from today, in the configured zone. Dividing the gap between a UTC
+// midnight and "now" by 86400000 is off by one for half of every day.
+const daysUntil = (d: string) => daysFromToday(d);
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardSummary | null>(null);

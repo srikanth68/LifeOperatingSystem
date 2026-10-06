@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Vault.Worker.Data;
 using Vault.Worker.Models;
+using Maaya.Time;
 
 namespace Vault.Worker.Services;
 
@@ -64,7 +65,7 @@ public class SyncService : ISyncService
                 return syncRecord;
             }
 
-            var endDate = DateTime.UtcNow.Date;
+            var endDate = MaayaClock.Today.ToDateTime(TimeOnly.MinValue);
             var startDate = endDate.AddDays(-30);
 
             foreach (var item in items)
@@ -210,7 +211,7 @@ public class SyncService : ISyncService
 
     public async Task<List<StaleTransaction>> FindStaleTransactionsAsync(int days = 730)
     {
-        var end = DateTime.UtcNow.Date;
+        var end = MaayaClock.Today.ToDateTime(TimeOnly.MinValue);
         var start = end.AddDays(-Math.Clamp(days, 1, 730));
         var result = new List<StaleTransaction>();
 

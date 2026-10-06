@@ -6,6 +6,7 @@ import KnowledgeGraph from '../components/KnowledgeGraph';
 import '../styles/northstar.css';
 import '../styles/modules.css';
 
+import { formatInstant } from '../services/timezone';
 const API = moduleApi(5500);
 const af = (url: string, init?: RequestInit) => fetch(url, { ...init, headers: { ...authHeaders(), ...init?.headers } });
 const post = (url: string, body: unknown) => af(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -86,7 +87,7 @@ function BrainPage() {
       <div className="ns-brain-header">
         <div>
           <div className="ns-brain-title">NorthStar Brain</div>
-          <div className="ns-brain-sub">Context snapshot · {new Date(ctx.generatedAt).toLocaleTimeString()}</div>
+          <div className="ns-brain-sub">Context snapshot · {formatInstant(ctx.generatedAt, { timeStyle: 'medium' })}</div>
         </div>
         <button className="ns-sync-btn" onClick={sync} disabled={syncing}>
           {syncing ? 'Syncing...' : '🔄 Sync All Modules'}

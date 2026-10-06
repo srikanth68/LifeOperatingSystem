@@ -9,12 +9,13 @@ import '../styles/modules.css';
 import type { ModuleId } from '../App';
 import type { DashboardSummary, Transaction } from '@/types';
 
+import { zonedNow, formatInstant } from '../services/timezone';
 interface Props {
   onNavigate: (m: ModuleId) => void;
 }
 
 function greeting() {
-  const h = new Date().getHours();
+  const h = zonedNow().getHours();
   if (h < 12) return 'Good morning';
   if (h < 17) return 'Good afternoon';
   return 'Good evening';
@@ -66,9 +67,9 @@ function ClockDial() {
     const t = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(t);
   }, []);
-  const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-  const day = now.toLocaleDateString('en-US', { weekday: 'long' });
-  const date = now.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+  const time = formatInstant(now, { hour: '2-digit', minute: '2-digit', hour12: false });
+  const day = formatInstant(now, { weekday: 'long' });
+  const date = formatInstant(now, { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
 
   return (
     <div className="clock-dial">

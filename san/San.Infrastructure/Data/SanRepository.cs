@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using San.Application.Interfaces;
 using San.Domain.Entities;
+using Maaya.Time;
 
 namespace San.Infrastructure.Data;
 
@@ -212,7 +213,7 @@ public class SanRepository(SanDbContext db) : ISanRepository
     public async Task<List<Person>> GetUpcomingBirthdaysAsync(int withinDays = 30)
     {
         var people = await db.People.Where(p => p.Birthday != null).ToListAsync();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = MaayaClock.Today;
         return people.Where(p =>
         {
             if (!DateOnly.TryParse(p.Birthday, out var bday)) return false;

@@ -3,6 +3,7 @@ import { categoryGroupApi } from '@/services/api';
 import type { CategoryGroup, CategoryGroupSummary } from '@/types';
 import '../styles/categorybudget.css';
 
+import { formatDay } from '../services/timezone';
 const fmt = (n: number) =>
   '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -259,7 +260,7 @@ export default function CategoryBudget() {
                                   {t.amount < 0 ? '+' : '-'}{fmt(t.amount)}
                                 </div>
                                 <div className="txn-date">
-                                  {new Date(t.transactionDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                  {formatDay(t.transactionDate, { month: 'short', day: 'numeric' })}
                                 </div>
                               </div>
                             </div>

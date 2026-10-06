@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Vitara.Application.Interfaces;
 using Vitara.Domain.Entities;
+using Vitara.Domain.Health;
 
 namespace Vitara.API.Controllers;
 
@@ -10,7 +11,7 @@ public class NutritionController(IVitaraRepository repo) : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Get([FromQuery] int days = 14)
     {
-        var to = DateOnly.FromDateTime(DateTime.UtcNow);
+        var to = LocalTime.Today;
         var from = to.AddDays(-days);
         return Ok(await repo.GetNutritionAsync(from, to));
     }
@@ -47,7 +48,7 @@ public class NutritionController(IVitaraRepository repo) : ControllerBase
     [HttpGet("summary")]
     public async Task<IActionResult> Summary([FromQuery] int days = 7)
     {
-        var to = DateOnly.FromDateTime(DateTime.UtcNow);
+        var to = LocalTime.Today;
         var from = to.AddDays(-days);
         var data = await repo.GetNutritionAsync(from, to);
         if (data.Count == 0) return Ok(new { count = 0 });

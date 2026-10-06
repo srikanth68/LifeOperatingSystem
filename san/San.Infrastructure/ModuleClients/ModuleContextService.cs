@@ -7,6 +7,7 @@ using Maaya.Auth;
 using San.Application;
 using San.Application.DTOs;
 using San.Application.Interfaces;
+using Maaya.Time;
 
 namespace San.Infrastructure.ModuleClients;
 
@@ -251,7 +252,10 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
             try { return TimeZoneInfo.FindSystemTimeZoneById(tzId); }
             catch { /* unknown id — fall through to local */ }
         }
-        return TimeZoneInfo.Local;
+        // Not TimeZoneInfo.Local. That is the machine's own zone, which on a developer's laptop is
+        // not the zone this system is configured for -- so the same code would compute different
+        // days on the dev machine and on Everest. MaayaClock resolves the deployment's zone.
+        return MaayaClock.Zone;
     }
 
     // Discrete events that occurred since the user's last message, newest first, each
@@ -392,7 +396,7 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
     public async Task SaveKnowledgeAsync(string source, string topic, string summary, CancellationToken ct = default) =>
         await PostToBrainAsync(
             "/api/ingest",
-            new { source, topic, summary, day = DateTime.UtcNow.ToString("yyyy-MM-dd") },
+            new { source, topic, summary, day = MaayaClock.Today.ToString("yyyy-MM-dd") },
             HealthComponents.NorthStarWrite, ct);
 
     // Writes to NorthStar stay best-effort — losing one must never take down the chat

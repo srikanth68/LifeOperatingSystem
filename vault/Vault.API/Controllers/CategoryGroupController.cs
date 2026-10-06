@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Vault.API.Models;
 using Vault.Worker.Data;
 using Vault.Worker.Models;
+using Maaya.Time;
 
 namespace Vault.API.Controllers;
 
@@ -31,8 +32,8 @@ public class CategoryGroupController : ControllerBase
         var group = await _db.CategoryGroups.Include(g => g.Items).FirstOrDefaultAsync(g => g.Id == id);
         if (group == null) return NotFound();
 
-        if (month == 0) month = DateTime.UtcNow.Month;
-        if (year == 0) year = DateTime.UtcNow.Year;
+        if (month == 0) month = MaayaClock.Today.Month;
+        if (year == 0) year = MaayaClock.Today.Year;
 
         var monthStart = new DateTime(year, month, 1);
         var monthEnd = monthStart.AddMonths(1);

@@ -4,6 +4,7 @@ using San.Application;
 using San.Application.DTOs;
 using San.Application.Interfaces;
 using San.Domain.Entities;
+using Maaya.Time;
 
 namespace San.API.Controllers;
 
@@ -13,7 +14,7 @@ public class CalendarController(ISanRepository repo, IGoogleCalendarService goog
     [HttpGet("events")]
     public async Task<IActionResult> GetEvents([FromQuery] DateTime? from, [FromQuery] DateTime? to)
     {
-        var start = from ?? DateTime.UtcNow.Date;
+        var start = from ?? MaayaClock.StartOfDayUtc(MaayaClock.Today);
         var end = to ?? start.AddDays(7);
         var events = await repo.GetCalendarEventsAsync(start, end);
         var tzAll = await moduleContext.ResolveTimeZoneAsync();

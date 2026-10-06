@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Vitara.Application.Interfaces;
 using Vitara.Domain.Entities;
+using Vitara.Domain.Health;
 
 namespace Vitara.API.Controllers;
 
@@ -10,7 +11,7 @@ public class WeighInsController(IVitaraRepository repo) : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Get([FromQuery] int days = 180)
     {
-        var to = DateOnly.FromDateTime(DateTime.UtcNow);
+        var to = LocalTime.Today;
         return Ok(await repo.GetWeighInsAsync(to.AddDays(-days), to));
     }
 
@@ -19,7 +20,7 @@ public class WeighInsController(IVitaraRepository repo) : ControllerBase
     {
         if (req.WeightKg <= 0) return BadRequest("Weight must be positive.");
         var day = string.IsNullOrWhiteSpace(req.Day)
-            ? DateOnly.FromDateTime(DateTime.UtcNow)
+            ? LocalTime.Today
             : DateOnly.Parse(req.Day);
 
         var weighIn = new WeighIn

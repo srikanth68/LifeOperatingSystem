@@ -156,3 +156,49 @@ a different IP.
 > `tailscale serve` issues a real Let's Encrypt cert for your `*.ts.net` name,
 > which every device already trusts — no warning, nothing to import. Only worth
 > it if you're open to switching mesh VPNs.
+
+## Timezone
+
+One zone for the whole system, set in one place. Everything that decides what *day* it is —
+every module's "today", the day a reading or transaction is filed under, the month a budget
+shows, the hour a reminder fires, and what the web app displays — reads the same setting.
+
+| Resolution order | Where |
+|---|---|
+| 1 | `MaayaClock.Configure(...)` — a runtime override, used by Vitara for `VITARA_TIMEZONE` |
+| 2 | `MAAYA_TIMEZONE` — explicit, per-container |
+| 3 | `TZ` — the container's zone. The Dockerfile sets it (`ARG TZ=America/New_York`) |
+| 4 | `America/New_York` — the stated default |
+
+To change it for the whole system, rebuild with the new zone and nothing else:
+
+```bash
+docker compose build --build-arg TZ=Asia/Kolkata && docker compose up -d
+```
+
+The machine's own zone is **deliberately not** in that list. A laptop is not in the zone the
+system is configured for, and letting it win makes the same code compute different days on the
+dev machine and on Everest.
+
+The web app and San also read a user-editable `timezone` fact from NorthStar (Settings →
+Timezone). That changes what is **displayed** and how reminders are interpreted immediately.
+It does *not* move the day boundary the other modules file data under, which follows the
+deployment zone above until the next rebuild — so keep the two equal.
+
+**Use an IANA zone, not "EST".** `EST` is a fixed UTC-5 all year; New York is UTC-4 from March
+to November, so a fixed offset puts every summer evening an hour out. `America/New_York`
+handles the change.
+
+### Why this is guarded by a test
+
+`DateOnly.FromDateTime(DateTime.UtcNow)` reads as "today" and is "today in London": from 8pm in
+New York it returns *tomorrow*. About forty copies had accumulated across seven modules, each
+producing a plausible number, wrong for four hours of every evening. `shared/Maaya.Time.Tests`
+now fails the build, with file and line, if a calendar day or hour is derived from the UTC
+clock, the process clock or the browser clock — in C# or in the web app. Use `MaayaClock`
+(backend) or `services/timezone.ts` (web).
+
+Calendar dates and instants are different things: `2026-10-03` is a day and must never shift;
+`2026-10-04T03:00:00Z` is a moment and is shown in the configured zone. Vault's database layer
+tags every `DateTime` as UTC, including transaction *dates*, so use `formatDay` for those and
+`formatInstant` for moments.

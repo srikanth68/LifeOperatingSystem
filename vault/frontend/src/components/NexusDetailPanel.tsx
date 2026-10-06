@@ -6,6 +6,7 @@ import {
 } from '../pages/NexusModule';
 import type { TickerDetail, Report, Signal, TradePlan } from '../pages/NexusModule';
 
+import { formatInstant } from '../services/timezone';
 interface Props {
   symbol: string;
   // Supplied when the caller already holds the full TickerDetail -- the premarket
@@ -289,7 +290,7 @@ export function NexusDetailPanel({ symbol, detail, onClose }: Props) {
             )}
 
             <div className="nexus-source-line">
-              {d.meta.freshness ?? 'RECORDED'} · {d.source} · as of {new Date(d.asOf).toLocaleString()}
+              {d.meta.freshness ?? 'RECORDED'} · {d.source} · as of {formatInstant(d.asOf, { dateStyle: 'medium', timeStyle: 'short' })}
             </div>
 
             {/* A way out at the end of a long read, without scrolling back up. */}

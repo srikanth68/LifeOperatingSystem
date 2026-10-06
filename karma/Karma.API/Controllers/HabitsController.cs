@@ -3,6 +3,7 @@ using Karma.Application.Interfaces;
 using Karma.Domain.Entities;
 using Karma.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
+using Maaya.Time;
 
 namespace Karma.API.Controllers;
 
@@ -13,7 +14,7 @@ public class HabitsController(IKarmaRepository repo) : ControllerBase
     public async Task<IActionResult> GetAll([FromQuery] bool? active)
     {
         var habits = await repo.GetHabitsAsync(active ?? false);
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = MaayaClock.Today;
         var todayLogs = await repo.GetLogsForDateAsync(today);
         var logMap = todayLogs.ToDictionary(l => l.HabitId, l => l.Completed);
 
@@ -30,7 +31,7 @@ public class HabitsController(IKarmaRepository repo) : ControllerBase
     [HttpGet("today")]
     public async Task<IActionResult> GetToday()
     {
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = MaayaClock.Today;
         var habits = await repo.GetHabitsAsync(activeOnly: true);
         var todayLogs = await repo.GetLogsForDateAsync(today);
         var logMap = todayLogs.ToDictionary(l => l.HabitId, l => l.Completed);
@@ -50,7 +51,7 @@ public class HabitsController(IKarmaRepository repo) : ControllerBase
     {
         var h = await repo.GetHabitAsync(id);
         if (h is null) return NotFound();
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = MaayaClock.Today;
         var allLogs = await repo.GetHabitLogsAsync(h.Id, today.AddDays(-365), today);
         var (cur, best) = KarmaRepository.ComputeStreaks(allLogs, today);
         var todayLog = allLogs.FirstOrDefault(l => l.Date == today);
@@ -93,7 +94,7 @@ public class HabitsController(IKarmaRepository repo) : ControllerBase
             h.GoalId = req.GoalId;
         });
         if (updated is null) return NotFound();
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = MaayaClock.Today;
         var allLogs = await repo.GetHabitLogsAsync(updated.Id, today.AddDays(-365), today);
         var (cur, best) = KarmaRepository.ComputeStreaks(allLogs, today);
         return Ok(ToResult(updated, cur, best, null));
@@ -115,7 +116,7 @@ public class HabitsController(IKarmaRepository repo) : ControllerBase
     {
         var habit = await repo.GetHabitAsync(id);
         if (habit is null) return NotFound("Habit not found.");
-        var date = req.Date ?? DateOnly.FromDateTime(DateTime.Now);
+        var date = req.Date ?? MaayaClock.Today;
         var log = await repo.UpsertHabitLogAsync(id, date, req.Completed, req.Note);
         return Ok(new HabitLogResult(log.Id, log.HabitId, log.Date, log.Completed, log.Note, log.LoggedAt));
     }
@@ -123,7 +124,7 @@ public class HabitsController(IKarmaRepository repo) : ControllerBase
     [HttpGet("{id:guid}/logs")]
     public async Task<IActionResult> GetLogs(Guid id, [FromQuery] int days = 90)
     {
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = MaayaClock.Today;
         var from = today.AddDays(-days);
         var logs = await repo.GetHabitLogsAsync(id, from, today);
         return Ok(logs.Select(l => new HabitLogResult(l.Id, l.HabitId, l.Date, l.Completed, l.Note, l.LoggedAt)));
@@ -136,7 +137,7 @@ public class HabitsController(IKarmaRepository repo) : ControllerBase
         var habit = await repo.GetHabitAsync(id);
         if (habit is null) return NotFound();
 
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = MaayaClock.Today;
         var from = today.AddDays(-days);
         var logs = await repo.GetHabitLogsAsync(id, from, today);
         var (cur, best) = KarmaRepository.ComputeStreaks(logs, today);

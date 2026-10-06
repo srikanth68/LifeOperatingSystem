@@ -44,12 +44,15 @@ export const summaryApi = {
 };
 
 export const transactionsApi = {
-  getAll: (filters?: { accountId?: string; startDate?: Date; endDate?: Date; category?: string }) =>
+  // Dates are "yyyy-MM-dd" strings and travel as such. They used to be Date objects reduced
+  // with toISOString().split('T')[0], which is the UTC date: lossless only for a Date that
+  // happened to be built at UTC midnight, and a day out for one built at local midnight.
+  getAll: (filters?: { accountId?: string; startDate?: string; endDate?: string; category?: string }) =>
     api.get<Transaction[]>('/transactions', {
       params: {
         accountId: filters?.accountId,
-        startDate: filters?.startDate?.toISOString().split('T')[0],
-        endDate: filters?.endDate?.toISOString().split('T')[0],
+        startDate: filters?.startDate,
+        endDate: filters?.endDate,
         category: filters?.category,
       },
     }),

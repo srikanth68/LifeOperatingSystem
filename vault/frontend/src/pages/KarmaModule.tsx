@@ -5,6 +5,7 @@ import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
 import { ApiUnreachable } from '../components/ApiUnreachable';
 
+import { todayInTz, addDays, weekdayOf, formatInstant } from '../services/timezone';
 const API = moduleApi(5600);
 type Page = 'habits' | 'goals' | 'progress';
 const TABS: { id: Page; label: string }[] = [
@@ -92,20 +93,20 @@ function HabitHeatmap({ stats }: { stats: HabitStats }) {
   const completedDays = new Set(stats.logs.filter(l => l.completed).map(l => l.date));
   const loggedDays = new Set(stats.logs.map(l => l.date));
 
+  // Calendar arithmetic on date strings, never on Date objects. The earlier version built a
+  // local-midnight Date and called .toISOString().slice(0, 10) on it -- which is the UTC date,
+  // so from anywhere east of Greenwich every cell was labelled the day before, and from New
+  // York after 8pm "today" was tomorrow. Dates here are days, not instants.
   const weeks = 17;
-  const today = new Date();
-  const start = new Date(today);
-  start.setDate(start.getDate() - (weeks * 7 - 1));
-  // align to Sunday
-  start.setDate(start.getDate() - start.getDay());
+  const today = todayInTz();
+  const first = addDays(today, -(weeks * 7 - 1));
+  const start = addDays(first, -weekdayOf(first));   // align to Sunday
 
   const cells: { date: string; state: 'done' | 'miss' | 'none' | 'future' }[] = [];
   for (let i = 0; i < weeks * 7; i++) {
-    const d = new Date(start);
-    d.setDate(d.getDate() + i);
-    const iso = d.toISOString().slice(0, 10);
+    const iso = addDays(start, i);
     let state: 'done' | 'miss' | 'none' | 'future' = 'none';
-    if (d > today) state = 'future';
+    if (iso > today) state = 'future';
     else if (completedDays.has(iso)) state = 'done';
     else if (loggedDays.has(iso)) state = 'miss';
     cells.push({ date: iso, state });
@@ -234,9 +235,8 @@ function HabitsPage() {
   const pct = total > 0 ? done / total : 0;
   const r = 22; const circ = 2 * Math.PI * r;
 
-  const today = new Date();
-  const dayName = today.toLocaleDateString('en-US', { weekday: 'long' });
-  const dateFmt = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+  const dayName = formatInstant(new Date(), { weekday: 'long' });
+  const dateFmt = formatInstant(new Date(), { month: 'long', day: 'numeric' });
 
   return (
     <div style={style}>
@@ -719,30 +719,25 @@ function ProgressPage() {
 
   if (!loading && err) return <ApiUnreachable name="Karma" port={5600} mc="var(--karma)" onRetry={() => { setLoading(true); load(); }} />;
 
-  const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
+  // Dates are days, so this is arithmetic on "yyyy-MM-dd" strings in the configured zone --
+  // not on Date objects, whose toISOString() is the UTC date and put every cell a day out.
+  const todayStr = todayInTz();
 
   // Build 84-day grid (12 weeks) ending today
   const WEEKS = 12;
-  const endDay = new Date(today);
-  endDay.setHours(0, 0, 0, 0);
-  const startDay = new Date(endDay);
-  startDay.setDate(startDay.getDate() - (WEEKS * 7 - 1));
+  const endDay = todayStr;
+  const startDay = addDays(endDay, -(WEEKS * 7 - 1));
 
   const buildGrid = (habitLogs: HabitLog[]) => {
     const set = new Set(habitLogs.filter(l => l.completed).map(l => l.date));
     const cols: { date: string; done: boolean }[][] = [];
-    const d = new Date(startDay);
-    // skip to Sunday
-    const dayOfWeek = d.getDay();
-    if (dayOfWeek !== 0) d.setDate(d.getDate() - dayOfWeek);
+    let d = addDays(startDay, -weekdayOf(startDay));   // skip back to Sunday
     for (let w = 0; w < WEEKS; w++) {
       const col: { date: string; done: boolean }[] = [];
       for (let day = 0; day < 7; day++) {
-        const ds = d.toISOString().slice(0, 10);
         const inRange = d >= startDay && d <= endDay;
-        col.push({ date: ds, done: inRange && set.has(ds) });
-        d.setDate(d.getDate() + 1);
+        col.push({ date: d, done: inRange && set.has(d) });
+        d = addDays(d, 1);
       }
       cols.push(col);
     }

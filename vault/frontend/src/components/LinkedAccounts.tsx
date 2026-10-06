@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { plaidApi } from '@/services/api';
 
+import { formatInstant } from '../services/timezone';
 interface LinkedItem {
   id: string;
   institutionName: string;
@@ -43,7 +44,7 @@ export default function LinkedAccounts({ refreshKey }: Props) {
           <div>
             <p className="linked-name">{item.institutionName}</p>
             <small className="text-muted">
-              Linked {new Date(item.createdAt).toLocaleDateString()}
+              Linked {formatInstant(item.createdAt, { month: 'short', day: 'numeric', year: 'numeric' })}
             </small>
           </div>
           <button

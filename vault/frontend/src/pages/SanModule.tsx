@@ -3,7 +3,7 @@ import { QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tan
 import { makeModuleQueryClient } from '../services/moduleQuery';
 import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
-import { useTimezone, formatInTz, localInputToUtcIso, utcIsoToLocalInput } from '../services/timezone';
+import { useTimezone, formatInTz, localInputToUtcIso, utcIsoToLocalInput, formatClock, zonedNow, zoned, monthWindowUtc, todayInTz, dayPart, daysBetween, formatDay } from '../services/timezone';
 import { getVoiceStatus, startRecording, speak, stopSpeaking, type Recorder, type VoiceStatus } from '../services/voice';
 import { useVoiceCallContext } from '../services/voiceCallContext';
 import { downscaleImage, type PickedImage } from '../services/image';
@@ -801,7 +801,7 @@ function Feed() {
 }
 
 /* ── Helpers ── */
-const fmtTime = (d: string) => new Date(d).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+const fmtTime = (d: string) => formatClock(d);
 const fmtTimeRange = (s: string, e: string) => `${fmtTime(s)} – ${fmtTime(e)}`;
 const relativeMinutes = (target: string, from: Date) => {
   const diff = Math.round((new Date(target).getTime() - from.getTime()) / 60_000);
@@ -843,7 +843,7 @@ function NowNext() {
 
   const data = nowNextQ.data;
   const location = contextQ.data?.location;
-  const currentTime = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const currentTime = formatClock(now);
 
   if (nowNextQ.isError) return <ApiError port={5300} />;
 
@@ -897,7 +897,9 @@ const emptyEventForm: EventFormState = { title: '', startTime: '', endTime: '', 
 
 function Calendar() {
   const queryClient = useQueryClient();
-  const today = new Date();
+  // Wall clock in the configured zone, so "today" and the month shown agree with where the
+  // events were actually scheduled rather than with whichever device is open.
+  const today = zonedNow();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedDay, setSelectedDay] = useState<number | null>(today.getDate());
@@ -909,14 +911,17 @@ function Calendar() {
 
   const eventsQ = useQuery<CalendarEvent[]>({
     queryKey: ['san-calendar-events', viewYear, viewMonth],
-    queryFn: () => get(`${API}/api/calendar/events?from=${monthStart.toISOString()}&to=${monthEnd.toISOString()}`),
+    queryFn: () => {
+      const w = monthWindowUtc(viewYear, viewMonth);
+      return get(`${API}/api/calendar/events?from=${w.from}&to=${w.to}`);
+    },
   });
 
   const createMut = useMutation({
     mutationFn: (f: EventFormState) => send(`${API}/api/calendar/events`, 'POST', {
       title: f.title,
-      startTime: new Date(f.startTime).toISOString(),
-      endTime: new Date(f.endTime).toISOString(),
+      startTime: localInputToUtcIso(f.startTime),
+      endTime: localInputToUtcIso(f.endTime),
       location: f.location || undefined,
       allDay: f.allDay,
     }),
@@ -945,8 +950,9 @@ function Calendar() {
   // Events by day
   const eventsByDay = new Map<number, CalendarEvent[]>();
   for (const ev of events) {
-    const d = new Date(ev.startTime).getDate();
-    const m = new Date(ev.startTime).getMonth();
+    const zs = zoned(ev.startTime);   // the day it falls on in the configured zone
+    const d = zs.getDate();
+    const m = zs.getMonth();
     if (m === viewMonth) {
       if (!eventsByDay.has(d)) eventsByDay.set(d, []);
       eventsByDay.get(d)!.push(ev);
@@ -1093,12 +1099,15 @@ function People() {
   const bdayStr = (b: string | null) => {
     if (!b) return null;
     try {
-      const d = new Date(b + 'T00:00:00');
-      const today = new Date();
-      let next = new Date(today.getFullYear(), d.getMonth(), d.getDate());
-      if (next < today) next = new Date(today.getFullYear() + 1, d.getMonth(), d.getDate());
-      const days = Math.ceil((next.getTime() - today.getTime()) / 86400000);
-      const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const bd = dayPart(b);
+      if (!bd) return null;
+      const [, bm, bdd] = bd.split('-');
+      const t = todayInTz();
+      const ty = Number(t.slice(0, 4));
+      let next = `${ty}-${bm}-${bdd}`;
+      if (next < t) next = `${ty + 1}-${bm}-${bdd}`;
+      const days = daysBetween(t, next);
+      const label = formatDay(bd, { month: 'short', day: 'numeric' });
       if (days === 0) return `🎉 Today!`;
       if (days <= 7) return `in ${days}d`;
       if (days <= 30) return `in ${days}d`;

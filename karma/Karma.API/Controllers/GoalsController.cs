@@ -4,6 +4,7 @@ using Karma.Application.Interfaces;
 using Karma.Domain.Entities;
 using Karma.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
+using Maaya.Time;
 
 namespace Karma.API.Controllers;
 
@@ -136,7 +137,7 @@ public class GoalsController(IKarmaRepository repo) : ControllerBase
     [HttpGet("{goalId:guid}/habits")]
     public async Task<IActionResult> LinkedHabits(Guid goalId)
     {
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = MaayaClock.Today;
         var habits = (await repo.GetHabitsAsync()).Where(h => h.GoalId == goalId).ToList();
         var results = new List<LinkedHabitResult>();
         foreach (var h in habits)

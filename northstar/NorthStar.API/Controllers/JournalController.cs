@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using NorthStar.Application.Interfaces;
 using NorthStar.Domain.Entities;
+using Maaya.Time;
 
 namespace NorthStar.API.Controllers;
 
@@ -32,7 +33,7 @@ public class JournalController(INorthStarRepository repo, ILogger<JournalControl
         // The day is the user's, not the server's: an entry spoken at 11pm belongs to
         // the day being described. The caller (San, which knows the timezone) passes it;
         // UTC today is only the fallback.
-        var day = ParseDay(req.Day) ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var day = ParseDay(req.Day) ?? MaayaClock.Today;
 
         var entry = await repo.AddEntryAsync(new KnowledgeEntry
         {

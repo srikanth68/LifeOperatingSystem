@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\shared\Maaya.Auth\Maaya.Auth.csproj" />
+    <ProjectReference Include="..\..\shared\Maaya.Time\Maaya.Time.csproj" />
   </ItemGroup>
 
 </Project>

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using NorthStar.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using Maaya.Time;
 
 namespace NorthStar.API.Controllers;
 
@@ -22,7 +23,7 @@ public class RollupController(INorthStarRepository repo) : ControllerBase
     public async Task<IActionResult> Get([FromQuery] int weeks = 8)
     {
         var span = Math.Clamp(weeks, 2, 26);
-        var since = DateTime.UtcNow.Date.AddDays(-7 * span);
+        var since = MaayaClock.StartOfDayUtc(MaayaClock.Today.AddDays(-7 * span));
 
         // High limit: this is an aggregate over everything in the window, and silently
         // truncating the input would produce numbers that look precise and are wrong.

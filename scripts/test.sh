@@ -34,6 +34,7 @@ mcp/Maaya.Mcp/Maaya.Mcp.csproj
 
 PROJECTS="
 shared/Maaya.Auth.Tests/Maaya.Auth.Tests.csproj
+shared/Maaya.Time.Tests/Maaya.Time.Tests.csproj
 san/San.Tests/San.Tests.csproj
 karma/Karma.Tests/Karma.Tests.csproj
 northstar/NorthStar.Tests/NorthStar.Tests.csproj

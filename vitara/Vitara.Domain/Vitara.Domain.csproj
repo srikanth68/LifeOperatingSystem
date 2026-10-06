@@ -6,4 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\shared\Maaya.Time\Maaya.Time.csproj" />
+  </ItemGroup>
+
 </Project>

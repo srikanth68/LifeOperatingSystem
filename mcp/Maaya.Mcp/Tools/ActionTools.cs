@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
 using ModelContextProtocol.Server;
+using Maaya.Time;
 
 namespace Maaya.Mcp.Tools;
 
@@ -38,7 +39,7 @@ public sealed class ActionTools(ModuleGateway gw)
                 return TimeZoneInfo.FindSystemTimeZoneById(id);
         }
         catch { /* fact unset or NorthStar down — fall back to the container's TZ */ }
-        return TimeZoneInfo.Local;
+        return MaayaClock.Zone;   // not the machine's own zone; see MaayaClock
     }
 
     private static bool LooksAbsolute(string s)

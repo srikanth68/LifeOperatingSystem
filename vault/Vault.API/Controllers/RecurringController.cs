@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Vault.Worker.Data;
 using Vault.Worker.Services;
+using Maaya.Time;
 
 namespace Vault.API.Controllers;
 
@@ -19,7 +20,7 @@ public class RecurringController(VaultDbContext db) : ControllerBase
     {
         // Thirteen months by default, so an annual renewal is seen at least twice and
         // a yearly subscription is detectable at all.
-        var today = DateTime.UtcNow.Date;
+        var today = MaayaClock.Today.ToDateTime(TimeOnly.MinValue);
         var from = today.AddDays(-Math.Clamp(days, 90, 1825));
 
         var transactions = await db.Transactions

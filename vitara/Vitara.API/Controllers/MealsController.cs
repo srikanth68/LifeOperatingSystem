@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Vitara.Application.Interfaces;
 using Vitara.Domain.Entities;
+using Vitara.Domain.Health;
 
 namespace Vitara.API.Controllers;
 
@@ -33,7 +34,7 @@ public class MealsController(IVitaraRepository repo) : ControllerBase
     public async Task<IActionResult> Get([FromQuery] string? day)
     {
         var d = string.IsNullOrWhiteSpace(day)
-            ? DateOnly.FromDateTime(DateTime.UtcNow)
+            ? LocalTime.Today
             : DateOnly.Parse(day);
         var meals = await repo.GetMealsAsync(d);
 
@@ -66,7 +67,7 @@ public class MealsController(IVitaraRepository repo) : ControllerBase
 
         var meal = new MealEntry
         {
-            Day = string.IsNullOrWhiteSpace(req.Day) ? DateOnly.FromDateTime(DateTime.UtcNow) : DateOnly.Parse(req.Day),
+            Day = string.IsNullOrWhiteSpace(req.Day) ? LocalTime.Today : DateOnly.Parse(req.Day),
             MealType = req.MealType ?? "snack",
             FoodName = req.FoodName.Trim(),
             FdcId = req.FdcId,

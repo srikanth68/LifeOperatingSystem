@@ -16,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Vault.Worker\Vault.Worker.csproj" />
     <ProjectReference Include="..\..\shared\Maaya.Auth\Maaya.Auth.csproj" />
+    <ProjectReference Include="..\..\shared\Maaya.Time\Maaya.Time.csproj" />
   </ItemGroup>
 
   <!-- Vault.Worker is also its own publishable app (Sdk.Web/Worker), so its

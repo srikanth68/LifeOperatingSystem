@@ -1,4 +1,5 @@
 using Vault.Worker.Services;
+using Maaya.Time;
 
 namespace Vault.Worker.Jobs;
 
@@ -25,7 +26,7 @@ public class ScheduledSyncWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            var now = DateTime.Now;
+            var now = MaayaClock.Now;
             var nextRunTime = GetNextRunTime(now);
             var timeUntilNextRun = nextRunTime - now;
 
