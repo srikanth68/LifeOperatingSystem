@@ -1,0 +1,7 @@
+# Written by `tsc -b` (npm run build) beside vite.config.ts, because tsconfig.node.json is a
+# composite project that emits. They were once committed by accident, and Vite prefers a .js
+# config over the .ts one -- so a stale copy silently replaced the real config and `npm run dev`
+# lost every /svc/<module> proxy. The .ts is the source; these are build output.
+vite.config.js
+vite.config.d.ts
+*.tsbuildinfo
