@@ -4,6 +4,7 @@ import { makeModuleQueryClient } from '../services/moduleQuery';
 import { Shell, Info, Chip, Row } from '../components/health/HealthKit';
 import { DonutSplit, Legend, SleepDial, RangeBar, RangeGauge, StackBar } from '../components/health/InsightCharts';
 import type { LabReading } from '../components/health/InsightCharts';
+import { RelationshipWeb, PatternRing, Bead, TrialTrack, ShiftStrip, Tug } from '../components/health/PatternCharts';
 import type { ReactNode } from 'react';
 import { vitaraHeaders, useProfileKey } from '../services/profile';
 import { moduleApi } from '../services/apiHost';
@@ -212,8 +213,8 @@ interface Evaluated {
   confidence: 'none' | 'low' | 'moderate';
   caveats: string[];
   earliestVerdict: string | null;
-  before: { median: number; n: number } | null;
-  after: { median: number; n: number } | null;
+  before: { median: number; n: number; p25?: number; p75?: number } | null;
+  after: { median: number; n: number; p25?: number; p75?: number } | null;
   change: number | null;
   rebound: { comparableWindows: number; median: number; p75: number } | null;
   alsoChanged: { metric: string; label: string; change: number; direction: string; detail: string }[];
@@ -898,28 +899,34 @@ function Correlations() {
           shows up here.
         </p>
       ) : (
-        <ul className="insight-corr">
-          {rows.map(c => {
-            const left = 50 + Math.min(c.rho, 0) * 50;
-            const width = Math.abs(c.rho) * 50;
-            return (
-              <li key={`${c.driver}-${c.outcome}-${c.lagDays}`} className="insight-corr-row">
-                <p className="insight-corr-text">
-                  When <strong>{label(c.driver)}</strong> is higher,{' '}
-                  <strong>{label(c.outcome)}</strong> tends to be {c.rho > 0 ? 'higher' : 'lower'}
-                  {c.lagDays === 0 ? ' the same day' : ' the next day'}.
-                </p>
-                <div className="insight-corr-plot" title={`rho ${c.rho.toFixed(2)} over ${c.n} days`}>
-                  <span className="quiet" style={{ left: `${50 - minRho * 50}%`, width: `${minRho * 100}%` }} />
-                  <span className="mid" />
-                  <span className="stem" style={{ left: `${left}%`, width: `${width}%` }} />
-                  <span className="dot" style={{ left: `${50 + c.rho * 50}%` }} />
-                </div>
-                <p className="insight-corr-stat">ρ {signed(c.rho, 2)} · {c.n} days</p>
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          <RelationshipWeb links={rows} name={label} />
+          <details className="insight-standing" style={{ marginTop: '0.8rem' }}>
+            <summary>The same, in words</summary>
+          <ul className="insight-corr">
+            {rows.map(c => {
+              const left = 50 + Math.min(c.rho, 0) * 50;
+              const width = Math.abs(c.rho) * 50;
+              return (
+                <li key={`${c.driver}-${c.outcome}-${c.lagDays}`} className="insight-corr-row">
+                  <p className="insight-corr-text">
+                    When <strong>{label(c.driver)}</strong> is higher,{' '}
+                    <strong>{label(c.outcome)}</strong> tends to be {c.rho > 0 ? 'higher' : 'lower'}
+                    {c.lagDays === 0 ? ' the same day' : ' the next day'}.
+                  </p>
+                  <div className="insight-corr-plot" title={`rho ${c.rho.toFixed(2)} over ${c.n} days`}>
+                    <span className="quiet" style={{ left: `${50 - minRho * 50}%`, width: `${minRho * 100}%` }} />
+                    <span className="mid" />
+                    <span className="stem" style={{ left: `${left}%`, width: `${width}%` }} />
+                    <span className="dot" style={{ left: `${50 + c.rho * 50}%` }} />
+                  </div>
+                  <p className="insight-corr-stat">ρ {signed(c.rho, 2)} · {c.n} days</p>
+                </li>
+              );
+            })}
+          </ul>
+          </details>
+        </>
       )}
 
       <p className="insight-method">
@@ -1131,13 +1138,18 @@ function InterventionsSection() {
       {data.interventions.length === 0 ? (
         <p className="insight-muted">Nothing recorded yet.</p>
       ) : (
-        data.interventions.map(i => <Verdictcard key={i.id} e={i} onStop={() => stop.mutate(i.id)} />)
+        data.interventions.map(i => (
+          <Verdictcard key={i.id} e={i} onStop={() => stop.mutate(i.id)}
+                       runInDays={data.runInDays} windowDays={data.windowDays} />
+        ))
       )}
     </section>
   );
 }
 
-function Verdictcard({ e, onStop }: { e: Evaluated; onStop: () => void }) {
+function Verdictcard({ e, onStop, runInDays, windowDays }: {
+  e: Evaluated; onStop: () => void; runInDays: number; windowDays: number;
+}) {
   // Only two verdicts are a result. Everything else is a reason there is not one yet,
   // and those are coloured neutrally on purpose — a grey "cannot say" must not read
   // as a failure, or nobody records the next one.
@@ -1164,6 +1176,18 @@ function Verdictcard({ e, onStop }: { e: Evaluated; onStop: () => void }) {
       </div>
 
       <p className="insight-summary" style={{ marginTop: '0.5rem' }}>{e.statement}</p>
+
+      {/* How far along it is, drawn: "cannot say yet" is easier to believe when the road left is visible. */}
+      <TrialTrack daysIn={e.daysIn} runInDays={runInDays} windowDays={windowDays} running={e.running} />
+
+      {e.before && e.after && e.targetMetric && (
+        <ShiftStrip
+          before={e.before}
+          after={e.after}
+          format={v => fmtValue(e.targetMetric as string, v)}
+          tone={tone}
+        />
+      )}
 
       {e.rebound && (
         /* The number the whole verdict turns on, shown rather than only applied. */
@@ -1236,7 +1260,14 @@ function PatternsSection() {
           <p className="insight-eyebrow">{p.title}</p>
           <p className="insight-summary" style={{ marginBottom: '0.5rem' }}>{p.statement}</p>
           <p className="insight-muted" style={{ fontSize: '0.8rem', marginBottom: '0.7rem' }}>{p.interpretation}</p>
-          <ComponentList components={p.components} />
+          <div className="ix-pattern">
+            <PatternRing
+              beads={p.components.map(c => ({ label: c.label, movement: c.movement, counts: c.counts }))}
+              moving={p.moving}
+              counted={p.counted}
+            />
+            <div className="ix-pattern-list"><ComponentList components={p.components} /></div>
+          </div>
         </div>
       ))}
 
@@ -1266,9 +1297,10 @@ function PatternsSection() {
 function ComponentList({ components }: { components: PatternComponent[] }) {
   return (
     <div className="hx-rows">
-      {components.map(c => (
+      {components.map((c, i) => (
         <Row
           key={c.metric}
+          icon={<Bead n={i + 1} movement={c.movement} />}
           tone={c.movement === 'unfavourable' ? 'warn' : c.movement === 'favourable' ? 'good' : undefined}
           title={c.label}
           note={
@@ -1406,6 +1438,8 @@ function WhatIf() {
   if (!data || data.scenarios.length === 0) return null;
 
   const answered = data.scenarios.filter(x => x.supported);
+  // One scale for every question, so a small answer looks small beside a large one.
+  const biggest = Math.max(1, ...answered.map(x => Math.abs(x.change ?? 0)));
   const refused = data.scenarios.filter(x => !x.supported);
 
   return (
@@ -1425,6 +1459,7 @@ function WhatIf() {
           {answered.map(x => (
             <li key={`${x.lever}${x.delta}`}>
               <p className="insight-whatif-q">{x.question}</p>
+              <Tug change={x.change ?? 0} max={biggest} />
               <p className="insight-whatif-a">
                 <b className={x.change! > 0 ? 'up' : x.change! < 0 ? 'down' : ''}>
                   {x.change! > 0 ? '+' : ''}{x.change} {data.unit}

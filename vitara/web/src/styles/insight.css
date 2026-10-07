@@ -867,3 +867,135 @@
   border-radius: 50%; border: 2px solid var(--text3); background: var(--surface);
 }
 .ix-gauge-ends { display: flex; justify-content: space-between; gap: 0.6rem; font-size: 0.7rem; color: var(--text3); }
+
+/* ── Patterns: the web, the ring, the track, the strip, the tug ─────────────
+ * The less ordinary pictures. Colour is never the only channel: a ribbon that moves apart is
+ * dashed, a bead that is not measured is hollow and dashed, and every one has its words beside it.
+ */
+
+/* The web */
+.ix-web { display: grid; grid-template-columns: minmax(96px, 30%) 1fr minmax(96px, 30%); position: relative; margin: 0.4rem 0 0.2rem; }
+.ix-web-col { position: relative; }
+.ix-web-node {
+  position: absolute; left: 0; right: 0; height: 30px;
+  display: flex; align-items: center; padding: 0 0.85rem;
+  border: 1px solid var(--border2); background: var(--surface); color: var(--text);
+  border-radius: 999px; font: inherit; font-size: 0.78rem; font-weight: 600; text-align: left; cursor: pointer;
+  transition: border-color 0.14s, box-shadow 0.14s, background 0.14s;
+}
+.ix-web-node.outcome { justify-content: flex-end; text-align: right; }
+.ix-web-node::after {
+  content: ''; position: absolute; top: 50%; width: 9px; height: 9px; margin-top: -4.5px; border-radius: 50%;
+  background: var(--insight); border: 2px solid var(--surface);
+}
+.ix-web-node.driver::after { right: -5px; }
+.ix-web-node.outcome::after { left: -5px; }
+.ix-web-node:hover, .ix-web-node.is-on { border-color: var(--insight); box-shadow: 0 0 0 3px var(--insight-wash); }
+.ix-web-node:focus-visible { outline: 2px solid var(--insight); outline-offset: 2px; }
+
+.ix-web-mid { position: relative; }
+.ix-web-mid svg { display: block; overflow: visible; }
+.ix-web-ribbon { transition: opacity 0.18s; stroke-linecap: butt; cursor: default; }
+.ix-web-ribbon.pos { stroke: color-mix(in srgb, var(--insight-usual) 62%, transparent); }
+.ix-web-ribbon.neg { stroke: color-mix(in srgb, var(--insight-notable) 70%, transparent); }
+.ix-web-ribbon.is-dim, .ix-web-chip.is-dim { opacity: 0.12; }
+.ix-web-chip {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  display: inline-flex; align-items: baseline; gap: 0.3rem; pointer-events: none;
+  padding: 0.12rem 0.55rem; border-radius: 999px; background: var(--surface); border: 1px solid var(--border2);
+  font-size: 0.72rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; transition: opacity 0.18s;
+  box-shadow: 0 2px 6px rgba(19, 32, 27, 0.08);
+}
+.ix-web-chip small { font-size: 0.62rem; font-weight: 500; color: var(--text3); }
+.ix-web-chip.pos { color: var(--insight-usual); }
+.ix-web-chip.neg { color: var(--insight-notable); }
+
+@media (max-width: 520px) {
+  .ix-web { grid-template-columns: minmax(84px, 36%) 1fr minmax(84px, 36%); }
+  .ix-web-node { font-size: 0.7rem; padding: 0 0.55rem; }
+  .ix-web-chip small { display: none; }
+}
+
+/* The ring */
+.ix-pattern { display: flex; gap: 1.4rem; align-items: center; flex-wrap: wrap; }
+.ix-pattern-list { flex: 1 1 260px; min-width: 0; }
+.ix-ring { position: relative; flex: none; }
+.ix-ring-track { stroke: var(--insight-hair); stroke-width: 3; }
+.ix-ring-arc { stroke-width: 6; stroke-linecap: round; }
+.ix-ring-arc.unfavourable { stroke: color-mix(in srgb, var(--insight-notable) 75%, transparent); }
+.ix-ring-arc.favourable { stroke: color-mix(in srgb, var(--insight-usual) 75%, transparent); }
+.ix-bead circle { stroke: var(--surface); stroke-width: 3; }
+.ix-bead text { font-size: 11px; font-weight: 700; fill: #fff; }
+.ix-bead.unfavourable circle { fill: var(--insight-notable); }
+.ix-bead.favourable circle { fill: var(--insight-usual); }
+.ix-bead.steady circle { fill: var(--surface); stroke: var(--text3); stroke-width: 2; }
+.ix-bead.steady text { fill: var(--text2); }
+.ix-bead.unmeasured circle { fill: var(--surface); stroke: var(--text3); stroke-width: 2; stroke-dasharray: 3 3; }
+.ix-bead.unmeasured text { fill: var(--text3); }
+.ix-ring-mid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; pointer-events: none; }
+.ix-ring-mid b { font-family: 'Space Grotesk', sans-serif; font-size: 1.9rem; line-height: 1; color: var(--text); }
+.ix-ring-mid b small { font-size: 0.95rem; color: var(--text3); font-weight: 600; }
+.ix-ring-mid span { margin-top: 0.25rem; font-size: 0.64rem; line-height: 1.25; color: var(--text3); }
+
+.ix-bead-badge {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  font-size: 0.7rem; font-weight: 700; color: #fff; background: var(--text3);
+}
+.ix-bead-badge.unfavourable { background: var(--insight-notable); }
+.ix-bead-badge.favourable { background: var(--insight-usual); }
+.ix-bead-badge.steady { background: var(--surface); color: var(--text2); border: 2px solid var(--text3); }
+.ix-bead-badge.unmeasured { background: var(--surface); color: var(--text3); border: 2px dashed var(--text3); }
+
+/* The trial track */
+.ix-trial { margin: 1.7rem 0 0.4rem; }
+.ix-trial-bar { position: relative; height: 14px; border-radius: 999px; background: var(--insight-hair); }
+.ix-trial-bar .runin {
+  position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px 0 0 999px;
+  background: repeating-linear-gradient(135deg, var(--insight-hair) 0 5px, color-mix(in srgb, var(--text3) 38%, transparent) 5px 7px);
+}
+.ix-trial-bar .window { position: absolute; top: 0; bottom: 0; border-radius: 0 999px 999px 0; background: var(--insight-wash); overflow: hidden; }
+.ix-trial-bar .window i { display: block; height: 100%; background: var(--insight-usual); border-radius: 0 999px 999px 0; transition: width 0.5s ease; }
+.ix-trial-bar .pin { position: absolute; top: -5px; bottom: -5px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: var(--text); }
+.ix-trial-bar .pin b {
+  position: absolute; bottom: calc(100% + 3px); left: 50%; transform: translateX(-50%);
+  font-size: 0.68rem; font-weight: 700; color: var(--text); white-space: nowrap;
+}
+.ix-trial-legend { display: flex; margin-top: 0.3rem; font-size: 0.68rem; color: var(--text3); }
+.ix-trial-legend span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The before / after strip */
+.ix-shift { display: grid; gap: 0.35rem; margin: 0.9rem 0 0.2rem; }
+.ix-shift-row { display: grid; grid-template-columns: 78px 1fr 78px; align-items: center; gap: 0.6rem; }
+.ix-shift-title { font-size: 0.74rem; font-weight: 700; color: var(--text2); line-height: 1.2; }
+.ix-shift-title small { display: block; font-weight: 500; font-size: 0.64rem; color: var(--text3); }
+.ix-shift-lane { position: relative; height: 24px; }
+.ix-shift-lane::before { content: ''; position: absolute; left: 0; right: 0; top: 11px; height: 2px; background: var(--insight-hair); border-radius: 2px; }
+.ix-shift-iqr {
+  position: absolute; top: 5px; height: 14px; border-radius: 7px;
+  background: color-mix(in srgb, var(--insight-usual) 26%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--insight-usual) 40%, transparent);
+}
+.ix-shift-dot {
+  position: absolute; top: 3px; width: 18px; height: 18px; margin-left: -9px; border-radius: 50%;
+  background: var(--surface); border: 4px solid var(--insight-usual); box-shadow: 0 2px 6px rgba(19, 32, 27, 0.22);
+}
+.ix-shift-row:last-of-type .ix-shift-dot { border-color: var(--insight); }
+.ix-shift.good .ix-shift-row:last-of-type .ix-shift-dot { border-color: var(--hx-good, #1a7f4b); }
+.ix-shift.warn .ix-shift-row:last-of-type .ix-shift-dot { border-color: var(--insight-notable); }
+.ix-shift-val { font-size: 0.82rem; font-weight: 700; color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+
+/* The tug */
+.ix-tug { position: relative; height: 34px; margin: 0.6rem 0 0.3rem; }
+.ix-tug-axis { position: absolute; left: 0; right: 0; top: 16px; height: 2px; background: var(--insight-hair); border-radius: 2px; }
+.ix-tug::before { content: ''; position: absolute; left: 50%; top: 6px; bottom: 6px; width: 2px; margin-left: -1px; background: var(--text3); border-radius: 2px; }
+.ix-tug-bar { position: absolute; top: 12px; height: 10px; border-radius: 5px; transition: width 0.4s ease; }
+.ix-tug-bar.up { background: linear-gradient(90deg, var(--insight-wash), var(--insight-usual)); }
+.ix-tug-bar.down { background: linear-gradient(270deg, var(--insight-wash), var(--insight-notable)); }
+.ix-tug-knob {
+  position: absolute; top: 8px; width: 18px; height: 18px; margin-left: -9px; border-radius: 50%;
+  background: var(--surface); border: 4px solid var(--insight); box-shadow: 0 2px 6px rgba(19, 32, 27, 0.22);
+}
+@media (prefers-reduced-motion: reduce) { .ix-tug-bar, .ix-trial-bar .window i, .ix-web-ribbon { transition: none; } }
+
+/* An intervention's name and its kind sit in one inline group, not the flex row findings use. */
+.insight-finding-head > span > .insight-metric + .insight-type { margin-left: 0.6rem; }
