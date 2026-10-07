@@ -871,3 +871,88 @@ h1.module-title  { font-size: 1.35rem; margin-bottom: 0; }
 .vx-shelf .ix-gauge-mark b { display: none; }
 .vx-shelf .ix-gauge-line { height: 26px; }
 .vx-shelf .ix-gauge-line > * { transform: translateY(-14px); }
+
+/* ── Sleep rings: one ring per night on a 24-hour dial ───────────────────── */
+.vx-rings-wrap { display: flex; justify-content: center; padding: 0.4rem 0 0.2rem; }
+.vx-rings { position: relative; max-width: 100%; }
+.vx-rings svg { display: block; max-width: 100%; height: auto; }
+.vx-rings-spoke { stroke: var(--border); stroke-width: 1; }
+.vx-rings-tick { font-size: 10px; font-weight: 600; fill: var(--text3); }
+.vx-rings-guide { stroke: var(--border); stroke-width: 1; opacity: 0.55; }
+.vx-rings-typical { stroke: var(--text2); stroke-width: 1.5; stroke-dasharray: 3 4; }
+.vx-rings-night { stroke: var(--hx-1); cursor: pointer; transition: opacity 0.18s, stroke 0.18s; outline: none; }
+.vx-rings-night.is-last { stroke: var(--hx-2); }
+.vx-rings-night.is-on { stroke: var(--hx-2); opacity: 1 !important; }
+.vx-rings-night.is-dim { opacity: 0.14 !important; }
+.vx-rings-night:focus-visible { stroke: var(--hx-2); }
+.vx-rings-mid {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; pointer-events: none;
+}
+.vx-rings-mid b { font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; color: var(--text); line-height: 1.2; }
+.vx-rings-mid span { font-size: 0.66rem; color: var(--text3); }
+
+/* ── Stage strata: each night as layers ──────────────────────────────────── */
+.vx-strata { padding-top: 0.4rem; }
+.vx-strata-plot { position: relative; height: 190px; display: flex; align-items: flex-end; gap: 6px; padding: 0 2px; }
+.vx-strata-col { flex: 1 1 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; min-width: 0; }
+.vx-strata-stack {
+  display: flex; flex-direction: column-reverse; border-radius: 7px 7px 3px 3px; overflow: hidden;
+  gap: 1.5px; background: var(--surface); transition: transform 0.15s;
+}
+.vx-strata-stack i { display: block; min-height: 2px; }
+.vx-strata-col:hover .vx-strata-stack { transform: translateY(-2px); box-shadow: 0 6px 14px -8px rgba(19, 32, 27, 0.45); }
+.vx-strata-day { margin-top: 0.3rem; text-align: center; font-size: 0.66rem; color: var(--text3); }
+.vx-strata-plot > .vx-strata-col { padding-bottom: 1.15rem; position: relative; }
+.vx-strata-plot > .vx-strata-col .vx-strata-day { position: absolute; bottom: 0; left: 0; right: 0; }
+.vx-strata-usual {
+  position: absolute; left: 0; right: 0; height: 0; border-top: 1.5px dashed var(--text2); z-index: 1; pointer-events: none;
+  margin-bottom: 1.15rem;
+}
+.vx-strata-usual em {
+  position: absolute; right: 0; bottom: 3px; font-style: normal; font-size: 0.64rem; color: var(--text2);
+  background: var(--surface); padding: 0 0.3rem; border-radius: 4px;
+}
+.vx-strata-key { display: flex; flex-wrap: wrap; gap: 0.9rem; margin-top: 0.7rem; font-size: 0.74rem; color: var(--text2); }
+.vx-strata-key span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.vx-strata-key i { width: 10px; height: 10px; border-radius: 3px; }
+
+/* ── Recovery flower ─────────────────────────────────────────────────────── */
+.vx-flower { position: relative; flex: none; }
+.vx-flower svg { display: block; }
+.vx-flower-guide { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 4; }
+.vx-flower-usual { fill: none; stroke: var(--text3); stroke-width: 1.4; stroke-dasharray: 4 3; }
+.vx-flower-petal { fill-opacity: 0.86; stroke: var(--surface); stroke-width: 1.5; transition: fill-opacity 0.15s; }
+.vx-flower-petal:hover { fill-opacity: 1; }
+.vx-flower-mid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.vx-flower-mid b { font-family: 'Space Grotesk', sans-serif; font-size: 1.7rem; line-height: 1; color: var(--text); }
+.vx-flower-mid span { font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); margin-top: 0.15rem; }
+
+.vx-flower-key { list-style: none; margin: 0.8rem 0 0; padding: 0; display: grid; gap: 0.3rem; }
+.vx-flower-key li { display: grid; grid-template-columns: 10px 1fr auto auto; align-items: baseline; gap: 0.5rem; font-size: 0.78rem; color: var(--text2); }
+.vx-flower-key i { width: 10px; height: 10px; border-radius: 3px; align-self: center; }
+.vx-flower-key b { color: var(--text); font-variant-numeric: tabular-nums; }
+.vx-flower-key em { font-style: normal; font-size: 0.7rem; color: var(--text3); min-width: 6.5rem; text-align: right; }
+
+/* ── Readiness weather ───────────────────────────────────────────────────── */
+.vx-weather {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(46px, 1fr); gap: 0.4rem;
+  overflow-x: auto; padding: 0.2rem 0.1rem 0.5rem; scroll-snap-type: x proximity;
+}
+.vx-weather-day {
+  scroll-snap-align: start; display: flex; flex-direction: column; align-items: center; gap: 0.15rem;
+  padding: 0.5rem 0.2rem 0.45rem; border-radius: 13px; border: 1px solid var(--border); background: var(--surface); min-width: 0;
+}
+.vx-weather-day.good { background: color-mix(in srgb, #f2b705 9%, var(--surface)); }
+.vx-weather-day.fine { background: color-mix(in srgb, var(--hx-2) 5%, var(--surface)); }
+.vx-weather-day.warn { background: color-mix(in srgb, var(--text3) 10%, var(--surface)); }
+.vx-weather-name { font-size: 0.68rem; font-weight: 700; color: var(--text2); text-align: center; line-height: 1.1; }
+.vx-weather-name small { display: block; font-weight: 500; color: var(--text3); }
+.vx-weather-day svg { width: 30px; height: 30px; margin: 0.15rem 0; }
+.vx-weather-day b { font-family: 'Space Grotesk', sans-serif; font-size: 1.05rem; color: var(--text); }
+.vx-weather-word { font-size: 0.6rem; color: var(--text3); text-align: center; line-height: 1.15; }
+.vx-weather .sun { fill: #f2b705; }
+.vx-weather .ray { stroke: #f2b705; stroke-width: 2.2; stroke-linecap: round; }
+.vx-weather .cloud { fill: #dfe6ef; stroke: #b9c4d3; stroke-width: 1.2; }
+.vx-weather .cloud.dark { fill: #c5cfdb; stroke: #9aa8ba; }
+.vx-weather .blank { fill: none; stroke: var(--text3); stroke-width: 1.5; stroke-dasharray: 3 3; }

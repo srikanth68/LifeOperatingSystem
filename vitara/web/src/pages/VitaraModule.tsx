@@ -10,6 +10,7 @@ import { moduleApi } from '../services/apiHost';
 import { VitaraMetricsCatalogue } from '../components/VitaraMetricsCatalogue';
 import { VitaraLabs } from '../components/VitaraLabs';
 import { LabShelf } from '../components/health/LabShelf';
+import { SleepRings, StageStrata, RecoveryFlower, ReadinessWeather } from '../components/health/SleepCharts';
 import type { ShelfAnalyte } from '../components/health/LabShelf';
 import { Shell as HxShell, Tabs as HxTabs, Card, Ring, Stat, Chip, Delta as HxDelta, SectionHead, Empty, Info, Panel, Spark, RailCard, Row, HX_SERIES } from '../components/health/HealthKit';
 import '../styles/modules.css';
@@ -128,11 +129,6 @@ const avg = (arr: (number | undefined | null)[]) => {
 };
 const fmtMin = (m: number) => { const h = Math.floor(m / 60), min = m % 60; return h > 0 ? `${h}h ${min}m` : `${min}m`; };
 const fmtClock = (iso: string) => formatClock(iso);
-
-const TIMELINE_ANCHOR_HOUR = 18;
-const timelineAnchor = (d: Date) => { const a = new Date(d); a.setHours(TIMELINE_ANCHOR_HOUR, 0, 0, 0); if (d.getHours() < 12) a.setDate(a.getDate() - 1); return a; };
-const timelineOffset = (anchor: Date, d: Date) => (d.getTime() - anchor.getTime()) / 3_600_000;
-const timelineTickLabel = (h: number) => { const actual = ((TIMELINE_ANCHOR_HOUR + h) % 24 + 24) % 24; const h12 = actual % 12 === 0 ? 12 : actual % 12; return `${h12}${actual < 12 ? 'AM' : 'PM'}`; };
 
 // Chart chrome, on paper: hairline grid one step off the surface, recessive axis
 // text, and a tooltip that reads as a small card rather than a dark tooltip bubble.
@@ -809,21 +805,18 @@ function SleepPage() {
   const nights = [...oneNightPerDay(data)].reverse();   // newest first for this page
   const lastNight = nights[0];
 
-  const rows = nights.map(s => {
-    const start2 = zoned(s.bedtimeStart), end2 = zoned(s.bedtimeEnd);   // wall clock in the configured zone
-    const anchor = timelineAnchor(start2);
-    const offset = timelineOffset(anchor, start2);
-    const duration = timelineOffset(anchor, end2) - offset;
-    return {
-      key: s.id, day: dayLabel(s.day), offset, duration, efficiency: s.efficiency,
-      bedLabel: fmtClock(s.bedtimeStart), wakeLabel: fmtClock(s.bedtimeEnd),
-      totalLabel: fmtMin(s.totalSleepMinutes), deepLabel: fmtMin(s.deepMinutes),
-      remLabel: fmtMin(s.remMinutes), lightLabel: fmtMin(s.lightMinutes), awakeLabel: fmtMin(s.awakeMinutes),
-    };
-  });
-  const rawMin = Math.min(...rows.map(r => r.offset)), rawMax = Math.max(...rows.map(r => r.offset + r.duration));
-  const domainMin = Math.floor(rawMin / 3) * 3, domainMax = Math.ceil(rawMax / 3) * 3;
-  const ticks: number[] = []; for (let h = domainMin; h <= domainMax; h += 3) ticks.push(h);
+  // Wall-clock minutes in the configured zone: a night is drawn where the user lived it, not
+  // where the server or the browser happens to be.
+  const minuteOf = (iso: string) => { const z = zoned(iso); return z.getHours() * 60 + z.getMinutes(); };
+  const oldestFirst = [...nights].reverse();
+  const ringNights = oldestFirst.map(s => ({
+    key: s.id, label: `${shortDay(s.day)} ${dayLabel(s.day)}`,
+    bed: minuteOf(s.bedtimeStart), wake: minuteOf(s.bedtimeEnd), asleep: s.totalSleepMinutes,
+  }));
+  const strataNights = oldestFirst.map(s => ({
+    key: s.id, short: shortDay(s.day).slice(0, 1), label: `${shortDay(s.day)} ${dayLabel(s.day)}`,
+    deep: s.deepMinutes, rem: s.remMinutes, light: s.lightMinutes, awake: s.awakeMinutes,
+  }));
 
   const stageTotal = lastNight ? (lastNight.deepMinutes + lastNight.remMinutes + lastNight.lightMinutes) || 1 : 1;
 
@@ -865,34 +858,12 @@ function SleepPage() {
           </div>
         </Panel>
 
-      <Panel title="When you slept" note="Each bar is one night, from lights out to waking.">
-        <ResponsiveContainer width="100%" height={rows.length * 30 + 44}>
-          <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 0 }} barCategoryGap="34%">
-            <CartesianGrid horizontal={false} {...GRID}/>
-            <XAxis type="number" domain={[domainMin, domainMax]} ticks={ticks} tickFormatter={timelineTickLabel} tick={AX} tickLine={false} axisLine={false}/>
-            <YAxis type="category" dataKey="day" tick={AX} tickLine={false} axisLine={false} width={56}/>
-            <Tooltip content={<SleepTooltip/>} cursor={{ fill: 'rgba(15,138,114,0.06)' }}/>
-            <Bar dataKey="offset" stackId="t" fill="transparent" isAnimationActive={false}/>
-            {/* One series, one colour: the bar's LENGTH is the story, and colouring each
-                night by its own score would double-encode it in the only free channel. */}
-            <Bar dataKey="duration" stackId="t" radius={5} fill="var(--hx-1)" isAnimationActive={false}/>
-          </BarChart>
-        </ResponsiveContainer>
+      <Panel title="When you slept" note="One ring per night, the newest outermost. Point at a ring to see that night.">
+        <div className="vx-rings-wrap"><SleepRings nights={ringNights} /></div>
       </Panel>
 
       <Panel title="Fourteen nights" note={a.total != null ? `usually ${fmtMin(Math.round(a.total))} asleep` : undefined}>
-        <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={[...nights].reverse().map(s => ({ day: shortDay(s.day), hours: +(s.totalSleepMinutes / 60).toFixed(2), score: s.score ?? null }))}
-                    margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-            <CartesianGrid vertical={false} {...GRID}/>
-            <XAxis dataKey="day" tick={AX} tickLine={false} axisLine={false}/>
-            <YAxis width={30} tick={AX} tickLine={false} axisLine={false} unit="h"/>
-            <Tooltip contentStyle={TT.contentStyle} labelStyle={TT.labelStyle} formatter={(v: number) => [`${v} h`, 'asleep']}/>
-            {a.total != null && <ReferenceLine y={+(a.total / 60).toFixed(2)} stroke="var(--text3)" strokeWidth={1}/>}
-            <Bar dataKey="hours" radius={[5, 5, 0, 0]} fill="var(--hx-1)" isAnimationActive={false}/>
-          </BarChart>
-        </ResponsiveContainer>
-        <p className="hx-chart-note" style={{ marginTop: '0.5rem' }}>The line is your own 14-night average.</p>
+        <StageStrata nights={strataNights} usualAsleep={a.total ?? null} />
       </Panel>
       </div>
 
@@ -928,17 +899,6 @@ function SleepPage() {
   );
 }
 
-function SleepTooltip({ active, payload }: { active?: boolean; payload?: { payload: { day: string; bedLabel: string; wakeLabel: string; totalLabel: string; deepLabel: string; remLabel: string; lightLabel: string; awakeLabel: string } }[] }) {
-  if (!active || !payload?.length) return null;
-  const d = payload[0].payload;
-  return (
-    <div style={TT.contentStyle}>
-      <div style={TT.labelStyle}>{d.day}</div>
-      <div>{d.bedLabel} - {d.wakeLabel} | {d.totalLabel}</div>
-      <div style={{ fontSize: 10, color: '#7a96c0', marginTop: 4 }}>Deep {d.deepLabel} | REM {d.remLabel} | Light {d.lightLabel} | Awake {d.awakeLabel}</div>
-    </div>
-  );
-}
 
 // ── BODY ──────────────────────────────────────────────────────────────────────
 
@@ -1288,6 +1248,7 @@ function ReadinessPage() {
   const a = {
     score: avg(data.map(r => r.score)), rhr: avg(data.map(r => r.restingHeartRate)),
     hrv: avg(data.map(r => r.hrvBalance)), recov: avg(data.map(r => r.recoveryIndex)),
+    sleep: avg(data.map(r => r.sleepBalance)), act: avg(data.map(r => r.activityBalance)),
   };
   const today = latest(data);
   const levels = data.reduce((acc, r) => { const l = r.level ?? 'unknown'; acc[l] = (acc[l] ?? 0) + 1; return acc; }, {} as Record<string, number>);
@@ -1296,12 +1257,26 @@ function ReadinessPage() {
   // Oldest-first, for the rail.
   const series = [...data].sort((x, y) => x.day.localeCompare(y.day));
 
+  // The four parts of the score that are themselves 0-100, so they can share one flower.
+  // Resting heart rate and temperature are in bpm and degrees and stay in the rail.
+  const petals = [
+    { key: 'hrv', label: 'HRV balance', value: today?.hrvBalance ?? null, usual: a.hrv ?? null, color: 'var(--hx-2)' },
+    { key: 'recovery', label: 'Recovery index', value: today?.recoveryIndex ?? null, usual: a.recov ?? null, color: 'var(--hx-4)' },
+    { key: 'sleep', label: 'Sleep balance', value: today?.sleepBalance ?? null, usual: a.sleep ?? null, color: 'var(--hx-6)' },
+    { key: 'activity', label: 'Activity balance', value: today?.activityBalance ?? null, usual: a.act ?? null, color: 'var(--hx-1)' },
+  ];
+
+  const weather = series.map(r => ({
+    key: r.id, short: shortDay(r.day), date: String(Number(r.day.slice(8, 10))),
+    label: `${shortDay(r.day)} ${dayLabel(r.day)}`, score: r.score ?? null, level: r.level ?? null,
+  }));
+
   return (
     <div className="hx-bento">
       <div className="hx-col">
         <Panel title="Recovery" icon="🌱" note={today ? dayLabel(today.day) : 'Today'} className="hx-hero2">
           <div className="hx-hero2-body">
-          <Ring score={today?.score} size={118} label="readiness" tone={toneFor(today?.score)}/>
+          <RecoveryFlower score={today?.score ?? null} petals={petals} size={210} />
           <div className="hx-hero2-copy">
             <h2 className="hx-hero2-verdict">
               {today?.level ? today.level.replace('_', ' ') : today?.score != null ? 'Recovery' : 'Nothing today yet'}
@@ -1327,6 +1302,17 @@ function ReadinessPage() {
               ))}
               <Chip>of the last {data.length} days</Chip>
             </div>
+            {/* The petals, in words: each part, last night against its own fortnight. */}
+            <ul className="vx-flower-key">
+              {petals.map(p => (
+                <li key={p.key}>
+                  <i style={{ background: p.color }} aria-hidden="true" />
+                  <span>{p.label}</span>
+                  <b>{p.value ?? '—'}</b>
+                  <em>{p.usual != null ? `usually ${Math.round(p.usual)}` : 'no average yet'}</em>
+                </li>
+              ))}
+            </ul>
           </div>
           </div>
         </Panel>
@@ -1350,24 +1336,8 @@ function ReadinessPage() {
         </ResponsiveContainer>
       </Panel>
 
-      <Panel title="Day by day" note="Each night, and what it was made of.">
-      <div className="hx-grid hx-grid-4">
-        {[...data].reverse().map(r => (
-          <div key={r.id} className="hx-stat">
-            <div className="hx-stat-head">
-              <span className="hx-stat-label">{dayLabel(r.day)}</span>
-              {r.level && <Chip tone={r.level === 'optimal' ? 'good' : r.level === 'good' ? 'neutral' : 'warn'}>{r.level.replace('_', ' ')}</Chip>}
-            </div>
-            <div className="hx-stat-value">
-              <span className="hx-stat-num" style={{ color: toneFor(r.score) }}>{r.score ?? '—'}</span>
-            </div>
-            <span className="hx-stat-sub">
-              {[r.restingHeartRate ? `${r.restingHeartRate} bpm` : null, r.hrvBalance != null ? `HRV ${r.hrvBalance}` : null]
-                .filter(Boolean).join(' · ') || 'No detail recorded'}
-            </span>
-          </div>
-        ))}
-      </div>
+      <Panel title="Day by day" note="The fortnight as a forecast, oldest on the left. The level is written under every day.">
+        <ReadinessWeather days={weather} />
       </Panel>
       </div>
 
