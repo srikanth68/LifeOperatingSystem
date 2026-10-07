@@ -9,6 +9,8 @@ import { vitaraHeaders, profileQuery, useProfileKey } from '../services/profile'
 import { moduleApi } from '../services/apiHost';
 import { VitaraMetricsCatalogue } from '../components/VitaraMetricsCatalogue';
 import { VitaraLabs } from '../components/VitaraLabs';
+import { LabShelf } from '../components/health/LabShelf';
+import type { ShelfAnalyte } from '../components/health/LabShelf';
 import { Shell as HxShell, Tabs as HxTabs, Card, Ring, Stat, Chip, Delta as HxDelta, SectionHead, Empty, Info, Panel, Spark, RailCard, Row, HX_SERIES } from '../components/health/HealthKit';
 import '../styles/modules.css';
 import '../styles/vitara.css';
@@ -286,6 +288,8 @@ function TodayPage({ status }: { status: OuraStatus }) {
   const { data: days } = useQuery<Activity[]>({ queryKey: ['activity', 7], queryFn: () => get(`${API}/api/activity?days=7`) });
   const { data: food } = useQuery<NutritionRow[]>({ queryKey: ['nutrition-today'], queryFn: () => get(`${API}/api/nutrition?days=1`) });
   const { data: labs } = useQuery<Measurement[]>({ queryKey: ['measurements', 120], queryFn: () => get(`${API}/api/measurements?days=120`) });
+  // The reference ranges the shelf draws each result against. Same query the Labs tab uses.
+  const { data: analytes } = useQuery<ShelfAnalyte[]>({ queryKey: ['analytes'], queryFn: () => get(`${API}/api/labs/analytes`) });
 
   const sync = useMutation({
     mutationFn: () => fetch(`${API}/api/oura/sync`, { method: 'POST', headers: vitaraHeaders() }).then(r => { if (!r.ok) throw new Error(r.status.toString()); return r.json(); }),
@@ -307,7 +311,7 @@ function TodayPage({ status }: { status: OuraStatus }) {
 
   const byDay = oneNightPerDay(nights ?? []);
   const actDays = [...(days ?? [])].sort((a, b) => a.day.localeCompare(b.day));
-  const recentLabs = (labs ?? []).slice(0, 4);
+  const recentLabs = (labs ?? []).slice(0, 6);
 
   return (
     <div>
@@ -605,13 +609,7 @@ function TodayPage({ status }: { status: OuraStatus }) {
           <Panel title="Recent readings" icon="🧪" right={recentLabs.length > 0 ? 'you recorded these' : undefined}
                  info="Blood pressure, glucose, lab results — anything the ring cannot measure. These feed the same baselines its data does.">
             {recentLabs.length > 0 ? (
-              <div className="hx-rows">
-                {recentLabs.map(m => (
-                  <Row key={m.id} title={m.label}
-                       note={`${m.at}${m.signature ? ` · ${m.signature}` : ''}`}
-                       right={<span className="hx-row-right">{m.value} {m.unit}</span>}/>
-                ))}
-              </div>
+              <LabShelf readings={recentLabs} analytes={analytes ?? []} />
             ) : (
               <Empty title="Nothing recorded by hand yet.">
                 One blood-pressure reading at the same time of day for a fortnight becomes a baseline worth trusting.

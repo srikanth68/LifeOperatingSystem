@@ -855,3 +855,19 @@ h1.module-title  { font-size: 1.35rem; margin-bottom: 0; }
 }
 .v-panel-error p { margin: 0 0 0.5rem; font-size: 0.85rem; line-height: 1.55; color: var(--text); }
 .v-panel-error-detail { font-size: 0.74rem !important; color: var(--text3) !important; font-family: monospace; }
+
+/* ── The lab shelf: recent results, each on its own reference range ───────── */
+.vx-shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 0.7rem; }
+.vx-shelf-card { border: 1px solid var(--border); border-radius: 14px; padding: 0.8rem 0.9rem 0.65rem; background: var(--surface); }
+.vx-shelf-card.is-out { border-color: color-mix(in srgb, var(--hx-warn, #d18f00) 45%, var(--border)); background: color-mix(in srgb, var(--hx-warn, #d18f00) 4%, var(--surface)); }
+.vx-shelf-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; font-size: 0.8rem; }
+.vx-shelf-head b { color: var(--text); font-weight: 650; }
+.vx-shelf-value { margin-top: 0.35rem; display: flex; align-items: baseline; gap: 0.35rem; }
+.vx-shelf-value span { font-family: 'Space Grotesk', sans-serif; font-size: 1.55rem; font-weight: 700; color: var(--text); line-height: 1.1; }
+.vx-shelf-value small { font-size: 0.72rem; color: var(--text3); }
+.vx-shelf-when { margin: 0.25rem 0 0; font-size: 0.68rem; color: var(--text3); }
+.vx-shelf-none { margin: 0.7rem 0 0.1rem; font-size: 0.72rem; color: var(--text3); }
+.vx-shelf .ix-gauge { margin-top: 0.5rem; }
+.vx-shelf .ix-gauge-mark b { display: none; }
+.vx-shelf .ix-gauge-line { height: 26px; }
+.vx-shelf .ix-gauge-line > * { transform: translateY(-14px); }
