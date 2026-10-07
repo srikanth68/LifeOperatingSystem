@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import MaayaDashboard  from './pages/MaayaDashboard';
 import VaultModule     from './pages/VaultModule';
-import VitaraModule    from './pages/VitaraModule';
-import InsightModule   from './pages/InsightModule';
 import NexusModule     from './pages/NexusModule';
 import AasthiModule    from './pages/AasthiModule';
 import SanModule       from './pages/SanModule';
@@ -13,6 +11,7 @@ import SettingsHub     from './pages/SettingsHub';
 import Login           from './pages/Login';
 import PinPad          from './pages/PinPad';
 import CommandPalette  from './components/CommandPalette';
+import ExternalApp     from './components/ExternalApp';
 import ArcReactor      from './components/ArcReactor';
 import { CallFab, CallOverlay } from './components/VoiceCallUI';
 import { VoiceCallProvider } from './services/voiceCallContext';
@@ -312,8 +311,9 @@ export default function App() {
     switch (active) {
       case 'home':      return <MaayaDashboard onNavigate={navigate} />;
       case 'vault':     return <VaultModule />;
-      case 'vitara':    return <VitaraModule />;
-      case 'insight':   return <InsightModule />;
+      // Moved out: Vitara and Insight are one app of their own. See components/ExternalApp.
+      case 'vitara':    return <ExternalApp name="Vitara" blurb="Your health readings, sleep, labs and profiles now live in a separate app, without the rest of Maaya around it. You sign in there once more, with the same PIN or password." />;
+      case 'insight':   return <ExternalApp name="Insight" section="insight" blurb="What your readings mean against your own history is part of the same app as Vitara. It opens straight onto Insight." />;
       case 'nexus':     return <NexusModule />;
       case 'aasthi':    return <AasthiModule />;
       case 'san':       return <SanModule />;

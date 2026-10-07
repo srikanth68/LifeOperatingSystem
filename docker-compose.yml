@@ -211,6 +211,19 @@ services:
       - "3443:443"   # https://<host>:3443 (mic works over Meshnet/.nord)
     depends_on: [vault]
 
+  # Vitara + Insight as their own app, outside the Maaya shell: no sidebar, none of the other
+  # modules. Signing in is still Maaya's (the vault server), and that is the ONLY thing of
+  # Maaya's it can reach -- its nginx forwards /api/auth and nothing else from vault.
+  # http://<host>:3100
+  vitara-web:
+    build: ./vitara/web
+    image: maaya-vitara-web
+    restart: unless-stopped
+    logging: *logging
+    ports:
+      - "3100:80"
+    depends_on: [vault, vitara, vitara-insight]
+
   # ── Voice ──
   # TTS runs as its own container (Gemma generates text, not audio). STT does not:
   # Gemma 4 is multimodal and hears audio natively on the same llama.cpp server San

@@ -66,6 +66,26 @@ for proj in $BUILD_PROJECTS; do
 done
 echo
 
+# The two web apps, type-checked. A type error here used to surface only as a failed
+# `docker compose up --build` on the deploy box, long after every other check had passed.
+# Skipped (not failed) where dependencies are not installed, so a fresh clone still runs.
+echo "  type-checking the web apps..."
+for entry in "vault/frontend|npx tsc -p tsconfig.json --noEmit --composite false --incremental false" "vitara/web|npx tsc --noEmit"; do
+  dir="${entry%%|*}"; cmd="${entry#*|}"
+  if [ ! -d "$dir/node_modules" ]; then
+    printf '  \033[33mSKIP\033[0m  %-20s (run npm install in %s)\n' "$dir" "$dir"
+    continue
+  fi
+  if out=$(cd "$dir" && eval "$cmd" 2>&1); then
+    printf '  \033[32m ok \033[0m  %-20s type-checks\n' "$dir"
+  else
+    printf '  \033[31mFAIL\033[0m  %-20s\n' "$dir"
+    echo "$out" | head -5 | sed 's/^/        /'
+    failed=$((failed + 1))
+  fi
+done
+echo
+
 for proj in $PROJECTS; do
   name=$(basename "$proj" .csproj)
   if [ ! -f "$proj" ]; then

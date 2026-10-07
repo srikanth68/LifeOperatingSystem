@@ -12,6 +12,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+# Where the Vitara app is served, if not at <this host>:3100. Empty means "work it out from the
+# address Maaya was reached on"; see src/components/ExternalApp.tsx.
+ARG VITE_VITARA_URL=""
+ENV VITE_VITARA_URL=$VITE_VITARA_URL
 RUN npm run build
 
 FROM nginx:alpine

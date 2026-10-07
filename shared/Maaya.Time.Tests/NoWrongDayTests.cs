@@ -102,10 +102,27 @@ public class NoWrongDayTests
     {
         var offenders = new List<string>();
         var root = RepoRoot();
-        var web = Path.Combine(root, "vault", "frontend", "src");
 
-        foreach (var file in Directory.EnumerateFiles(web, "*.*", SearchOption.AllDirectories)
-                     .Where(f => f.EndsWith(".ts") || f.EndsWith(".tsx")))
+        // Both web apps. Vitara's pages used to live inside Maaya's and were covered by that one
+        // folder; when they moved, a guard that still only read the old folder would have gone on
+        // passing while looking at none of them. Each root must also contain code, so an
+        // emptied or renamed folder fails here instead of quietly guarding nothing.
+        var roots = new[]
+        {
+            Path.Combine(root, "vault", "frontend", "src"),
+            Path.Combine(root, "vitara", "web", "src"),
+        };
+
+        var files = roots.SelectMany(r =>
+        {
+            Assert.True(Directory.Exists(r), $"Expected a web app at {Path.GetRelativePath(root, r)}.");
+            var found = Directory.EnumerateFiles(r, "*.*", SearchOption.AllDirectories)
+                .Where(f => f.EndsWith(".ts") || f.EndsWith(".tsx")).ToList();
+            Assert.True(found.Count > 10, $"{Path.GetRelativePath(root, r)} holds almost no code; the guard would be checking nothing.");
+            return found;
+        }).ToList();
+
+        foreach (var file in files)
         {
             // The helpers are the one place allowed to touch the primitives.
             if (file.Replace('\\', '/').EndsWith("/services/timezone.ts")) continue;

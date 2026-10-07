@@ -203,6 +203,28 @@ Calendar dates and instants are different things: `2026-10-03` is a day and must
 tags every `DateTime` as UTC, including transaction *dates*, so use `formatDay` for those and
 `formatInstant` for moments.
 
+## Vitara web (Vitara + Insight as their own app)
+
+Vitara and Insight no longer render inside the Maaya shell. They are `vitara/web`, built into its own
+container and served on its own port:
+
+```
+http://<host>:3100     the app: sign-in, then Today | Insight
+http://<host>:3000     Maaya; its Vitara and Insight tabs now link to the app above
+```
+
+- **Same backends.** `vitara` (5100) and `vitara-insight` (5110) are untouched; only the page in front of
+  them moved. Nothing to migrate, no data touched.
+- **Same sign-in, once more.** It is Maaya's login (the vault server). The two sites are different origins,
+  so the browser keeps separate tokens: you sign in again on `:3100`, with the same PIN or password.
+- **It can reach very little of Maaya.** Its nginx forwards `/svc/vault/api/auth/`, `/svc/vitara/` and
+  `/svc/insight/`. Every other `/svc/` path is a 404 from that container.
+- **Deploying** is the same command as ever (`docker compose up -d --build`); the new `vitara-web` image
+  builds with the rest. If the Maaya launcher points at the wrong address, set `VITE_VITARA_URL` when
+  building the Maaya frontend.
+- **Timezone** is read from the Vitara server (`/api/clock`), so setting `MAAYA_TIMEZONE` on the backend is
+  the only place it is ever configured.
+
 ## Profiles (more than one person)
 
 Vitara and Insight can hold more than one person. **Each person has their own SQLite file.**
