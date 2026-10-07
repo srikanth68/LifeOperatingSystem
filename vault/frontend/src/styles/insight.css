@@ -621,8 +621,8 @@
 }
 .insight-forecast-row .insight-forecast-value b { font-size: 1.8rem; }
 
+.insight-export-wrap { margin-left: auto; display: inline-flex; align-items: center; gap: 0.35rem; }
 .insight-export {
-  margin-left: auto;
   border: 1px solid var(--border2);
   background: var(--surface2);
   color: var(--text2);
@@ -680,3 +680,190 @@
 }
 .insight-asks-muted li { color: var(--text3); font-size: 0.78rem; }
 .insight-asks-muted li::before { background: var(--text3); opacity: 0.5; }
+
+/* ── App shell: navigation, panels, and the new pictures ────────────────────
+ *
+ * One nav element does both jobs. On a wide screen it is the pill bar under the header; on
+ * a phone it becomes a bottom bar with icons, because that is where a thumb is. The tab
+ * state is the same either way.
+ */
+
+.ix-nav {
+  position: sticky;
+  top: 0.5rem;
+  z-index: 30;
+  display: flex;
+  gap: 0.3rem;
+  padding: 0.3rem;
+  margin: 0 0 1.25rem;
+  background: color-mix(in srgb, var(--bg2) 88%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: 0 6px 20px -14px rgba(19, 32, 27, 0.35);
+}
+.ix-nav button {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: none;
+  background: transparent;
+  color: var(--text2);
+  border-radius: 999px;
+  padding: 0.55rem 0.9rem;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.16s, color 0.16s, box-shadow 0.16s;
+}
+.ix-nav button:hover { color: var(--text); }
+.ix-nav button:focus-visible { outline: 2px solid var(--insight); outline-offset: 1px; }
+.ix-nav button[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(19, 32, 27, 0.12);
+}
+.ix-nav .ix-ico { width: 18px; height: 18px; flex: none; }
+.ix-nav button[aria-selected="true"] .ix-ico { color: var(--insight); }
+.ix-nav .ix-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--insight-notable);
+  margin-left: -0.15rem;
+}
+
+.ix-panel { animation: ix-in 0.24s ease both; }
+@keyframes ix-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ix-panel { animation: none; } }
+
+@media (max-width: 720px) {
+  /* A bottom bar that lives INSIDE the page column, last in the flow and stuck to the foot of
+     the screen, rather than fixed to the window: a fixed bar ignores the module rail beside
+     the page and slides underneath it. */
+  .insight-page { display: flex; flex-direction: column; }
+  .ix-panel { order: 1; }
+  .ix-nav {
+    order: 2;
+    position: sticky;
+    top: auto;
+    bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+    margin: 1rem 0 0;
+    padding: 0.35rem;
+    border-radius: 22px;
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    box-shadow: 0 10px 30px -10px rgba(19, 32, 27, 0.4);
+  }
+  .ix-nav button {
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.45rem 0.1rem;
+    font-size: 0.68rem;
+    border-radius: 16px;
+    min-width: 0;
+  }
+  .ix-nav .ix-ico { width: 21px; height: 21px; }
+}
+
+/* The status ring: a count of measurements by where they sit, with the words beside it. */
+.ix-status { display: flex; gap: 1.4rem; align-items: center; flex-wrap: wrap; }
+.ix-status-copy { min-width: 0; flex: 1 1 220px; }
+
+.ix-donut { position: relative; flex: none; }
+.ix-donut-track { stroke: var(--insight-hair); }
+.ix-donut svg circle { transition: stroke-dasharray 0.5s ease; }
+.ix-donut-mid {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; pointer-events: none;
+}
+.ix-donut-num {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 2.1rem; font-weight: 700; line-height: 1; color: var(--text);
+}
+.ix-donut-cap { margin-top: 0.2rem; font-size: 0.66rem; letter-spacing: 0.04em; color: var(--text3); }
+
+.ix-legend { list-style: none; margin: 0.7rem 0 0; padding: 0; display: grid; gap: 0.3rem; }
+.ix-legend li { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text2); }
+.ix-legend li i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.ix-legend li span { flex: 1; }
+.ix-legend li b { color: var(--text); font-variant-numeric: tabular-nums; }
+.ix-legend li.is-zero { opacity: 0.5; }
+
+/* The sleep dial. */
+.ix-dial { position: relative; flex: none; }
+.ix-dial-face { stroke: var(--insight-hair); }
+.ix-dial-night { stroke: var(--insight); }
+.ix-dial-wander { stroke: var(--insight-wash); }
+.ix-dial-pin { fill: var(--surface); stroke: var(--insight); stroke-width: 2.5; }
+.ix-dial-pin.wake { stroke: var(--insight-notable); }
+.ix-dial-tick { font-size: 8.5px; font-weight: 600; fill: var(--text3); letter-spacing: 0.02em; }
+.ix-dial-mid {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.ix-dial-mid b { font-family: 'Space Grotesk', sans-serif; font-size: 1.35rem; color: var(--text); font-weight: 700; }
+.ix-dial-mid span { font-size: 0.68rem; color: var(--text3); }
+
+.ix-clock { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+.ix-clock-copy { min-width: 0; flex: 1 1 140px; }
+.ix-key { display: flex; gap: 0.9rem; flex-wrap: wrap; margin: 0.6rem 0 0; padding: 0; list-style: none; font-size: 0.76rem; color: var(--text2); }
+.ix-key li { display: inline-flex; align-items: center; gap: 0.35rem; }
+.ix-key i { width: 9px; height: 9px; border-radius: 50%; border: 2.5px solid var(--insight); background: var(--surface); }
+.ix-key li.wake i { border-color: var(--insight-notable); }
+
+/* A forecast range. */
+.ix-range { position: relative; height: 22px; margin: 0.7rem 0 0.2rem; }
+.ix-range-track { position: absolute; left: 0; right: 0; top: 10px; height: 2px; border-radius: 2px; background: var(--insight-hair); }
+.ix-range-span {
+  position: absolute; top: 5px; height: 12px; border-radius: 999px;
+  background: linear-gradient(90deg, var(--insight-wash), color-mix(in srgb, var(--insight) 38%, transparent), var(--insight-wash));
+  min-width: 6px;
+}
+.ix-range-mark {
+  position: absolute; top: 3px; width: 16px; height: 16px; margin-left: -8px;
+  border-radius: 50%; background: var(--surface); border: 3px solid var(--insight);
+  box-shadow: 0 2px 6px rgba(19, 32, 27, 0.2);
+}
+
+/* A split bar. */
+.ix-stack { display: flex; gap: 2px; height: 10px; border-radius: 999px; overflow: hidden; background: var(--insight-hair); }
+.ix-stack > span { display: block; min-width: 4px; }
+.ix-stack-empty { flex: 1; }
+
+.ix-ring-col { flex: none; width: 150px; display: flex; flex-direction: column; align-items: stretch; }
+.ix-ring-col .ix-donut { align-self: center; }
+.ix-donut-num small { font-size: 1rem; font-weight: 600; color: var(--text3); margin-left: 1px; }
+@media (max-width: 520px) { .insight-verdict { flex-wrap: wrap; } .ix-ring-col { width: 100%; } }
+
+.insight-finding-trend { margin: 0.7rem 0 0.2rem; }
+.insight-finding-trend span { display: block; margin-top: 0.2rem; font-size: 0.7rem; color: var(--text3); }
+
+/* A lab value on its reference range. */
+.ix-gauge { margin: 0.8rem 0 0.2rem; }
+.ix-gauge-line { position: relative; height: 40px; }
+.ix-gauge-track { position: absolute; left: 0; right: 0; top: 24px; height: 4px; border-radius: 4px; background: var(--insight-hair); }
+.ix-gauge-zone {
+  position: absolute; top: 20px; height: 12px; border-radius: 6px;
+  background: color-mix(in srgb, var(--insight-usual) 30%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--insight-usual) 45%, transparent);
+}
+.ix-gauge-mark {
+  position: absolute; top: 17px; width: 18px; height: 18px; margin-left: -9px;
+  border-radius: 50%; background: var(--insight-usual); border: 3px solid var(--surface);
+  box-shadow: 0 2px 6px rgba(19, 32, 27, 0.28);
+}
+.ix-gauge.is-out .ix-gauge-mark { background: var(--insight-notable); }
+.ix-gauge-mark b {
+  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  font-size: 0.78rem; font-weight: 700; color: var(--text); white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.ix-gauge-prev {
+  position: absolute; top: 21px; width: 10px; height: 10px; margin-left: -5px;
+  border-radius: 50%; border: 2px solid var(--text3); background: var(--surface);
+}
+.ix-gauge-ends { display: flex; justify-content: space-between; gap: 0.6rem; font-size: 0.7rem; color: var(--text3); }

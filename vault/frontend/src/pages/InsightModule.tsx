@@ -2,12 +2,15 @@ import { useMemo, useState } from 'react';
 import { QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { makeModuleQueryClient } from '../services/moduleQuery';
 import { Shell, Info, Chip, Row } from '../components/health/HealthKit';
+import { DonutSplit, Legend, SleepDial, RangeBar, RangeGauge, StackBar } from '../components/health/InsightCharts';
+import type { LabReading } from '../components/health/InsightCharts';
+import type { ReactNode } from 'react';
 import { vitaraHeaders, useProfileKey } from '../services/profile';
 import { moduleApi } from '../services/apiHost';
 import '../styles/modules.css';
 import '../styles/insight.css';
 
-import { todayInTz } from '../services/timezone';
+import { addDays, todayInTz } from '../services/timezone';
 // Vitara Insight — what the health data MEANS, as opposed to what it says.
 //
 // Deliberately a separate tab from Vitara rather than another panel inside it. Vitara
@@ -32,6 +35,8 @@ interface Finding {
   severity: string;
   summary: string;
   daysRunning: number;
+  // Only on lab findings: the value and the range it was read against, so it can be drawn.
+  lab?: LabReading | null;
 }
 
 interface Coverage {
@@ -259,7 +264,7 @@ interface VisitBrief {
   generatedOn: string;
   scope: string;
   verdict: string;
-  bring: { topic: string; what: string; since: string | null; severity: string; ask: string | null }[];
+  bring: { topic: string; what: string; since: string | null; severity: string; ask: string | null; lab?: LabReading | null }[];
   questions: string[];
   notLookedAt: string[];
   coverage: string;
@@ -412,6 +417,22 @@ function Verdict() {
     queryKey: ['insight-summary'],
     queryFn: () => get<Summary>(`${API}/api/health/summary`),
   });
+  const { tiles } = useMetricTiles();
+
+  // Where the measurements that have a normal sit today. A count of measurements, never a
+  // score: there is deliberately no single number for "how healthy are you".
+  const ring = useMemo(() => {
+    const band = (b: string) => tiles.filter(t => (t.latest ? zBand(t.latest.value) : 'none') === b).length;
+    const unchecked = tiles.filter(t => !t.latest).length + (data?.coverage?.stillLearning ?? 0);
+    const parts = [
+      { key: 'usual', label: 'In your usual range', value: band('usual'), color: 'var(--insight-usual)' },
+      { key: 'notable', label: 'A little off', value: band('notable'), color: 'var(--insight-notable)' },
+      { key: 'high', label: 'Well off', value: band('high'), color: 'var(--insight-high)' },
+      { key: 'unchecked', label: 'Not checked today', value: unchecked, color: 'var(--border2)' },
+    ];
+    const measured = parts[0].value + parts[1].value + parts[2].value;
+    return { parts, measured, usual: parts[0].value };
+  }, [tiles, data]);
 
   if (isLoading) return <section className="insight-card insight-verdict is-loading" aria-busy="true" />;
   if (error || !data) {
@@ -446,7 +467,20 @@ function Verdict() {
 
   return (
     <section className={`insight-card insight-verdict state-${state}`}>
-      <div className="insight-pulse" aria-hidden="true"><span /><span /><span /></div>
+      {state !== 'unrun' && ring.measured > 0 ? (
+        <div className="ix-ring-col">
+          <DonutSplit
+            parts={ring.parts}
+            ariaLabel={`${ring.usual} of ${ring.measured} measurements are in your usual range today`}
+          >
+            <span className="ix-donut-num">{ring.usual}<small>/{ring.measured}</small></span>
+            <span className="ix-donut-cap">in range today</span>
+          </DonutSplit>
+          <Legend parts={ring.parts} />
+        </div>
+      ) : (
+        <div className="insight-pulse" aria-hidden="true"><span /><span /><span /></div>
+      )}
       <div className="insight-verdict-body">
         <p className="insight-eyebrow">Health read</p>
         <h2 className="insight-verdict-title">{title}</h2>
@@ -632,6 +666,7 @@ function Findings() {
               <span className="insight-metric">{label(f.metric)}</span>
             </div>
             <p className="insight-summary">{f.summary}</p>
+            {f.lab ? <RangeGauge reading={f.lab} /> : <FindingTrend metric={f.metric} />}
             {/* How long it has been true is the difference between one odd morning and
                 something worth acting on, so it is drawn rather than buried in the text. */}
             <div className="insight-days" aria-label={`Day ${f.daysRunning}`}>
@@ -668,15 +703,15 @@ function Findings() {
 
 const Z_MAX = 3;
 
-function TodayVsNormal() {
+// One tile per metric with a normal: where today sits against it, and the last two weeks.
+// Shared by the page's headline ring and by the tiles themselves, so the ring can never
+// count something the tiles do not show.
+function useMetricTiles() {
   const baselinesQ = useQuery({
     queryKey: ['insight-baselines'],
     queryFn: () => get<BaselineSet>(`${API}/api/health/baselines`),
   });
-  const derivedQ = useQuery({
-    queryKey: ['insight-derived', 14],
-    queryFn: () => get<Derived[]>(`${API}/api/health/derived?days=14`),
-  });
+  const { byMetric: zByMetric } = useZSeries();
 
   const tiles = useMemo(() => {
     const baselines = (baselinesQ.data?.baselines ?? []).filter(b => b.isValid);
@@ -688,16 +723,13 @@ function TodayVsNormal() {
       if (!cur || b.n > cur.n) best.set(b.metric, b);
     }
 
-    const zSeries = new Map<string, Derived[]>();
-    for (const d of derivedQ.data ?? []) {
-      if (!d.metric.endsWith('_z')) continue;
-      const metric = d.metric.slice(0, -2);
-      zSeries.set(metric, [...(zSeries.get(metric) ?? []), d]);
-    }
+    // The tiles show the last two weeks. The series behind them is longer, so a reading
+    // from three weeks ago must not count as today's: cut to the window first.
+    const since = addDays(todayInTz(), -14);
 
     return [...best.values()]
       .map(b => {
-        const series = (zSeries.get(b.metric) ?? []).sort((x, y) => x.day.localeCompare(y.day));
+        const series = (zByMetric.get(b.metric) ?? []).filter(d => d.day >= since);
         const latest = series.length ? series[series.length - 1] : undefined;
         return { baseline: b, series, latest };
       })
@@ -705,9 +737,53 @@ function TodayVsNormal() {
         Number(!!b.latest) - Number(!!a.latest)
         || Math.abs(b.latest?.value ?? 0) - Math.abs(a.latest?.value ?? 0)
         || label(a.baseline.metric).localeCompare(label(b.baseline.metric)));
-  }, [baselinesQ.data, derivedQ.data]);
+  }, [baselinesQ.data, zByMetric]);
 
-  if (baselinesQ.isLoading) return null;
+  return { tiles, loading: baselinesQ.isLoading };
+}
+
+// The z-score history per metric: how far each day sat from its own usual. Sixty days,
+// asked for once and shared, so the tiles and the findings read the same line.
+function useZSeries() {
+  const q = useQuery({
+    queryKey: ['insight-derived', 60],
+    queryFn: () => get<Derived[]>(`${API}/api/health/derived?days=60`),
+  });
+
+  const byMetric = useMemo(() => {
+    const out = new Map<string, Derived[]>();
+    for (const d of q.data ?? []) {
+      if (!d.metric.endsWith('_z')) continue;
+      const metric = d.metric.slice(0, -2);
+      out.set(metric, [...(out.get(metric) ?? []), d]);
+    }
+    for (const list of out.values()) list.sort((x, y) => x.day.localeCompare(y.day));
+    return out;
+  }, [q.data]);
+
+  return { byMetric, loading: q.isLoading };
+}
+
+// The finding's own line, when it has one. Some findings are about something that has no
+// z-score (sleep debt, a lab, a composite pattern); those simply get no picture rather than
+// a made-up one.
+function FindingTrend({ metric }: { metric: string }) {
+  const { byMetric } = useZSeries();
+  const series = byMetric.get(metric);
+  if (!series || series.length < 8) return null;
+
+  return (
+    <div className="insight-finding-trend">
+      <Sparkline series={series} height={44} />
+      <span>last {series.length} days against your usual</span>
+    </div>
+  );
+}
+
+function TodayVsNormal() {
+  const { tiles, loading } = useMetricTiles();
+
+  if (loading) return null;
 
   return (
     <section className="insight-section">
@@ -770,8 +846,8 @@ function PositionStrip({ z, band }: { z: number | null; band: string }) {
   );
 }
 
-function Sparkline({ series }: { series: Derived[] }) {
-  const W = 240, H = 34, pad = 4;
+function Sparkline({ series, height = 34 }: { series: Derived[]; height?: number }) {
+  const W = 240, H = height, pad = 4;
   const n = series.length;
   const x = (i: number) => pad + (i / Math.max(1, n - 1)) * (W - 2 * pad);
   const y = (v: number) => H / 2 - (Math.max(-Z_MAX, Math.min(Z_MAX, v)) / Z_MAX) * (H / 2 - pad);
@@ -780,7 +856,7 @@ function Sparkline({ series }: { series: Derived[] }) {
 
   return (
     <svg className="insight-spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img"
-         aria-label={`Last ${n} days relative to typical`}>
+         style={{ height }} aria-label={`Last ${n} days relative to typical`}>
       <rect className="usual" x={pad} width={W - 2 * pad} y={y(1)} height={y(-1) - y(1)} />
       <line className="typical" x1={pad} x2={W - pad} y1={y(0)} y2={y(0)} />
       <polyline className="line" points={points} />
@@ -886,6 +962,14 @@ function SelfCheckSection() {
           <p className="insight-summary" style={{ fontSize: '1rem' }}>
             <b>{data.speaking}</b> speaking · <b>{data.quiet}</b> quiet · <b>{data.blind}</b> blind
           </p>
+          <StackBar
+            ariaLabel={`${data.speaking} parts speaking, ${data.quiet} quiet, ${data.blind} blind`}
+            parts={[
+              { key: 's', label: 'speaking', value: data.speaking, color: 'var(--insight-usual)' },
+              { key: 'q', label: 'quiet', value: data.quiet, color: 'var(--border2)' },
+              { key: 'b', label: 'blind', value: data.blind, color: 'var(--insight-notable)' },
+            ]}
+          />
           {/* No total and no percentage. A single number summarising how well this is
               working would be the same kind of composite the app grades as
               experimental everywhere else. */}
@@ -1235,6 +1319,7 @@ function VisitBriefSection() {
                 {b.since && <span className="insight-type">{b.since}</span>}
               </div>
               <p className="insight-summary">{b.what}</p>
+              {b.lab && <RangeGauge reading={b.lab} />}
             </li>
           ))}
         </ul>
@@ -1266,7 +1351,7 @@ function VisitBriefSection() {
 
 // The one number on this page that can be wrong in public, so it is shown with its own
 // track record attached rather than on its own.
-function Tomorrow({ what, unit, forecast }: { what: string; unit: string; forecast: Forecast | null }) {
+function Tomorrow({ what, unit, forecast, bounds }: { what: string; unit: string; forecast: Forecast | null; bounds?: [number, number] }) {
   if (!forecast) return null;
 
   const naive = forecast.method === 'today';
@@ -1278,6 +1363,7 @@ function Tomorrow({ what, unit, forecast }: { what: string; unit: string; foreca
         <b>{Math.round(forecast.value)}</b>
         <span>{unit}</span>
       </div>
+      <RangeBar low={forecast.low} high={forecast.high} value={forecast.value} bounds={bounds} unit={unit} />
       <p className="insight-forecast-range">
         usually lands between {Math.round(forecast.low)} and {Math.round(forecast.high)}
       </p>
@@ -1302,10 +1388,10 @@ function TomorrowRow() {
 
   return (
     <div className="insight-forecast-row">
-      <Tomorrow what="readiness" unit="/100" forecast={data.readiness} />
+      <Tomorrow what="readiness" unit="/100" forecast={data.readiness} bounds={[0, 100]} />
       <Tomorrow what="resting heart rate" unit="bpm" forecast={data.restingHeartRate} />
-      <Tomorrow what="HRV" unit="ms" forecast={data.hrv} />
-      <Tomorrow what="time asleep" unit="min" forecast={data.timeAsleep} />
+      <Tomorrow what="HRV" unit="ms" forecast={data.hrv} bounds={[0, 200]} />
+      <Tomorrow what="time asleep" unit="min" forecast={data.timeAsleep} bounds={[0, 720]} />
     </div>
   );
 }
@@ -1392,14 +1478,35 @@ function ExportButton() {
   };
 
   return (
-    <button className="insight-export" onClick={save} disabled={busy}>
-      {busy ? 'Preparing\u2026' : 'Export signature'}
+    // The note sits BESIDE the button, not inside it: a button nested in a button is invalid
+    // markup, and a screen reader cannot reach the inner one.
+    <span className="insight-export-wrap">
+      <button className="insight-export" onClick={save} disabled={busy}>
+        {busy ? 'Preparing\u2026' : 'Export signature'}
+      </button>
       <Info label="What is in the file">
         Your normals, sleep clock, weekly shape, recovery, what you respond to, and the fitted weights
         of any forecast that earned its place — in the units you read. No individual readings, no
         specific days, no raw sleep or heart-rate data leave with it.
       </Info>
-    </button>
+    </span>
+  );
+}
+
+function TomorrowSection() {
+  return (
+    <section className="insight-section">
+      <h2 className="insight-h2">
+        Tomorrow
+        <Info label="How tomorrow is predicted">
+          Fitted on your own history and nobody else's, then tested one day at a time against two
+          duller answers: assuming tomorrow is like today, and assuming an average day. Assuming
+          tomorrow is like today is a genuinely good forecast, so when the model cannot beat it that
+          is what you are shown — said plainly rather than hidden.
+        </Info>
+      </h2>
+      <TomorrowRow />
+    </section>
   );
 }
 
@@ -1415,19 +1522,6 @@ function BioSignatureSection() {
 
   return (
     <>
-      <section className="insight-section">
-        <h2 className="insight-h2">
-          Tomorrow
-          <Info label="How tomorrow is predicted">
-            Fitted on your own history and nobody else's, then tested one day at a time against two
-            duller answers: assuming tomorrow is like today, and assuming an average day. Assuming
-            tomorrow is like today is a genuinely good forecast, so when the model cannot beat it that
-            is what you are shown — said plainly rather than hidden.
-          </Info>
-        </h2>
-        <TomorrowRow />
-      </section>
-
       <section className="insight-section">
         <h2 className="insight-h2">
           How you run
@@ -1449,11 +1543,20 @@ function BioSignatureSection() {
             {clock && (
               <div className="insight-card insight-sig">
                 <p className="insight-eyebrow">Your clock</p>
-                <p className="insight-sig-lead">{clock.bedtime} → {clock.wake}</p>
-                <p className="insight-sig-note">
-                  give or take {Math.round(clock.bedtimeVariabilityMinutes)} min, over {clock.nights} nights
-                  <Info label="About your sleep clock">{clock.note}</Info>
-                </p>
+                <div className="ix-clock">
+                  <SleepDial bedtime={clock.bedtime} wake={clock.wake} wanderMinutes={clock.bedtimeVariabilityMinutes} />
+                  <div className="ix-clock-copy">
+                    <p className="insight-sig-lead">{clock.bedtime} → {clock.wake}</p>
+                    <p className="insight-sig-note">
+                      give or take {Math.round(clock.bedtimeVariabilityMinutes)} min, over {clock.nights} nights
+                      <Info label="About your sleep clock">{clock.note}</Info>
+                    </p>
+                    <ul className="ix-key">
+                      <li><i aria-hidden="true" />bed</li>
+                      <li className="wake"><i aria-hidden="true" />wake</li>
+                    </ul>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1649,7 +1752,46 @@ function BaselineTable() {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
+type TabId = 'overview' | 'patterns' | 'you' | 'check';
+
+const ICON = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.75, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
+
+const TABS: { id: TabId; label: string; icon: ReactNode }[] = [
+  { id: 'overview', label: 'Overview', icon: <svg className="ix-ico" viewBox="0 0 24 24" {...ICON}><rect x="3" y="3" width="7.5" height="9" rx="2"/><rect x="13.5" y="3" width="7.5" height="5.5" rx="2"/><rect x="13.5" y="11.5" width="7.5" height="9.5" rx="2"/><rect x="3" y="15" width="7.5" height="6" rx="2"/></svg> },
+  { id: 'patterns', label: 'Patterns', icon: <svg className="ix-ico" viewBox="0 0 24 24" {...ICON}><circle cx="5.5" cy="17.5" r="2.5"/><circle cx="18.5" cy="6.5" r="2.5"/><circle cx="18" cy="18" r="2"/><path d="M7.7 16.2 16.3 8M8 17.7l8 .2"/></svg> },
+  { id: 'you', label: 'You', icon: <svg className="ix-ico" viewBox="0 0 24 24" {...ICON}><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1-4 4-6 7.5-6s6.5 2 7.5 6"/></svg> },
+  { id: 'check', label: 'Check', icon: <svg className="ix-ico" viewBox="0 0 24 24" {...ICON}><path d="M12 3 4.5 6v5.5c0 4.6 3.1 8 7.5 9.5 4.4-1.5 7.5-4.9 7.5-9.5V6z"/><path d="m8.8 12 2.4 2.4 4.2-4.6"/></svg> },
+];
+
+const TAB_KEY = 'insight.tab';
+const readTab = (): TabId => {
+  try {
+    const v = localStorage.getItem(TAB_KEY);
+    return TABS.some(t => t.id === v) ? (v as TabId) : 'overview';
+  } catch { return 'overview'; }
+};
+
+function InsightNav({ active, onPick }: { active: TabId; onPick: (id: TabId) => void }) {
+  return (
+    <nav className="ix-nav" role="tablist" aria-label="Insight sections">
+      {TABS.map(t => (
+        <button key={t.id} role="tab" aria-selected={active === t.id} onClick={() => onPick(t.id)}>
+          {t.icon}
+          <span>{t.label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 function InsightPage() {
+  const [tab, setTab] = useState<TabId>(readTab);
+  const pick = (id: TabId) => {
+    setTab(id);
+    try { localStorage.setItem(TAB_KEY, id); } catch { /* fine: it just will not be remembered */ }
+    window.scrollTo?.({ top: 0 });
+  };
+
   return (
     <Shell
       title="Insight"
@@ -1672,22 +1814,43 @@ function InsightPage() {
       }
     >
       <div className="insight-page">
-        <div className="insight-top">
-          <Verdict />
-          <BioAgeCard />
-        </div>
+        <InsightNav active={tab} onPick={pick} />
 
-        <Findings />
-        <PatternsSection />
-        <InterventionsSection />
-        <VisitBriefSection />
-        <BioSignatureSection />
-        <WhatIf />
-        <TodayVsNormal />
-        <Correlations />
-        <IllnessRecord />
-        <BaselineTable />
-        <SelfCheckSection />
+        {/* key= restarts the entrance animation on every switch. Only the open panel is
+            mounted, so a tab that is never opened never fetches. */}
+        <div className="ix-panel" key={tab} role="tabpanel">
+          {tab === 'overview' && (
+            <>
+              <div className="insight-top">
+                <Verdict />
+                <BioAgeCard />
+              </div>
+              <TomorrowSection />
+              <Findings />
+              <TodayVsNormal />
+            </>
+          )}
+
+          {tab === 'patterns' && (
+            <>
+              <PatternsSection />
+              <Correlations />
+              <InterventionsSection />
+              <WhatIf />
+            </>
+          )}
+
+          {tab === 'you' && (
+            <>
+              <BioSignatureSection />
+              <VisitBriefSection />
+              <IllnessRecord />
+              <BaselineTable />
+            </>
+          )}
+
+          {tab === 'check' && <SelfCheckSection />}
+        </div>
       </div>
     </Shell>
   );

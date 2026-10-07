@@ -900,7 +900,7 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
             brief.Scope,
             brief.Verdict,
 
-            bring = brief.Bring.Select(b => new { b.Topic, b.What, b.Since, b.Severity, b.Ask }),
+            bring = brief.Bring.Select(b => new { b.Topic, b.What, b.Since, b.Severity, b.Ask, b.Lab }),
             questions = brief.Questions,
 
             // Named rather than implied. Everything this cannot see, in the payload, so
@@ -1087,6 +1087,7 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
                 f.Summary,
                 daysRunning = Surfacing.DaysRunning(f),
                 surfaced = true,
+                lab = f.Type == FindingTypes.LabAnchor ? LabReading.FromEvidence(f.EvidenceJson) : null,
             }),
 
             // Present, briefly. Held back from the lead is not the same as hidden, and a

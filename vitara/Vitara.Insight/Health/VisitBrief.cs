@@ -36,7 +36,8 @@ public static class VisitBrief
         string What,
         string? Since,
         string Severity,          // info | notable | urgent-ish is NOT a tier here; see Urgency
-        string? Ask);
+        string? Ask,
+        LabReading? Lab = null);  // the numbers behind a lab sentence, so it can be drawn
 
     public record Result(
         string Scope,
@@ -93,11 +94,12 @@ public static class VisitBrief
                 : $"{days} days, since {f.FirstDetectedLocal:d MMM}";
 
             bring.Add(new Item(
-                MetricCatalogue.Find(f.Metric)?.Label ?? f.Metric,
+                MetricCatalogue.Find(f.Metric)?.Label ?? Words(f.Metric),
                 f.Summary,
                 since,
                 f.Severity,
-                AskFor(f, days)));
+                AskFor(f, days),
+                f.Type == FindingTypes.LabAnchor ? LabReading.FromEvidence(f.EvidenceJson) : null));
         }
 
         // ── Blood work, against the printed range ───────────────────────────────
@@ -106,11 +108,27 @@ public static class VisitBrief
         {
             var rows = labResults.Where(m => m.LabPanelId == latestPanel.Id).ToList();
 
+            // A lab the detector has already flagged is on the sheet once, as the finding,
+            // which carries how long it has been running. Listing the same draw again
+            // underneath read as two separate problems. Matched on the draw date as well as
+            // the metric: a finding about an OLDER draw says nothing about this one.
+            var alreadyFlagged = active
+                .Where(f => f.Type == FindingTypes.LabAnchor && f.FirstDetectedLocal == latestPanel.DrawnOnLocal)
+                .Select(f => f.Metric)
+                .ToHashSet();
+
+            // Counted before the duplicates are skipped, so that dropping one can never turn
+            // into the sentence below claiming the whole panel was in range.
+            var outOfRange = 0;
+
             foreach (var row in rows)
             {
                 var range = ReferenceRanges.For(ranges, row.Metric, biologicalSex, age, latestPanel.LabName);
                 var standing = ReferenceRanges.Where(row.Value, range);
                 if (standing is not (ReferenceRanges.Standing.Below or ReferenceRanges.Standing.Above)) continue;
+
+                outOfRange++;
+                if (alreadyFlagged.Contains(row.Metric)) continue;
 
                 var label = MetricCatalogue.Find(row.Metric)?.Label ?? row.Metric;
 
@@ -120,10 +138,16 @@ public static class VisitBrief
                     ReferenceRanges.Describe(standing, range) + ".",
                     $"drawn {latestPanel.DrawnOnLocal:d MMM yyyy}",
                     "notable",
-                    $"Is this {label.ToLowerInvariant()} worth repeating or acting on?"));
+                    $"Is this {label.ToLowerInvariant()} worth repeating or acting on?",
+                    range is null || (range.Low is null && range.High is null)
+                        ? null
+                        : new LabReading(row.Value, null, range.Low, range.High,
+                            string.IsNullOrWhiteSpace(row.Unit) ? range.Unit : row.Unit,
+                            latestPanel.DrawnOnLocal.ToString("yyyy-MM-dd"),
+                            standing == ReferenceRanges.Standing.Below ? "below" : "above")));
             }
 
-            if (rows.Count > 0 && bring.All(b => b.Since?.StartsWith("drawn") != true))
+            if (rows.Count > 0 && outOfRange == 0)
                 questions.Add($"Everything on the {latestPanel.DrawnOnLocal:d MMM} panel sat inside its reference range " +
                               "— is there anything on it you would want repeated anyway?");
         }
@@ -162,6 +186,15 @@ public static class VisitBrief
             NotLookedAt: Blind,
             Coverage: coverage,
             Disclaimer: Disclaimer);
+    }
+
+    // A finding about something that is not a catalogued measurement (sleep debt, a composite
+    // pattern) has no label to borrow, and its key is a column name. This sheet is read by a
+    // clinician, so the key is turned into words rather than printed as it is stored.
+    private static string Words(string key)
+    {
+        var text = key.Replace('_', ' ').Trim();
+        return text.Length == 0 ? key : char.ToUpperInvariant(text[0]) + text[1..];
     }
 
     // The question a finding raises, written as the patient would ask it. Templated
