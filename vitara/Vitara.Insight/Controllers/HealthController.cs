@@ -849,40 +849,16 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         return $"{minutes / 60:00}:{minutes % 60:00}";
     }
 
-    // One row per day, assembled from the tables that own each piece. Built here rather
-    // than in the forecast so that the model sees exactly what the rest of the module
-    // sees, with the same day boundaries.
-    private async Task<List<Prediction.DayRow>> DayRows(DateOnly from, DateOnly to)
-    {
-        var readiness = await repo.GetReadinessAsync(from, to);
-        var activity = await repo.GetActivityAsync(from, to);
-        var sleep = await repo.GetSleepAsync(from, to);
-
-        var byDay = readiness.ToDictionary(r => r.Day);
-        var activityByDay = activity.GroupBy(a => a.Day).ToDictionary(g => g.Key, g => g.Last());
-        var sleepByDay = sleep.GroupBy(x => x.Day).ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.TotalSleepMinutes).First());
-
-        var rows = new List<Prediction.DayRow>();
-
-        for (var day = from; day <= to; day = day.AddDays(1))
-        {
-            byDay.TryGetValue(day, out var r);
-            activityByDay.TryGetValue(day, out var a);
-            sleepByDay.TryGetValue(day, out var night);
-
-            // A day with nothing at all is still a row. Dropping it would close the gap
-            // and let a fortnight without the ring look like a continuous fortnight.
-            rows.Add(new Prediction.DayRow(
-                day,
-                Readiness: r?.Score,
-                RestingHr: night?.LowestHr,
-                Hrv: night?.AvgHrv,
-                SleepMinutes: night?.TotalSleepMinutes,
-                ActiveCalories: a?.ActiveCalories));
-        }
-
-        return rows;
-    }
+    // One row per day. See DayRowBuilder for why this reads Observations as well as the
+    // typed tables: a person whose history came from an Apple Health export has nothing
+    // in the typed tables at all.
+    private async Task<List<Prediction.DayRow>> DayRows(DateOnly from, DateOnly to) =>
+        DayRowBuilder.Build(
+            await repo.GetReadinessAsync(from, to),
+            await repo.GetActivityAsync(from, to),
+            await repo.GetSleepAsync(from, to),
+            await repo.GetObservationsAsync(from, to),
+            from, to);
 
     // The sheet you take to an appointment.
     //
