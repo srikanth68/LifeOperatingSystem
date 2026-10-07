@@ -43,6 +43,10 @@ export function useTimezone() {
     queryFn: fetchTimezone,
     staleTime: 60 * 60_000, // rarely changes
     initialData: cachedTz,
+    // initialData counts as fresh for staleTime, so without this the hour-long staleTime
+    // meant the configured zone was never fetched at all and everyone got the default.
+    // Epoch 0 says the placeholder is ancient, so the real value is fetched on mount.
+    initialDataUpdatedAt: 0,
   });
 }
 

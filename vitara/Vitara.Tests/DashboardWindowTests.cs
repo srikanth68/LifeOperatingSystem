@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Vitara.API.Controllers;
 using Vitara.Domain.Entities;
+using Vitara.Domain.Health;
 
 namespace Vitara.Tests;
 
@@ -16,7 +17,7 @@ namespace Vitara.Tests;
 public class DashboardWindowTests
 {
     private static readonly JsonSerializerOptions Opts = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-    private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
+    private static readonly DateOnly Today = LocalTime.Today;
 
     private static FakeRepo WithSlowReadings(int daysAgo)
     {

@@ -21,7 +21,9 @@ public static class ProfileIds
     // file, byte for byte, which is what makes this change safe to deploy.
     public const string Default = "default";
 
-    private static readonly Regex Valid = new(@"^[a-z0-9][a-z0-9-]{0,39}$", RegexOptions.Compiled);
+    // \z, not $: in .NET `$` also matches just before a trailing newline, which would let
+    // an id with a newline on the end through a check whose whole job is to be strict.
+    private static readonly Regex Valid = new(@"^[a-z0-9][a-z0-9-]{0,39}\z", RegexOptions.Compiled);
 
     public static bool IsValid(string? id) => id is not null && Valid.IsMatch(id);
 

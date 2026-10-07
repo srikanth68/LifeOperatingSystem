@@ -68,6 +68,8 @@ public class ProfileTests : IDisposable
     [InlineData("-leading")]
     [InlineData("a%2e%2e")]
     [InlineData("a\0b")]
+    [InlineData("p-3f9a01bc\n")]     // .NET's $ also matches just before a final newline
+    [InlineData("default\n")]
     public void AnythingThatCouldReachAnotherPathIsRefused(string? id) => Assert.False(ProfileIds.IsValid(id));
 
     [Fact]

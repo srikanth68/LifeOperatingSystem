@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Vitara.API.Controllers;
 using Vitara.Application.Interfaces;
 using Vitara.Domain.Entities;
+using Vitara.Domain.Health;
 using Vitara.Infrastructure.Profiles;
 
 // Controllers return anonymous objects which serialize PascalCase by default.
@@ -323,7 +324,7 @@ public class DashboardControllerTests
         var result = await ctrl.Get();
         var json = GetJson(result);
 
-        Assert.Equal(DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd"), json.GetProperty("date").GetString());
+        Assert.Equal(LocalTime.Today.ToString("yyyy-MM-dd"), json.GetProperty("date").GetString());
         Assert.True(json.GetProperty("profile").ValueKind == JsonValueKind.Null);
         Assert.True(json.GetProperty("sleep").ValueKind == JsonValueKind.Null);
         Assert.True(json.GetProperty("readiness").ValueKind == JsonValueKind.Null);
@@ -345,7 +346,7 @@ public class DashboardControllerTests
     [Fact]
     public async Task Dashboard_ReturnsSleepData_ForToday()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = LocalTime.Today;
         var repo = new FakeRepo();
         repo.SleepData.Add(new SleepSession
         {
@@ -365,7 +366,7 @@ public class DashboardControllerTests
     [Fact]
     public async Task Dashboard_WeeklyAvg_ComputesCorrectly()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = LocalTime.Today;
         var repo = new FakeRepo();
         for (int i = 0; i < 7; i++)
         {
@@ -382,7 +383,7 @@ public class DashboardControllerTests
     [Fact]
     public async Task Dashboard_RecentWorkouts_LimitedTo3()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = LocalTime.Today;
         var repo = new FakeRepo();
         for (int i = 0; i < 5; i++)
             repo.WorkoutData.Add(new Workout { Id = $"dw{i}", Day = today, Activity = "running", StartTime = DateTime.UtcNow.AddHours(-i) });
@@ -394,7 +395,7 @@ public class DashboardControllerTests
     [Fact]
     public async Task Dashboard_StressMinutes_ConvertedFromSeconds()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = LocalTime.Today;
         var repo = new FakeRepo();
         repo.StressData.Add(new DailyStress { Id = "dst", Day = today, StressHighSeconds = 3600, RecoveryHighSeconds = 1800 });
 
@@ -456,7 +457,7 @@ public class SleepControllerTests
     [Fact]
     public async Task Sleep_Summary_ComputesAverages()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = LocalTime.Today;
         var repo = new FakeRepo();
         repo.SleepData.AddRange(new[]
         {
@@ -489,7 +490,7 @@ public class ActivityControllerTests
     [Fact]
     public async Task Activity_ReturnsData_WithinRange()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = LocalTime.Today;
         var repo = new FakeRepo();
         repo.ActivityData.Add(new DailyActivity { Id = "ac1", Day = today, Steps = 12000, Score = 90 });
 
@@ -502,7 +503,7 @@ public class ActivityControllerTests
     [Fact]
     public async Task Activity_Summary_ComputesAverages()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = LocalTime.Today;
         var repo = new FakeRepo();
         repo.ActivityData.AddRange(new[]
         {
@@ -525,7 +526,7 @@ public class ReadinessControllerTests
     [Fact]
     public async Task Readiness_Summary_GroupsLevels()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = LocalTime.Today;
         var repo = new FakeRepo();
         repo.ReadinessData.AddRange(new[]
         {
@@ -562,7 +563,7 @@ public class BioAgeControllerTests
     [Fact]
     public async Task BioAge_ComputesBioAge_WithSufficientData()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = LocalTime.Today;
         var repo = new FakeRepo
         {
             Profile = new UserProfile { Id = "ba", Age = 38 }
@@ -597,7 +598,7 @@ public class BioAgeControllerTests
     [Fact]
     public async Task BioAge_UsesCardiovascularAge_WhenPresent()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = LocalTime.Today;
         var repo = new FakeRepo { Profile = new UserProfile { Id = "cv", Age = 40 } };
 
         for (int i = 0; i < 5; i++)
@@ -624,7 +625,7 @@ public class BioAgeControllerTests
     [Fact]
     public async Task BioAge_ClampsDelta_ToMaxRange()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = LocalTime.Today;
         var repo = new FakeRepo { Profile = new UserProfile { Id = "clamp", Age = 30 } };
 
         for (int i = 0; i < 5; i++)
@@ -687,7 +688,7 @@ public class BioAgeControllerTests
 
     private static async Task<JsonElement> SufficientAsync(double? cvAge)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = LocalTime.Today;
         var repo = new FakeRepo { Profile = new UserProfile { Id = "lbl", Age = 40 } };
         for (int i = 0; i < 10; i++)
         {
@@ -727,7 +728,7 @@ public class ProtocolsControllerTests
     [Fact]
     public async Task Protocols_Zone2_ShowsBehind_WhenLowMinutes()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = LocalTime.Today;
         var repo = new FakeRepo();
         repo.ActivityData.Add(new DailyActivity { Id = "pz1", Day = today, MediumActivityMinutes = 10 });
 
@@ -742,7 +743,7 @@ public class ProtocolsControllerTests
     [Fact]
     public async Task Protocols_Zone2_ShowsOnTrack_WhenSufficientMinutes()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = LocalTime.Today;
         var repo = new FakeRepo();
         for (int i = 0; i < 7; i++)
             repo.ActivityData.Add(new DailyActivity { Id = $"pza{i}", Day = today.AddDays(-i), MediumActivityMinutes = 30 });
@@ -755,7 +756,7 @@ public class ProtocolsControllerTests
     [Fact]
     public async Task Protocols_SleepOptimization_ComputesBedtimeConsistency()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = LocalTime.Today;
         var repo = new FakeRepo();
         for (int i = 0; i < 5; i++)
         {
