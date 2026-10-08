@@ -28,6 +28,27 @@ public record DailyVitals(
 public static class FindingDetectors
 {
     // Stable across runs for the same condition. Content-derived, in code.
+    // How a measure is named in a sentence. Findings are read by people on a phone, by San and on
+    // the sheet taken to a doctor, and "resting_hr" is a column name. The stored key still travels
+    // in the finding's own Metric field; only the prose changes.
+    private static string Name(string metric)
+    {
+        if (MetricCatalogue.Find(metric)?.Label is { Length: > 0 } label) return label;
+        var words = metric.Replace('_', ' ').Trim();
+        return words.Length == 0 ? metric : char.ToUpperInvariant(words[0]) + words[1..];
+    }
+
+    // The same, in the middle of a sentence: "No resting heart rate", but never "No hrv".
+    private static string Mid(string metric)
+    {
+        var n = Name(metric);
+        var first = n.Split(' ')[0];
+
+        // "LDL", "HbA1c" and "VO2" keep their capitals; "Heart" and "Resting" do not.
+        var isName = first.Skip(1).Any(c => char.IsUpper(c) || char.IsDigit(c));
+        return isName || n.Length == 0 ? n : char.ToLowerInvariant(n[0]) + n[1..];
+    }
+
     private static string Key(string type, string metric, string direction) => $"{type}:{metric}:{direction}";
 
     // ── Deviation ───────────────────────────────────────────────────────────────
@@ -59,7 +80,7 @@ public static class FindingDetectors
             Metric = metric,
             Direction = direction,
             Severity = Math.Abs(latest.Z) >= threshold * 1.75 ? "notable" : "info",
-            Summary = $"{metric} has been {direction} against your baseline for {sustainedDays} days " +
+            Summary = $"{Name(metric)} has been {direction} against your baseline for {sustainedDays} days " +
                       $"({latest.Z:+0.0;-0.0} SD).",
             EvidenceJson = JsonSerializer.Serialize(new { z = window.Select(w => Math.Round(w.Z, 2)), threshold }),
             FirstDetectedLocal = window[^1].Day,
@@ -237,7 +258,7 @@ public static class FindingDetectors
     public static Finding FromRegimeChange(
         string metric, RegimeChange change, string? attribution, DateOnly today, bool adopted = true)
     {
-        var moved = $"{metric} settled at a new level around {change.ChangePointLocal:d MMM} " +
+        var moved = $"{Name(metric)} settled at a new level around {change.ChangePointLocal:d MMM} " +
                     $"({Math.Round(change.Before, 1)} → {Math.Round(change.After, 1)}), held for {change.DaysHeld} days";
 
         return new Finding
@@ -334,7 +355,7 @@ public static class FindingDetectors
             Metric = metric,
             Direction = direction,
             Severity = "info",
-            Summary = $"{metric} has been {direction} steadily for {windowDays} days — about {Math.Abs(perMonth):0.##} per month.",
+            Summary = $"{Name(metric)} has been {direction} steadily for {windowDays} days — about {Math.Abs(perMonth):0.##} per month.",
             EvidenceJson = JsonSerializer.Serialize(new
             {
                 slopePerDay = Math.Round(trend.SlopePerDay, 4),
@@ -365,8 +386,8 @@ public static class FindingDetectors
             Direction = "missing",
             Severity = "info",
             Summary = lastSeen is null
-                ? $"No {metric} has ever been recorded."
-                : $"No {metric} recorded since {lastSeen:d MMM} — {daysMissing} days.",
+                ? $"No {Mid(metric)} has ever been recorded."
+                : $"No {Mid(metric)} recorded since {lastSeen:d MMM} — {daysMissing} days.",
             EvidenceJson = JsonSerializer.Serialize(new { lastSeen = lastSeen?.ToString("yyyy-MM-dd"), daysMissing, allowedDays }),
             FirstDetectedLocal = lastSeen?.AddDays(allowedDays) ?? today,
             LastDetectedLocal = today,

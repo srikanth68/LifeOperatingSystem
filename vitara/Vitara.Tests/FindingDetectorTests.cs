@@ -1,5 +1,6 @@
 using Vitara.Insight.Health;
 using Vitara.Domain.Entities;
+using Vitara.Domain.Health;
 
 namespace Vitara.Tests;
 
@@ -275,5 +276,52 @@ public class FindingDetectorTests
         Assert.Equal("notable", unexplained.Severity);
         Assert.Equal("info", explained.Severity);
         Assert.Contains("Nothing recorded explains it", unexplained.Summary);
+    }
+
+    // ── Findings are read by people, so they say "Resting heart rate", not resting_hr ────────
+
+    [Fact]
+    public void A_deviation_names_the_measure_in_words_not_by_its_stored_key()
+    {
+        var f = FindingDetectors.Deviation("resting_hr", Z(2.4, 2.6), 2.0, 2)!;
+
+        Assert.StartsWith("Resting heart rate has been", f.Summary);
+        Assert.DoesNotContain("resting_hr", f.Summary);
+        Assert.Equal("resting_hr", f.Metric);             // the key still travels in its own field
+    }
+
+    [Fact]
+    public void A_level_shift_names_the_measure_in_words()
+    {
+        var change = new RegimeChange(new DateOnly(2026, 8, 10), 56.1, 59.4, 3.0, 20);
+
+        var f = FindingDetectors.FromRegimeChange("resting_hr", change, null, Today);
+
+        Assert.StartsWith("Resting heart rate settled at a new level", f.Summary);
+        Assert.DoesNotContain("resting_hr", f.Summary);
+    }
+
+    [Fact]
+    public void A_missing_measure_is_named_in_words_and_lowercased_mid_sentence()
+    {
+        var f = FindingDetectors.Staleness("resting_hr", null, Today, 7)!;
+
+        Assert.Equal("No resting heart rate has ever been recorded.", f.Summary);
+    }
+
+    [Fact]
+    public void An_acronym_keeps_its_capitals_mid_sentence()
+    {
+        // Never "No lDL" or "No hbA1c": those first words are names, not ordinary words.
+        Assert.StartsWith("No LDL", FindingDetectors.Staleness(MetricKeys.Ldl, null, Today, 7)!.Summary);
+        Assert.StartsWith("No HbA1c", FindingDetectors.Staleness(MetricKeys.Hba1c, null, Today, 7)!.Summary);
+    }
+
+    [Fact]
+    public void A_key_with_no_catalogue_entry_still_reads_as_words()
+    {
+        var f = FindingDetectors.Deviation("some_new_metric", Z(2.4, 2.6), 2.0, 2)!;
+
+        Assert.StartsWith("Some new metric has been", f.Summary);
     }
 }
