@@ -7,6 +7,8 @@ import { useTimezone } from './services/timezone';
 import VitaraModule from './pages/VitaraModule';
 import InsightModule from './pages/InsightModule';
 import SignIn from './pages/SignIn';
+import MobileApp from './mobile/MobileApp';
+import { useIsMobile } from './mobile/useMobile';
 
 // Vitara and Insight as ONE app.
 //
@@ -75,6 +77,8 @@ export default function App() {
   const [authState, setAuthState] = useState<AuthState>(auth.isAuthenticated() ? 'ready' : 'probing');
   const [probe, setProbe] = useState<ProbeResult | null>(null);
   const [section, setSection] = useState<Section>(readSection);
+  // A phone gets the phone shell: bottom bar, its own home screen, same pages inside.
+  const mobile = useIsMobile();
 
   // One client for things that belong to the app rather than to a person. Each section builds
   // its own per-person client inside, so switching people still discards everything.
@@ -115,6 +119,15 @@ export default function App() {
         pinLength={probe?.pinLength ?? 4}
         onSignedIn={() => setAuthState('ready')}
       />
+    );
+  }
+
+  if (mobile) {
+    return (
+      <QueryClientProvider client={client}>
+        <Clock />
+        <MobileApp onSignOut={signOut} />
+      </QueryClientProvider>
     );
   }
 

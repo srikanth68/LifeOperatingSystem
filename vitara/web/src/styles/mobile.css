@@ -1,0 +1,199 @@
+/* ── Vitara as a phone app ───────────────────────────────────────────────────
+ *
+ * The same pages as the desktop app inside a different shell: a header that stays put, a bottom
+ * bar where a thumb lands, and a home screen built for glancing. Everything here is scoped under
+ * .vm so none of it can leak into the desktop layout.
+ *
+ * Device manners: it respects the notch and the home indicator (safe-area insets), uses dynamic
+ * viewport height so the address bar cannot hide the bottom bar, removes the grey tap flash, and
+ * stops the page rubber-banding underneath the pull-to-refresh.
+ */
+
+:root { --vm-top: 62px; --vm-nav: 64px; }
+
+html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; }
+
+.hx.vm {
+  min-height: 100dvh; padding: 0; margin: 0; border-radius: 0; box-shadow: none;
+  touch-action: manipulation;
+}
+
+/* ── Pull to refresh ─────────────────────────────────────────────────────── */
+.vm-ptr { display: flex; align-items: flex-end; justify-content: center; overflow: hidden; transition: height 0.18s ease; }
+.vm-spin {
+  width: 22px; height: 22px; margin-bottom: 10px; border-radius: 50%;
+  border: 2.5px solid var(--border2); border-top-color: var(--vitara);
+}
+.vm-spin.is-on { animation: vm-rot 0.8s linear infinite; }
+@keyframes vm-rot { to { transform: rotate(360deg); } }
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+.vm-top {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: calc(env(safe-area-inset-top, 0px) + 0.55rem) 1rem 0.55rem;
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+.vm-title { min-width: 0; }
+.vm-title h1 { margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; color: var(--text); line-height: 1.15; }
+.vm-title p { margin: 0.05rem 0 0; font-size: 0.74rem; color: var(--text3); }
+.vm-top-right { margin-left: auto; display: flex; align-items: center; gap: 0.45rem; }
+.vm-sync { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.68rem; color: var(--text3); white-space: nowrap; }
+.vm-back {
+  width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border2); background: var(--surface);
+  font-size: 1.4rem; line-height: 1; color: var(--text2); display: grid; place-items: center; padding: 0 0 3px;
+}
+.vm-more { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border2); background: var(--surface); display: grid; place-items: center; }
+.vm-more svg { width: 20px; height: 20px; fill: var(--text2); }
+
+/* The profile button is a pill with a name on a desktop. Here it is just the avatar. */
+.vm .hx-profile-btn { font-size: 0; padding: 0.15rem; gap: 0; width: 36px; height: 36px; justify-content: center; }
+.vm .hx-profile-btn .hx-profile-dot { font-size: 0.8rem; width: 1.8rem; height: 1.8rem; }
+.vm .hx-profile-pop { position: fixed; left: 0.75rem; right: 0.75rem; top: calc(env(safe-area-inset-top, 0px) + 3.6rem); width: auto; }
+
+/* ── Content ─────────────────────────────────────────────────────────────── */
+.vm-main { padding: 0.9rem 1rem calc(var(--vm-nav) + env(safe-area-inset-bottom, 0px) + 1.4rem); }
+.vm-skel { height: 320px; border-radius: 22px; background: linear-gradient(100deg, var(--surface3) 30%, var(--surface) 50%, var(--surface3) 70%); background-size: 200% 100%; animation: vm-shimmer 1.3s linear infinite; }
+@keyframes vm-shimmer { to { background-position: -200% 0; } }
+
+/* ── Bottom bar ──────────────────────────────────────────────────────────── */
+.vm-nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  padding: 0.35rem 0.4rem calc(env(safe-area-inset-bottom, 0px) + 0.35rem);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid var(--border);
+}
+.vm-nav button {
+  display: flex; flex-direction: column; align-items: center; gap: 0.15rem;
+  border: none; background: transparent; padding: 0.4rem 0 0.3rem; border-radius: 14px;
+  font: inherit; font-size: 0.64rem; font-weight: 600; color: var(--text3); cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.vm-nav svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.vm-nav button.is-on { color: var(--vitara); background: var(--vitara-dim); }
+.vm-nav button:active { transform: scale(0.96); }
+
+/* ── More sheet ──────────────────────────────────────────────────────────── */
+.vm-sheet-wrap { position: fixed; inset: 0; z-index: 80; background: rgba(19, 32, 27, 0.42); display: flex; align-items: flex-end; animation: vm-fade 0.18s ease; }
+.vm-sheet {
+  width: 100%; max-height: 82dvh; overflow-y: auto; background: var(--surface);
+  border-radius: 24px 24px 0 0; padding: 0.6rem 1rem calc(env(safe-area-inset-bottom, 0px) + 1rem);
+  animation: vm-rise 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes vm-fade { from { opacity: 0; } }
+@keyframes vm-rise { from { transform: translateY(40px); opacity: 0; } }
+.vm-grab { display: block; width: 38px; height: 4px; border-radius: 4px; background: var(--border2); margin: 0 auto 0.7rem; }
+.vm-sheet ul { list-style: none; margin: 0; padding: 0; }
+.vm-sheet li button {
+  width: 100%; display: grid; grid-template-columns: 1fr auto; grid-template-areas: "a c" "b c"; align-items: center;
+  text-align: left; gap: 0.05rem 0.5rem; padding: 0.8rem 0.2rem; border: none; border-bottom: 1px solid var(--border);
+  background: transparent; font: inherit; color: var(--text); cursor: pointer;
+}
+.vm-sheet li button b { grid-area: a; font-size: 0.98rem; }
+.vm-sheet li button span { grid-area: b; font-size: 0.74rem; color: var(--text3); }
+.vm-sheet li button i { grid-area: c; font-style: normal; font-size: 1.4rem; color: var(--text3); }
+.vm-install { padding: 0.9rem 0 0; font-size: 0.82rem; color: var(--text2); }
+.vm-install .hx-btn { width: 100%; padding: 0.7rem; font-size: 0.9rem; }
+.vm-signout { width: 100%; margin-top: 0.9rem; padding: 0.75rem; border-radius: 14px; border: 1px solid var(--border2); background: var(--surface3); color: var(--text2); font: inherit; font-weight: 600; cursor: pointer; }
+
+/* ── Today ───────────────────────────────────────────────────────────────── */
+.vm-banner {
+  display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.9rem; margin-bottom: 0.8rem;
+  border-radius: 999px; border: 1px solid var(--border2); background: var(--surface); color: var(--text2);
+  font-size: 0.8rem; text-decoration: none;
+}
+.vm-banner b { margin-left: auto; color: var(--vitara); }
+
+.vm-hero { text-align: center; padding: 0.4rem 0 0.2rem; }
+.vm-rings { position: relative; margin: 0 auto; }
+.vm-ring-track { stroke: var(--border); }
+.vm-ring-track.is-empty { stroke-dasharray: 3 7; }
+.vm-ring-arc { transition: stroke-dasharray 1.1s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.vm-rings-mid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.vm-rings-mid b { font-family: 'Space Grotesk', sans-serif; font-size: 3.1rem; line-height: 1; color: var(--text); letter-spacing: -0.03em; }
+.vm-rings-mid span { margin-top: 0.2rem; font-size: 0.66rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); }
+
+.vm-hero-key { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+.vm-hero-key button {
+  width: 100%; display: grid; grid-template-columns: auto 1fr; grid-template-areas: "i l" "b b" "w w"; align-items: center; column-gap: 0.4rem;
+  text-align: left; padding: 0.6rem 0.7rem; border-radius: 16px; border: 1px solid var(--border); background: var(--surface);
+  font: inherit; cursor: pointer;
+}
+.vm-hero-key i { grid-area: i; width: 9px; height: 9px; border-radius: 50%; }
+.vm-hero-key span { grid-area: l; font-size: 0.7rem; font-weight: 600; color: var(--text2); }
+.vm-hero-key b { grid-area: b; font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; color: var(--text); line-height: 1.2; }
+.vm-hero-key em { grid-area: w; font-style: normal; font-size: 0.66rem; color: var(--text3); }
+.vm-hero-key button:active { transform: scale(0.97); }
+
+.vm-verdict { margin: 1.1rem 0 0.2rem; font-family: 'Space Grotesk', sans-serif; font-size: 1.3rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.25; color: var(--text); }
+.vm-verdict-sub { margin: 0; font-size: 0.84rem; line-height: 1.5; color: var(--text2); }
+
+.vm-rail {
+  display: flex; gap: 0.65rem; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+  margin: 1.1rem -1rem 0; padding: 0.2rem 1rem 0.4rem; scroll-padding-left: 1rem;
+}
+.vm-rail::-webkit-scrollbar { display: none; }
+.vm-metric {
+  flex: 0 0 148px; scroll-snap-align: start; text-align: left; display: flex; flex-direction: column; gap: 0.15rem;
+  padding: 0.85rem 0.9rem 0.7rem; border-radius: 20px; border: 1px solid var(--border); background: var(--surface);
+  box-shadow: var(--hx-shadow); font: inherit; cursor: pointer;
+}
+.vm-metric:active { transform: scale(0.98); }
+.vm-metric-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text3); }
+.vm-metric-value { display: flex; align-items: baseline; gap: 0.25rem; margin-top: 0.15rem; }
+.vm-metric-value b { font-family: 'Space Grotesk', sans-serif; font-size: 1.7rem; line-height: 1.1; color: var(--text); }
+.vm-metric-value small { font-size: 0.72rem; color: var(--text3); }
+.vm-metric-delta { min-height: 1.1rem; }
+.vm-metric-spark { margin-top: 0.3rem; }
+.vm-metric.is-empty .vm-metric-delta { font-size: 0.7rem; color: var(--text3); }
+
+.vm-card {
+  margin-top: 0.9rem; padding: 1rem 1.1rem; border-radius: 22px; border: 1px solid var(--border);
+  background: var(--surface); box-shadow: var(--hx-shadow);
+}
+.vm-card[role="button"] { cursor: pointer; }
+.vm-card[role="button"]:active { transform: scale(0.99); }
+.vm-eyebrow { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin: 0 0 0.5rem; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); }
+.vm-eyebrow span { font-weight: 500; letter-spacing: 0.02em; text-transform: none; }
+.vm-fine { margin: 0.5rem 0 0; font-size: 0.72rem; color: var(--text3); }
+.vm-note b { color: var(--text); }
+.vm-note p { margin: 0.3rem 0 0; font-size: 0.84rem; color: var(--text2); }
+.vm-forecast { display: flex; align-items: baseline; gap: 0.6rem; }
+.vm-forecast b { font-family: 'Space Grotesk', sans-serif; font-size: 2.3rem; color: var(--insight, var(--text)); line-height: 1; }
+.vm-forecast span { font-size: 0.78rem; color: var(--text3); }
+.vm-heads { border-left: 4px solid var(--hx-warn); }
+.vm-heads.sev-high { border-left-color: var(--hx-bad); }
+.vm-heads-text { margin: 0; font-size: 0.88rem; line-height: 1.5; color: var(--text); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.vm-stage-key { display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem; margin-top: 0.55rem; font-size: 0.74rem; color: var(--text2); }
+.vm-stage-key span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.vm-stage-key i { width: 9px; height: 9px; border-radius: 3px; }
+.vm-big-sleep { margin: 0.5rem 0 0; font-family: 'Space Grotesk', sans-serif; font-size: 1.6rem; font-weight: 700; color: var(--text); }
+.vm-big-sleep span { font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 500; color: var(--text3); }
+.vm-foot { margin: 1.2rem 0 0; text-align: center; font-size: 0.7rem; color: var(--text3); }
+
+/* ── The same pages, on a phone ─────────────────────────────────────────── */
+
+/* Insight keeps its own tab bar. On a phone it sits under the header as a segmented control,
+   because the bottom of the screen already belongs to the app's own bar. */
+.vm .insight-page { display: block; padding-bottom: 0; }
+.vm .ix-nav {
+  order: 0; position: sticky; top: calc(var(--vm-top) + env(safe-area-inset-top, 0px)); bottom: auto;
+  margin: 0 0 1rem; padding: 0.25rem; border-radius: 999px; box-shadow: none; z-index: 30;
+  background: color-mix(in srgb, var(--bg2) 94%, transparent);
+}
+.vm .ix-nav button { flex-direction: row; gap: 0.3rem; padding: 0.5rem 0.2rem; font-size: 0.78rem; border-radius: 999px; }
+.vm .ix-nav .ix-ico { width: 15px; height: 15px; }
+.vm .hx-tabs { display: none; }
+
+/* Tap targets of at least 44px for the controls the existing pages use. */
+.vm .hx-btn, .vm .hx-btn-ghost, .vm select, .vm input:not([type="checkbox"]):not([type="radio"]) { min-height: 42px; }
+.vm input, .vm select, .vm textarea { font-size: 16px; }   /* anything smaller makes iOS zoom the page on focus */
+
+@media (prefers-reduced-motion: reduce) {
+  .vm-ring-arc, .vm-sheet, .vm-sheet-wrap, .vm-ptr { transition: none; animation: none; }
+  .vm-spin.is-on { animation-duration: 2s; }
+}

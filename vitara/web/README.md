@@ -10,6 +10,8 @@ npm run typecheck
 npm run build
 ```
 
+On a phone it renders as an installable app; see [MOBILE.md](MOBILE.md).
+
 ## What it shares with Maaya, and what it does not
 
 | | |

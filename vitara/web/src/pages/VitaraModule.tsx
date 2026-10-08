@@ -31,7 +31,7 @@ interface Dated { day: string; daysAgo: number }
 interface ImpactFinding { dimension: string; group: string; samples: number; avgAfter: number; delta: number }
 interface ImpactReport { baseline: number; baselineDays: number; findings: ImpactFinding[]; note?: string }
 
-interface Dashboard {
+export interface Dashboard {
   date: string;
   profile?: { age?: number; weight?: number; height?: number; biologicalSex?: string };
   sleep?: Dated & { score?: number; totalMinutes: number; deepMinutes: number; remMinutes: number; lightMinutes: number; efficiency: number; hrv?: number; lowestHr?: number; breathingRate?: number; spo2?: number; skinTemp?: number };
@@ -51,19 +51,19 @@ interface Dashboard {
   latestHeartRate?: { timestamp: string; bpm: number };
   heartRateSamples?: { timestamp: string; bpm: number }[];
 }
-interface Sleep {
+export interface Sleep {
   id: string; day: string; bedtimeStart: string; bedtimeEnd: string;
   totalSleepMinutes: number; remMinutes: number; deepMinutes: number;
   lightMinutes: number; awakeMinutes: number;
   score?: number; avgHrv?: number; lowestHr?: number;
   avgBreathingRate?: number; avgSpo2?: number; efficiency: number;
 }
-interface Readiness {
+export interface Readiness {
   id: string; day: string; score?: number; level?: string;
   hrvBalance?: number; recoveryIndex?: number; restingHeartRate?: number;
   activityBalance?: number; sleepBalance?: number; temperatureDeviation?: number;
 }
-interface Activity {
+export interface Activity {
   id: string; day: string; score?: number; steps: number;
   activeCalories: number; totalCalories: number;
   highActivityMinutes: number; mediumActivityMinutes: number;
@@ -73,9 +73,9 @@ interface WorkoutItem {
   id: string; day: string; activity: string; startTime?: string; endTime?: string;
   calories?: number; distance?: number; intensity?: string; label?: string;
 }
-interface OuraStatus { linked: boolean; expired?: boolean; linkedAt?: string; lastSyncedAt?: string; }
+export interface OuraStatus { linked: boolean; expired?: boolean; linkedAt?: string; lastSyncedAt?: string; }
 
-function relTime(iso?: string): string {
+export function relTime(iso?: string): string {
   if (!iso) return 'never';
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return 'never';
@@ -147,7 +147,7 @@ function Skel({ h = 180 }: { h?: number }) { return <div className="v-chart-skel
 
 // ── Setup Screens ─────────────────────────────────────────────────────────────
 
-function NotLinked() {
+export function NotLinked() {
   return (
     <div className="v-setup">
       <div className="v-setup-icon">
@@ -165,7 +165,7 @@ function NotLinked() {
 // Shown when a token row exists but is expired / can't refresh. Without this, a
 // broken token leaves status.linked=true so NotLinked never renders — and there
 // was no other way to re-trigger the OAuth flow from the UI.
-function OuraExpiredBanner() {
+export function OuraExpiredBanner() {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem',
@@ -178,7 +178,7 @@ function OuraExpiredBanner() {
   );
 }
 
-function BackendDown() {
+export function BackendDown() {
   return (
     <div className="v-setup">
       <div className="v-setup-icon v-setup-icon--error">
@@ -203,7 +203,7 @@ const MOVE  = 'var(--hx-1)';
 const TEMP  = 'var(--hx-3)';
 const BODY  = 'var(--hx-4)';
 
-function toneFor(score?: number | null): string {
+export function toneFor(score?: number | null): string {
   if (score == null) return 'var(--text3)';
   if (score >= 85) return 'var(--hx-good)';
   if (score >= 70) return 'var(--hx-1)';
@@ -218,7 +218,7 @@ function toneFor(score?: number | null): string {
 // the data says is a decoration, and after a week of reading it under a bad morning
 // nobody reads it at all. So this is computed, it can say nothing, and it never claims
 // a direction without a difference behind it.
-function greeting(d: Dashboard): { line: string; sub: string } {
+export function greeting(d: Dashboard): { line: string; sub: string } {
   const r = d.readiness?.score;
   const better: string[] = [];
   const worse: string[] = [];
@@ -779,7 +779,7 @@ function quickInsights(d: Dashboard): { title: string; note: string; icon: strin
   return out.slice(0, 4);
 }
 
-function SleepPage() {
+export function SleepPage() {
   const { data, isPending, isError, error } = useQuery<Sleep[]>({ queryKey: ['sleep', 14], queryFn: () => get(`${API}/api/sleep?days=14`) });
 
   if (isPending) return <Skel h={300}/>;
@@ -914,7 +914,7 @@ interface AgeHistory {
   vo2Max: { day: string; value: number }[];
 }
 
-function BodyPage() {
+export function BodyPage() {
   const qClient = useQueryClient();
   const { data: bio } = useQuery<{ bioAge?: number; chronologicalAge: number; delta?: number; cardiovascularAge?: number; vo2Max?: number; factors: { hrvScore?: number; restingHrScore?: number; sleepScore?: number; readinessScore?: number; recoveryTrend?: number }; dataQuality: string; ageSource: string; label?: string; disclaimer?: string }>({
     queryKey: ['bioage'], queryFn: () => get(`${API}/api/bioage`),
@@ -1109,7 +1109,7 @@ function LogWorkoutForm() {
   );
 }
 
-function ActivityPage() {
+export function ActivityPage() {
   const { data, isPending, isError, error } = useQuery<Activity[]>({ queryKey: ['activity', 14], queryFn: () => get(`${API}/api/activity?days=14`) });
   const { data: workouts } = useQuery<WorkoutItem[]>({ queryKey: ['workouts'], queryFn: () => get(`${API}/api/workouts?days=30`) });
 
@@ -1231,7 +1231,7 @@ function ActivityPage() {
 
 // ── RECOVERY ─────────────────────────────────────────────────
 
-function ReadinessPage() {
+export function ReadinessPage() {
   const { data, isPending, isError, error } = useQuery<Readiness[]>({ queryKey: ['readiness', 14], queryFn: () => get(`${API}/api/readiness?days=14`) });
 
   if (isPending) return <Skel h={200}/>;
@@ -1380,7 +1380,7 @@ const PROTOCOL_TONE: Record<string, 'good' | 'warn' | 'neutral'> = {
   'on-track': 'good', behind: 'warn', suggested: 'neutral', manual: 'neutral',
 };
 
-function ProtocolsPage() {
+export function ProtocolsPage() {
   const { data, isPending } = useQuery<ProtocolResult[]>({ queryKey: ['protocols'], queryFn: () => get(`${API}/api/protocols`) });
   if (isPending) return <Skel h={220}/>;
   if (!data?.length) {
@@ -1505,7 +1505,7 @@ function scalePreview(food: FoodResult, qty: number, unit: string) {
   };
 }
 
-function NutritionPage() {
+export function NutritionPage() {
   const qClient = useQueryClient();
   const today = todayInTz();
   const [day, setDay] = useState(today);
@@ -1866,7 +1866,7 @@ interface Measurement {
   signature: string;
 }
 
-function MeasurePanel() {
+export function MeasurePanel() {
   const queryClient = useQueryClient();
 
   const { data: specs } = useQuery({
@@ -2055,7 +2055,7 @@ interface XmlScan {
   warnings: string[];
 }
 
-function XmlImportPanel() {
+export function XmlImportPanel() {
   const [file, setFile]       = useState<File | null>(null);
   const [scan, setScan]       = useState<XmlScan | null>(null);
   const [chosen, setChosen]   = useState<Set<string>>(new Set());
@@ -2247,7 +2247,7 @@ interface ImportResult {
   committed: boolean;
 }
 
-function ImportPanel() {
+export function ImportPanel() {
   const [file, setFile]       = useState<File | null>(null);
   const [result, setResult]   = useState<ImportResult | null>(null);
   const [error, setError]     = useState<string | null>(null);
@@ -2385,7 +2385,7 @@ function ImportPanel() {
 // A dashboard payload missing a block took the whole module down to a white screen: no
 // message, nothing to retry, indistinguishable from the app being broken. React needs a
 // class for this; it is the only one in the codebase and it earns its place.
-class PanelBoundary extends Component<{ name: string; children: ReactNode }, { error: Error | null }> {
+export class PanelBoundary extends Component<{ name: string; children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
 
   static getDerivedStateFromError(error: Error) { return { error }; }
@@ -2479,10 +2479,15 @@ function VitaraInner() {
   );
 }
 
-export default function VitaraModule() {
-  // Keyed on the person: switching discards every cached query and all local state, so a screen
-  // can never show one person's numbers under another person's name while a refetch is in flight.
+// Keyed on the person: switching discards every cached query and all local state, so a screen
+// can never show one person's numbers under another person's name while a refetch is in flight.
+// Shared by the desktop module and the phone shell so the rule lives in one place.
+export function PersonProvider({ children }: { children: ReactNode }) {
   const profileKey = useProfileKey();
   const client = useMemo(() => makeModuleQueryClient(5 * 60_000), [profileKey]);
-  return <QueryClientProvider client={client} key={profileKey}><VitaraInner/></QueryClientProvider>;
+  return <QueryClientProvider client={client} key={profileKey}>{children}</QueryClientProvider>;
+}
+
+export default function VitaraModule() {
+  return <PersonProvider><VitaraInner/></PersonProvider>;
 }

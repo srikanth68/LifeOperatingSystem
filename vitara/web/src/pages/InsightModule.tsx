@@ -1819,7 +1819,8 @@ function InsightNav({ active, onPick }: { active: TabId; onPick: (id: TabId) => 
   );
 }
 
-function InsightPage() {
+// The page body without its header, so the phone shell can embed it under its own.
+export function InsightContent() {
   const [tab, setTab] = useState<TabId>(readTab);
   const pick = (id: TabId) => {
     setTab(id);
@@ -1828,27 +1829,7 @@ function InsightPage() {
   };
 
   return (
-    <Shell
-      title="Insight"
-      subtitle="What the numbers mean, against your own history"
-      accent="var(--hx-2)"
-      icon={
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 13h3l3 7 4-16 3 9h5"/>
-        </svg>
-      }
-      right={
-        <span className="hx-pill">
-          Compared with you
-          <Info label="What this page compares against">
-            Every number here is measured against your own last sixty days, not against a population
-            average. That is why a value can be flagged while still being perfectly normal for someone
-            else — and why it takes a few weeks of wear before any of it means anything.
-          </Info>
-        </span>
-      }
-    >
-      <div className="insight-page">
+    <div className="insight-page">
         <InsightNav active={tab} onPick={pick} />
 
         {/* key= restarts the entrance animation on every switch. Only the open panel is
@@ -1887,6 +1868,32 @@ function InsightPage() {
           {tab === 'check' && <SelfCheckSection />}
         </div>
       </div>
+  );
+}
+
+function InsightPage() {
+  return (
+    <Shell
+      title="Insight"
+      subtitle="What the numbers mean, against your own history"
+      accent="var(--hx-2)"
+      icon={
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 13h3l3 7 4-16 3 9h5"/>
+        </svg>
+      }
+      right={
+        <span className="hx-pill">
+          Compared with you
+          <Info label="What this page compares against">
+            Every number here is measured against your own last sixty days, not against a population
+            average. That is why a value can be flagged while still being perfectly normal for someone
+            else — and why it takes a few weeks of wear before any of it means anything.
+          </Info>
+        </span>
+      }
+    >
+      <InsightContent />
     </Shell>
   );
 }

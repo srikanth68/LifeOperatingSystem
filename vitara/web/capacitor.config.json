@@ -1,0 +1,7 @@
+{
+  "appId": "app.vitara.mobile",
+  "appName": "Vitara",
+  "webDir": "dist",
+  "server": { "androidScheme": "https" },
+  "ios": { "contentInset": "always" }
+}

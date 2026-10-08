@@ -14,8 +14,13 @@ const PORT_TO_SERVICE: Record<number, string> = {
   5110: 'insight',
 };
 
+// Empty on the web, which is the point: the page and the API share an origin. A native wrapper
+// (Capacitor) serves the page from its own origin, so there it must be told where the server is,
+// at build time: VITE_API_BASE=https://<the server>:3100. Nothing else about the app changes.
+const BASE = ((import.meta.env.VITE_API_BASE as string | undefined) ?? '').replace(/\/$/, '');
+
 export const moduleApi = (port: number): string => {
   const name = PORT_TO_SERVICE[port];
   if (!name) throw new Error(`No route is defined for port ${port}.`);
-  return `/svc/${name}`;
+  return `${BASE}/svc/${name}`;
 };
