@@ -29,7 +29,10 @@ public class SelfCheckTests
         // Seeded off the metric name, so two series are independent. An earlier version
         // gave every metric the same sawtooth; they correlated perfectly and the
         // correlation engine was entirely right to say so.
-        var rng = new Random(metric.GetHashCode() & 0x7fffffff);
+        // A seed that is the same on every run. string.GetHashCode() is randomised per process in
+        // .NET, so seeding from it gave different "random" data each run, and now and then the
+        // noise lined up into a correlation and a test about finding nothing found something.
+        var rng = new Random(metric.Aggregate(17, (h, c) => unchecked(h * 31 + c)) & 0x7fffffff);
         return Enumerable.Range(0, days)
             .Select(i => Obs(metric, value + (rng.NextDouble() - 0.5) * value * 0.2, Today.AddDays(-days + 1 + i), tier))
             .ToList();
