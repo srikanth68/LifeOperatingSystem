@@ -2,6 +2,8 @@
   "appId": "app.vitara.mobile",
   "appName": "Vitara",
   "webDir": "dist",
+  "backgroundColor": "#060e1c",
   "server": { "androidScheme": "https" },
-  "ios": { "contentInset": "always" }
+  "ios": { "contentInset": "never", "backgroundColor": "#060e1c" },
+  "plugins": { "StatusBar": { "overlaysWebView": true, "style": "DARK" } }
 }

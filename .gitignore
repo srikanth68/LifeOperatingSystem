@@ -65,3 +65,8 @@ ios/**/.build/
 mfp-mcp/
 .aidesigner/*
 !.aidesigner/.gitkeep
+
+# The native projects Capacitor generates on the Mac (vitara/web/scripts/native-ios.sh).
+# Per-machine: they carry the signing team and build output, and are recreated from the web app.
+vitara/web/ios/
+vitara/web/android/

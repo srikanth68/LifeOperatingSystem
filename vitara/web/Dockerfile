@@ -3,7 +3,7 @@
 # `npm run build` is `tsc --noEmit && vite build`, so a type error fails the image build instead
 # of shipping, the same rule Maaya's own frontend follows.
 
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci

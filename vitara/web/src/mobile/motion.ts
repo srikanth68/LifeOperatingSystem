@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { setNativeChrome } from './native';
 
 // Motion and theme for the phone app.
 //
@@ -60,6 +61,7 @@ export function useVmTheme(): [VmTheme, (t: VmTheme) => void] {
     const before = { meta: meta?.getAttribute('content') ?? null, bg: html.style.background };
     meta?.setAttribute('content', CHROME[theme]);
     html.style.background = CHROME[theme];
+    void setNativeChrome(theme);
     return () => {
       if (before.meta != null) meta?.setAttribute('content', before.meta);
       html.style.background = before.bg;
