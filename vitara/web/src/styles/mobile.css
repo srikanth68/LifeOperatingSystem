@@ -81,11 +81,11 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
 .vm-skel { height: 320px; border-radius: 22px; background: linear-gradient(100deg, var(--s2) 30%, var(--s1) 50%, var(--s2) 70%); background-size: 200% 100%; animation: vm-shimmer 1.3s linear infinite; }
 @keyframes vm-shimmer { to { background-position: -200% 0; } }
 
-.vm-head { display: flex; align-items: center; gap: 12px; margin: 0 0 22px; min-height: 52px; }
+.vm-hd { display: flex; align-items: center; gap: 12px; margin: 0 0 22px; min-height: 52px; }
 .vm-head-text { min-width: 0; flex: 1; }
 .vm-head-text p { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--t2); }
-.vm-head-text h1 { margin: 4px 0 0; font-family: inherit; font-size: 34px; font-weight: 600; letter-spacing: -.025em; line-height: 1.1; color: var(--t1); overflow-wrap: anywhere; }
-.vm-head.is-big .vm-head-text h1 { font-size: 26px; letter-spacing: -.02em; line-height: 1.15; }
+.vm-head-text h1 { margin: 4px 0 0; font-family: inherit; font-size: 34px; font-weight: 600; letter-spacing: -.025em; line-height: 1.1; color: var(--t1); overflow-wrap: break-word; }
+.vm-hd.is-big .vm-head-text h1 { font-size: 26px; letter-spacing: -.02em; line-height: 1.15; }
 .vm-head-right { display: flex; align-items: center; gap: 8px; flex: none; }
 .vm-back { width: 44px; height: 44px; margin-left: -12px; border: 0; background: transparent; color: var(--t1); font-size: 28px; line-height: 1; cursor: pointer; }
 .vm-pill {
@@ -164,7 +164,7 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
 
 /* ── Today ───────────────────────────────────────────────────────────────── */
 .vm-today { display: flex; flex-direction: column; gap: 22px; }
-.vm-today > .vm-head { margin-bottom: 0; }
+.vm-today > .vm-hd { margin-bottom: 0; }
 
 .vm-hero { display: flex; flex-direction: column; gap: 22px; }
 .vm-rings { position: relative; margin: 4px auto 0; }
@@ -188,19 +188,19 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
 .vm-label em { font-style: normal; font-weight: 400; letter-spacing: 0; text-transform: none; font-size: 13px; color: var(--t2); }
 
 /* ── Cards ───────────────────────────────────────────────────────────────── */
-.vm-card {
+.vm-tile {
   display: block; width: 100%; margin: 0; padding: 18px; text-align: left; font: inherit; color: var(--t1);
   background: var(--s1); border: 1px solid var(--line); border-radius: 22px;
 }
-.vm-card .vm-label { margin-bottom: 14px; }
+.vm-tile .vm-label { margin-bottom: 14px; }
 .vm-tap { cursor: pointer; }
 .vm-tap:active { transform: scale(.99); }
 .vm-dashed { background: transparent; border: 1px dashed var(--line2); }
-.vm-note b { font-size: 15px; font-weight: 600; }
-.vm-note p { margin: 4px 0 0; font-size: 13px; color: var(--t2); line-height: 1.4; }
+.vm-msg b { font-size: 15px; font-weight: 600; }
+.vm-msg p { margin: 4px 0 0; font-size: 13px; color: var(--t2); line-height: 1.4; }
 .vm-fine { margin: 10px 0 0; font-size: 14px; color: var(--t2); line-height: 1.4; text-wrap: pretty; }
 .vm-link { margin: 12px 0 0; font-size: 14px; font-weight: 600; color: var(--blue); }
-.vm-foot { margin: 6px 0 0; text-align: center; font-size: 12px; color: var(--t3); }
+.vm-end { margin: 6px 0 0; text-align: center; font-size: 12px; color: var(--t3); }
 
 .vm-offline { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 18px; background: var(--s1); }
 .vm-offline > div { flex: 1; min-width: 0; }
@@ -276,6 +276,148 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
 .vm-link-head { display: flex; align-items: center; gap: 10px; }
 .vm-link-head b { font-size: 17px; font-weight: 600; }
 .vm-link-head i { width: 26px; height: 26px; border-radius: 50%; border: 2px dashed var(--teal); box-sizing: border-box; display: grid; place-items: center; color: var(--teal); font-style: normal; font-weight: 700; font-size: 15px; }
+
+/* ── Sleep, Recovery, Activity ───────────────────────────────────────────── */
+.vm-screen { display: flex; flex-direction: column; gap: 22px; }
+.vm-screen > .vm-hd { margin-bottom: 0; }
+
+.vm-hero-row { display: flex; align-items: center; gap: 22px; }
+.vm-hero-row .vm-rings { margin: 0; flex: none; }
+.vm-ring-num { font-size: 46px; font-weight: 500; letter-spacing: -.04em; line-height: 1.05; color: var(--t1); }
+.vm-hero-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.vm-hero-text p { margin: 0; font-size: 14px; color: var(--t2); line-height: 1.45; }
+.vm-hero-text b { font-size: 20px; font-weight: 600; }
+.vm-hero-text .vm-big { font-size: 30px; font-weight: 500; letter-spacing: -.03em; }
+.vm-hero-text .vm-sleep-diff { color: var(--sleep); font-weight: 600; }
+.vm-card-title { font-size: 17px; font-weight: 600; display: block; margin-bottom: 8px; }
+.vm-state { font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+
+/* Stages: a row each, with your usual as a tick on the bar */
+.vm-stage-rows { display: flex; flex-direction: column; margin-top: 14px; }
+.vm-stage-row { display: grid; grid-template-columns: 76px minmax(0, 1fr) 64px; align-items: center; gap: 12px; min-height: 52px; border-top: 1px solid var(--line); }
+.vm-stage-name { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.vm-stage-name i { width: 10px; height: 10px; border-radius: 3px; }
+.vm-stage-bar { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; }
+.vm-stage-bar small { font-size: 12px; color: var(--t2); }
+.vm-stage-row > b { text-align: right; font-size: 15px; font-weight: 600; }
+.vm-meter { position: relative; height: 6px; border-radius: 3px; background: var(--track); }
+.vm-meter i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }
+.vm-meter u { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--t1); }
+
+/* Bars over a band: nights, steps */
+.vm-nights-chart { position: relative; margin-top: 8px; }
+.vm-band { position: absolute; left: 0; right: 0; border-radius: 4px; opacity: .1; }
+.vm-band-label { position: absolute; right: 0; font-size: 12px; color: var(--t2); }
+.vm-bars { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 5px; }
+.vm-bar { flex: 1; position: relative; border-radius: 5px 5px 2px 2px; background: var(--s3); }
+.vm-bar.is-last { background: linear-gradient(180deg, var(--sleep2), var(--sleep)); }
+.vm-bar.is-last span { position: absolute; bottom: 100%; right: 0; margin-bottom: 4px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.vm-bar-gold { background: var(--gold); border-radius: 3px 3px 1px 1px; }
+.vm-usual-line { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--t2); opacity: .8; }
+.vm-axis { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; color: var(--t2); }
+.vm-key { display: inline-flex; align-items: center; gap: 6px; }
+.vm-key i { width: 14px; height: 8px; border-radius: 2px; opacity: .35; }
+
+/* Bedtime dots */
+.vm-dots-chart { display: flex; gap: 10px; }
+.vm-dots-axis { position: relative; flex: none; width: 56px; font-size: 12px; color: var(--t2); }
+.vm-dots-axis span { position: absolute; left: 0; white-space: nowrap; }
+.vm-dots-plot { position: relative; flex: 1; }
+.vm-dot { position: absolute; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; box-sizing: border-box; }
+.vm-dot.in { background: var(--t2); }
+.vm-dot.out { background: transparent; border: 2px solid var(--t2); }
+.vm-dot.is-last { width: 14px; height: 14px; margin: -7px 0 0 -7px; background: var(--teal); }
+
+/* A row that opens the deep page */
+.vm-row-link { display: flex; align-items: center; justify-content: space-between; min-height: 56px; padding: 0 18px; border: 1px solid var(--line); border-radius: 18px; background: transparent; color: var(--t1); font: 500 16px 'Instrument Sans', system-ui, sans-serif; cursor: pointer; }
+.vm-row-link em { font-style: normal; font-size: 22px; color: var(--t2); }
+
+/* Recovery */
+.vm-weather { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 18px; padding: 22px 20px 18px; border-radius: 26px; border: 1px solid var(--line); background: linear-gradient(170deg, var(--tint-g), var(--s1) 55%); }
+.vm-sun { position: absolute; right: -30px; top: -30px; width: 150px; height: 150px; border-radius: 50%; background: radial-gradient(circle, var(--gold2) 0%, var(--gold) 34%, transparent 70%); }
+.vm-weather-main { position: relative; display: flex; flex-direction: column; gap: 4px; }
+.vm-label-s { font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--t2); }
+.vm-weather-main b { font-size: 44px; font-weight: 500; letter-spacing: -.035em; line-height: 1.05; }
+.vm-weather-main p { margin: 0; font-size: 15px; color: var(--t2); max-width: 230px; text-wrap: pretty; }
+.vm-weather-scale { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.vm-weather-scale div { display: flex; flex-direction: column; gap: 6px; }
+.vm-weather-scale i { height: 6px; border-radius: 3px; }
+.vm-weather-scale span { font-size: 12px; }
+.vm-weather-scale small { font-size: 12px; color: var(--t2); }
+.vm-chart-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+.vm-chart-head b { font-size: 36px; font-weight: 500; letter-spacing: -.03em; line-height: 1.1; }
+.vm-chart-head small { font-size: 15px; color: var(--t2); }
+.vm-chart-vs { margin-left: auto; font-size: 14px; font-weight: 600; color: var(--teal); text-align: right; }
+.vm-pairs { display: flex; gap: 8px; align-items: flex-end; height: 88px; }
+.vm-pairs > div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.vm-pair-bars { display: flex; gap: 3px; align-items: flex-end; height: 64px; }
+.vm-pair-bars i { width: 8px; border-radius: 3px; }
+.vm-pairs span { font-size: 12px; }
+.vm-legend-line { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; font-size: 12px; color: var(--t2); }
+.vm-legend-line span { display: flex; align-items: center; gap: 6px; }
+.vm-legend-line i { width: 8px; height: 8px; border-radius: 2px; }
+.vm-missing { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 20px 8px; text-align: center; }
+.vm-missing b { font-size: 20px; font-weight: 600; }
+.vm-missing p { margin: 0; max-width: 280px; font-size: 15px; line-height: 1.45; color: var(--t2); text-wrap: pretty; }
+.vm-missing .vm-cta { width: auto; }
+
+/* Activity */
+.vm-act-legend { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.vm-act-legend div { display: flex; flex-direction: column; gap: 1px; }
+.vm-act-legend span { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--t2); }
+.vm-act-legend i { width: 8px; height: 8px; border-radius: 50%; }
+.vm-act-legend b { font-size: 20px; font-weight: 600; }
+.vm-act-legend small { font-size: 12px; font-weight: 400; color: var(--t2); }
+.vm-split { display: flex; height: 12px; gap: 3px; }
+.vm-split i:first-child { border-radius: 6px 0 0 6px; }
+.vm-split i:last-child { border-radius: 0 6px 6px 0; }
+.vm-split-key { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin-top: 12px; font-size: 13px; color: var(--t2); }
+.vm-split-key b { color: var(--t1); }
+.vm-list { display: flex; flex-direction: column; }
+.vm-list-row { display: flex; align-items: center; gap: 14px; min-height: 64px; border-top: 1px solid var(--line); }
+.vm-list-row > div { flex: 1; min-width: 0; }
+.vm-list-row b { display: block; font-size: 16px; font-weight: 600; }
+.vm-list-row small { display: block; margin-top: 2px; font-size: 13px; color: var(--t2); }
+.vm-list-row > span:last-child { text-align: right; font-size: 14px; color: var(--t2); font-variant-numeric: tabular-nums; }
+.vm-list-ico { width: 40px; height: 40px; flex: none; border-radius: 12px; background: var(--tint-g); display: grid; place-items: center; }
+.vm-list-ico i { width: 14px; height: 14px; background: var(--gold); }
+.vm-list-ico i.shape-circle { border-radius: 50%; }
+.vm-list-ico i.shape-square { border-radius: 3px; }
+.vm-list-ico i.shape-diamond { border-radius: 2px; transform: rotate(45deg); }
+
+/* ── Labs ────────────────────────────────────────────────────────────────── */
+.vm-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 -20px; padding: 0 20px; }
+.vm-chips::-webkit-scrollbar { display: none; }
+.vm-chips button { flex: none; min-height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid var(--line2); background: transparent; color: var(--t1); font: 500 14px 'Instrument Sans', system-ui, sans-serif; cursor: pointer; }
+.vm-chips button.is-on { background: var(--s3); border-color: var(--teal); }
+.vm-statuses { display: flex; flex-wrap: wrap; gap: 8px; }
+.vm-statuses span, .vm-status { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.mark-circle, .mark-square, .mark-ring { display: inline-block; width: 8px; height: 8px; box-sizing: border-box; flex: none; }
+.mark-circle { border-radius: 50%; }
+.mark-square { border-radius: 1px; }
+.mark-ring { border-radius: 50%; border: 1.5px dashed; }
+.vm-lab-list { display: flex; flex-direction: column; gap: 12px; }
+.vm-lab { display: flex; flex-direction: column; gap: 14px; padding: 18px; border-radius: 22px; background: var(--s1); border: 1px solid var(--line); }
+.vm-lab-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.vm-lab-head b { font-size: 16px; font-weight: 600; }
+.vm-lab-value { display: flex; align-items: baseline; gap: 5px; margin-top: 4px; }
+.vm-lab-value span { font-size: 32px; font-weight: 500; letter-spacing: -.03em; line-height: 1.1; }
+.vm-lab-value small { font-size: 14px; color: var(--t2); }
+.vm-zone { position: relative; height: 40px; margin: 0 11px; }
+.vm-zone-bar { position: absolute; left: 0; right: 0; top: 10px; height: 10px; display: flex; gap: 2px; }
+.vm-zone-bar i { border-radius: 3px; }
+.vm-zone-now { position: absolute; top: 4px; width: 22px; height: 22px; margin-left: -11px; border-radius: 50%; background: var(--t1); border: 4px solid var(--s1); box-sizing: border-box; transition: left .9s cubic-bezier(.22, 1, .36, 1); }
+.vm-zone-prev { position: absolute; top: 8px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; border: 2px solid var(--t2); background: var(--s1); box-sizing: border-box; }
+.vm-zone span { position: absolute; top: 28px; transform: translateX(-50%); font-size: 12px; color: var(--t2); }
+.vm-key-line { display: flex; gap: 14px; align-items: center; font-size: 12px; color: var(--t2); }
+.vm-key-line span { display: flex; align-items: center; gap: 6px; }
+.mark-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--t1); display: inline-block; }
+.mark-hollow { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--t2); box-sizing: border-box; display: inline-block; }
+.vm-more-box { padding: 16px 18px; border: 1px solid var(--line); border-radius: 18px; }
+.vm-more-box summary { min-height: 28px; cursor: pointer; font-size: 15px; font-weight: 600; list-style: none; }
+.vm-more-box summary::-webkit-details-marker { display: none; }
+.vm-more-box p { margin: 10px 0 0; font-size: 14px; line-height: 1.45; color: var(--t2); }
+.vm-more-box p b { color: var(--t1); }
 
 /* ── The same pages, on a phone ─────────────────────────────────────────── */
 

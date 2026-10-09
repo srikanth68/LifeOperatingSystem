@@ -7,8 +7,9 @@ import { greeting } from '../pages/VitaraModule';
 import type { Dashboard, Sleep, Activity, Readiness, OuraStatus } from '../pages/VitaraModule';
 import { Rings } from './Rings';
 import type { RingItem, RingMode } from './Rings';
-import { UsualSpark, vsUsual, dateLine } from './Parts';
+import { UsualSpark, vsUsual, dateLine, OutOfReach } from './Parts';
 import { clamp, ease, useReveal } from './motion';
+import { avg, fmtMin, oneNightPerDay } from './stats';
 
 // The home screen of the phone app.
 //
@@ -29,11 +30,6 @@ const get = <T,>(url: string): Promise<T> =>
     if (!r.ok) throw new Error(String(r.status));
     return r.json() as Promise<T>;
   });
-
-export const fmtMin = (m: number) => {
-  const h = Math.floor(m / 60), min = Math.round(m % 60);
-  return h > 0 ? `${h}h ${String(min).padStart(2, '0')}m` : `${min}m`;
-};
 
 interface Forecast { value: number; low: number; high: number; method: 'model' | 'today' | 'none' }
 interface Finding { key: string; metric: string; severity: string; summary: string; daysRunning: number }
@@ -70,17 +66,7 @@ export function MobileToday({ status, go, tick, header }: {
   const eyebrow = dateLine();
 
   if (dash.isPending) return <>{header(hello, eyebrow)}<div className="vm-skel" aria-busy="true" /></>;
-  if (!d) {
-    return (
-      <>
-        {header(hello, eyebrow)}
-        <div className="vm-card vm-note">
-          <b>Data out of reach</b>
-          <p>Check you are on the same network as your server, then pull down to try again.</p>
-        </div>
-      </>
-    );
-  }
+  if (!d) return <>{header(hello, eyebrow)}<OutOfReach onRetry={() => { void dash.refetch(); }} /></>;
 
   // Last good data is on screen while the server cannot be reached: say so, and say since when.
   const offline = dash.isError || (typeof navigator !== 'undefined' && navigator.onLine === false);
@@ -143,7 +129,7 @@ export function MobileToday({ status, go, tick, header }: {
       {header(hello, eyebrow)}
 
       {offline && (
-        <div className="vm-card vm-dashed vm-offline" role="status">
+        <div className="vm-tile vm-dashed vm-offline" role="status">
           <i className="vm-dashed-ring" aria-hidden="true" />
           <div>
             <b>Data out of reach</b>
@@ -206,7 +192,7 @@ export function MobileToday({ status, go, tick, header }: {
 
       {/* ── Last night ────────────────────────────────────────────────── */}
       {d.sleep && (
-        <button type="button" className="vm-card vm-tap" onClick={() => go('sleep')}>
+        <button type="button" className="vm-tile vm-tap" onClick={() => go('sleep')}>
           <p className="vm-label"><span>Last night</span>
             <em>{lastNight ? `${formatClock(lastNight.bedtimeStart)} – ${formatClock(lastNight.bedtimeEnd)} ›` : ''}</em></p>
           <Stages s={d.sleep} awake={lastNight?.awakeMinutes} t={t} />
@@ -215,7 +201,7 @@ export function MobileToday({ status, go, tick, header }: {
 
       {/* ── Tomorrow ──────────────────────────────────────────────────── */}
       {forecast && forecast.method !== 'none' && (
-        <button type="button" className="vm-card vm-tap vm-forecast-card" onClick={() => go('insight')}>
+        <button type="button" className="vm-tile vm-tap vm-forecast-card" onClick={() => go('insight')}>
           <p className="vm-label"><span style={{ color: 'var(--blue)' }}>Tomorrow</span><em>Forecast</em></p>
           <div className="vm-forecast-row">
             <div className="vm-forecast-word">{forecastWord(forecast.value, readiness)}</div>
@@ -230,7 +216,7 @@ export function MobileToday({ status, go, tick, header }: {
 
       {/* ── A heads-up, only when there is one ───────────────────────── */}
       {lead && (
-        <button type="button" className="vm-card vm-tap" onClick={() => go('insight')}>
+        <button type="button" className="vm-tile vm-tap" onClick={() => go('insight')}>
           <p className="vm-label">
             <span>Top finding</span>
             <span className={`vm-sev sev-${lead.severity}`}>
@@ -248,7 +234,7 @@ export function MobileToday({ status, go, tick, header }: {
 
       {/* ── Honest empty states ──────────────────────────────────────── */}
       {nothingYet && (
-        <div className="vm-card vm-dashed vm-learn">
+        <div className="vm-tile vm-dashed vm-learn">
           <p className="vm-label"><span>Getting to know you</span></p>
           <div className="vm-nights" aria-hidden="true">{Array.from({ length: 7 }, (_, i) => <i key={i} className={i === 0 ? 'on' : ''} />)}</div>
           <p>Your usual takes about 7 nights to learn. Forecasts and patterns arrive after about 14 days.</p>
@@ -256,7 +242,7 @@ export function MobileToday({ status, go, tick, header }: {
       )}
 
       {status && !status.linked && (
-        <div className="vm-card vm-dashed vm-link-card">
+        <div className="vm-tile vm-dashed vm-link-card">
           <div className="vm-link-head"><i aria-hidden="true">+</i><b>No sensor linked</b></div>
           <p>
             {readiness == null
@@ -267,14 +253,14 @@ export function MobileToday({ status, go, tick, header }: {
         </div>
       )}
       {status?.linked && status.expired && (
-        <div className="vm-card vm-dashed vm-link-card">
+        <div className="vm-tile vm-dashed vm-link-card">
           <div className="vm-link-head"><i aria-hidden="true">!</i><b>Your sensor needs reconnecting</b></div>
           <p>The link expired, so nothing new is arriving.</p>
           <a className="vm-cta" href={`${VITARA}/api/oura/auth${profileQuery()}`} target="_blank" rel="noreferrer">Reconnect</a>
         </div>
       )}
 
-      <p className="vm-foot">
+      <p className="vm-end">
         {summaryQ.data?.computedThrough ? `Insight analysed through ${summaryQ.data.computedThrough}` : 'Pull down to refresh'}
       </p>
     </div>
@@ -379,8 +365,6 @@ const firstSentence = (text: string) => {
   return m ? m[0] : text;
 };
 
-const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
-
 // Time asleep against the average of the nights before it.
 function sleepVsUsual(minutes: number, before: Sleep[]) {
   const usual = avg(before.map(n => n.totalSleepMinutes));
@@ -388,14 +372,4 @@ function sleepVsUsual(minutes: number, before: Sleep[]) {
   const diff = Math.round(minutes - usual);
   if (Math.abs(diff) <= 5) return { arrow: '≈', text: 'about your usual' };
   return diff > 0 ? { arrow: '↑', text: `${diff} min more than usual` } : { arrow: '↓', text: `${-diff} min less than usual` };
-}
-
-// A nap is not a night: keep the longest session per day, oldest first.
-function oneNightPerDay(sessions: Sleep[]): Sleep[] {
-  const best = new Map<string, Sleep>();
-  for (const s of sessions) {
-    const cur = best.get(s.day);
-    if (!cur || s.totalSleepMinutes > cur.totalSleepMinutes) best.set(s.day, s);
-  }
-  return [...best.values()].sort((a, b) => a.day.localeCompare(b.day));
 }

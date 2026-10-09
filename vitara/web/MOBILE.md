@@ -8,12 +8,30 @@ on a phone.
 
 | | |
 |---|---|
-| **Shell** | A header that stays put, a bottom bar with the five places you go daily (Today, Sleep, Recovery, Activity, Insight), and a **More** sheet for the rest (Labs, Body, Food, Protocols, Record a reading, Import, Everything we track, Sign out). Respects the notch and home indicator. |
-| **Today** | Three concentric rings (sleep, recovery, activity) with readiness in the middle, one computed sentence about the day, swipeable cards (HRV, resting HR, time asleep, steps) each against *your own* usual with a trend line, tomorrow's forecast, the top finding from Insight, and last night's stages. Pull down to refresh. |
-| **Everything else** | The same Sleep, Recovery, Activity, Insight, Labs... screens the desktop app uses, not a second copy. Insight's own tab bar moves under the header so it doesn't collide with the bottom bar. |
+| **Shell** | A bottom bar with Today, Sleep, Recovery, Activity, Insight and **More**; the More sheet springs up with Labs, Body, Food, Protocols, Record a reading, Import, Everything we track, an **Appearance** switch (dark or light, remembered on the phone) and Sign out. Respects the notch and home indicator. |
+| **Today** | Three gradient rings (sleep, recovery, activity) with readiness in the middle, the day's sentence, swipeable cards (HRV, resting HR, time asleep, steps) each with a dashed "usual" line and a trend that draws in, last night, tomorrow's forecast with its likely range, and the top finding. Pull down to refresh. |
+| **Sleep** | Score ring and duration against your usual, each stage against its own usual, the last 14 nights over a band of your usual, and bedtime consistency. |
+| **Recovery** | "Body weather" (a scale for the readiness score), HRV and resting heart rate over 30 days against the middle half of your own values, and activity beside readiness for the week. |
+| **Activity** | Rings that close on *your usual* (there is no universal target), steps over 14 days, active minutes, recent workouts. |
+| **Labs** (More) | The latest draw, each result laid on its reference range with the previous draw marked; coral is used for outside-range results and nothing else. Entering a draw is one tap away. |
+| **Insight, and the deep pages** | Insight is the same page the desktop app uses, in the phone skin. Sleep, Recovery and Activity each end with a "Full ... detail" row that opens the desktop page for it. |
 | **Installable** | A web app manifest, generated icons (`scripts/make-icons.py`) and a service worker. |
 
-Code: `src/mobile/` (shell, Today, rings), `src/styles/mobile.css`, `public/sw.js`, `public/manifest.webmanifest`.
+The look comes from the Claude Design project "Vitara Health App Design": Instrument Sans for the interface, Newsreader for
+the one human sentence per screen, deep navy surfaces with teal (recovery), lavender (sleep), gold (activity) and blue
+(insight). The app's own tokens (`--surface`, `--text`, `--border`) are re-pointed at the phone tokens inside `.hx.vm`, so any
+desktop page shown in the phone shell follows the theme.
+
+**Honesty rules the design set, kept in code.** An empty ring is a dashed track, never a zero. Stale data says it is stale and
+since when. A missing sensor is named, with a way to fix it. Nothing is red for being below your usual; coral is reserved for
+out-of-range lab results. Things the data does not contain are not drawn (there is no sleep timeline, hourly steps or "load"
+score, so the screens do not pretend to).
+
+**Class names.** Everything phone-specific is `vm-*`. The desktop metrics page already uses `.vm-card`, `.vm-head`,
+`.vm-foot` and `.vm-note`, so the phone versions are `vm-tile`, `vm-hd`, `vm-end` and `vm-msg`; a colliding name restyles the
+other app's page.
+
+Code: `src/mobile/` (shell, the six screens, `Rings.tsx`, `Parts.tsx`, `motion.ts`, `stats.ts`), `src/styles/mobile.css`, `public/sw.js`, `public/manifest.webmanifest`.
 
 ## Installing it
 
@@ -59,7 +77,7 @@ Things that are different inside a native webview, and need doing first:
 
 ## Not built yet
 
-Push notifications, a home-screen widget, a dark theme, offline reading of the last known data, and per-person device
+Push notifications, a home-screen widget, offline reading of the last known data (the app shows what it last loaded while open, but does not store readings on the phone, by design), and per-person device
 keys (see `docs/VITARA-ACCOUNTS.md`). None of them is blocked by anything here.
 
 ## How it is meant to differ from Oura, Whoop and Apple Health

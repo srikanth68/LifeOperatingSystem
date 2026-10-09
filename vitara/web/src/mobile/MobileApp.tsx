@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  PersonProvider, PanelBoundary, BackendDown, relTime,
+  PersonProvider, PanelBoundary, relTime,
   SleepPage, ReadinessPage, ActivityPage, BodyPage, NutritionPage, ProtocolsPage,
   MeasurePanel, XmlImportPanel, ImportPanel,
 } from '../pages/VitaraModule';
@@ -14,6 +14,10 @@ import { ProfileMenu } from '../components/health/ProfileMenu';
 import { moduleApi } from '../services/apiHost';
 import { vitaraHeaders } from '../services/profile';
 import { MobileToday } from './MobileToday';
+import { MobileSleep } from './MobileSleep';
+import { MobileRecovery } from './MobileRecovery';
+import { MobileActivity } from './MobileActivity';
+import { MobileLabs } from './MobileLabs';
 import { RingDefs } from './Rings';
 import { dateLine } from './Parts';
 import { useVmTheme } from './motion';
@@ -28,6 +32,8 @@ import '../styles/mobile.css';
 
 type Tab = 'today' | 'sleep' | 'recovery' | 'move' | 'insight';
 type MoreKey = 'body' | 'food' | 'labs' | 'protocols' | 'record' | 'import' | 'all';
+// The deep pages behind the three designed screens: reached from a row at the bottom of each.
+type DetailKey = 'sleep-detail' | 'recovery-detail' | 'activity-detail' | 'labs-entry';
 
 const TABS: { id: Tab; label: string; title: string; icon: ReactNode }[] = [
   {
@@ -65,13 +71,13 @@ const MORE: { id: MoreKey; label: string; note: string }[] = [
 function Inner({ onSignOut }: { onSignOut: () => void }) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('today');
-  const [more, setMore] = useState<MoreKey | null>(null);
+  const [more, setMore] = useState<MoreKey | DetailKey | null>(null);
   const [sheet, setSheet] = useState(false);
   const [tick, setTick] = useState(0);                 // bumped on refresh: the home screen redraws
   const [theme, setTheme] = useVmTheme();
   const install = useInstall();
 
-  const { data: status, isPending, isError } = useQuery<OuraStatus>({
+  const { data: status, isPending } = useQuery<OuraStatus>({
     queryKey: ['oura-status'],
     queryFn: () => fetch(`${moduleApi(5100)}/api/oura/status`, { headers: vitaraHeaders() }).then(r => {
       if (!r.ok) throw new Error(String(r.status));
@@ -84,14 +90,15 @@ function Inner({ onSignOut }: { onSignOut: () => void }) {
     window.scrollTo?.({ top: 0 });
     navigator.vibrate?.(6);                       // a light tick where the device has one
   };
-  const goMore = (m: MoreKey) => { setMore(m); setSheet(false); window.scrollTo?.({ top: 0 }); };
+  const goMore = (m: MoreKey | DetailKey) => { setMore(m); setSheet(false); window.scrollTo?.({ top: 0 }); };
 
   const { pull, busy } = usePullToRefresh(async () => {
     await qc.invalidateQueries();
     setTick(n => n + 1);
   });
 
-  const moreLabel = MORE.find(m => m.id === more)?.label;
+  const DETAIL_TITLE: Record<DetailKey, string> = { 'sleep-detail': 'Sleep detail', 'recovery-detail': 'Recovery detail', 'activity-detail': 'Activity detail', 'labs-entry': 'Enter a draw' };
+  const moreLabel = more ? (MORE.find(m => m.id === more)?.label ?? DETAIL_TITLE[more as DetailKey]) : undefined;
   const title = more ? moreLabel : TABS.find(t => t.id === tab)?.title;
   const onMore = more !== null || sheet;
 
@@ -103,14 +110,14 @@ function Inner({ onSignOut }: { onSignOut: () => void }) {
     : { dot: 'ok', label: `Synced ${relTime(status.lastSyncedAt)}` };
 
   const header = (heading: string, eyebrow: string, big = false) => (
-    <header className={`vm-head ${big ? 'is-big' : ''}`}>
-      {more ? <button className="vm-back" onClick={() => setMore(null)} aria-label="Back">‹</button> : null}
+    <header className={`vm-hd ${big ? 'is-big' : ''}`}>
+      {more ? <button className="vm-back" onClick={() => setMore(more === 'labs-entry' ? 'labs' : null)} aria-label="Back">‹</button> : null}
       <div className="vm-head-text">
         <p>{eyebrow}</p>
         <h1>{heading}</h1>
       </div>
       <div className="vm-head-right">
-        {sync && <span className="vm-pill" title="Last sync"><i className={`dot-${sync.dot}`} />{sync.label}</span>}
+        {sync && !more && <span className="vm-pill" title="Last sync"><i className={`dot-${sync.dot}`} />{sync.label}</span>}
         <ProfileMenu />
       </div>
     </header>
@@ -128,18 +135,21 @@ function Inner({ onSignOut }: { onSignOut: () => void }) {
 
       <main className="vm-main">
         {isPending && <div className="vm-skel" aria-busy="true" />}
-        {!isPending && isError && <BackendDown />}
-        {!isPending && !isError && (
+                {!isPending && (
           <PanelBoundary key={more ?? tab} name={String(title)}>
             {more === null && tab === 'today' && (
               <MobileToday status={status} tick={tick} go={t => goTab(t)} header={(h, e) => header(h, e, true)} />
             )}
-            {(more !== null || tab !== 'today') && header(String(title), more ? 'Vitara' : dateLine())}
-            {more === null && tab === 'sleep' && <SleepPage />}
-            {more === null && tab === 'recovery' && <ReadinessPage />}
-            {more === null && tab === 'move' && <ActivityPage />}
+            {more === null && tab === 'sleep' && <MobileSleep tick={tick} header={(h, e) => header(h, e)} detail={() => goMore('sleep-detail')} />}
+            {more === null && tab === 'recovery' && <MobileRecovery tick={tick} header={(h, e) => header(h, e)} detail={() => goMore('recovery-detail')} />}
+            {more === null && tab === 'move' && <MobileActivity tick={tick} header={(h, e) => header(h, e)} detail={() => goMore('activity-detail')} />}
+            {(more !== null || tab === 'insight') && header(String(title), more ? 'Vitara' : dateLine())}
+            {more === 'sleep-detail' && <SleepPage />}
+            {more === 'recovery-detail' && <ReadinessPage />}
+            {more === 'activity-detail' && <ActivityPage />}
             {more === null && tab === 'insight' && <InsightContent />}
-            {more === 'labs' && <VitaraLabs />}
+            {more === 'labs' && <MobileLabs enter={() => goMore('labs-entry')} />}
+            {more === 'labs-entry' && <VitaraLabs />}
             {more === 'body' && <BodyPage />}
             {more === 'food' && <NutritionPage />}
             {more === 'protocols' && <ProtocolsPage />}
