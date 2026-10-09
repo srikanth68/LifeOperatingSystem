@@ -281,25 +281,23 @@ public class OuraClient : IOuraClient
     public async Task<List<Workout>> GetWorkoutsAsync(string accessToken, DateOnly from, DateOnly to)
     {
         var doc = await GetCollectionAsync("workout", accessToken, from, to);
-        var list = new List<Workout>();
-        foreach (var item in doc.RootElement.GetProperty("data").EnumerateArray())
-        {
-            list.Add(new Workout
-            {
-                Id = item.GetProperty("id").GetString() ?? "",
-                Day = DateOnly.Parse(item.GetProperty("day").GetString() ?? ""),
-                Activity = item.TryGetProperty("activity", out var act) ? act.GetString() ?? "" : "",
-                StartTime = item.TryGetProperty("start_datetime", out var st) ? DateTime.Parse(st.GetString()!) : null,
-                EndTime = item.TryGetProperty("end_datetime", out var et) ? DateTime.Parse(et.GetString()!) : null,
-                Calories = item.TryGetNullable<int>("calories"),
-                Distance = item.TryGetNullable<int>("distance"),
-                Intensity = item.TryGetProperty("intensity", out var inten) ? inten.GetString() : null,
-                Label = item.TryGetProperty("label", out var lbl) ? lbl.GetString() : null,
-                Source = item.TryGetProperty("source", out var src) ? src.GetString() : null,
-            });
-        }
-        return list;
+        return doc.RootElement.GetProperty("data").EnumerateArray().Select(MapWorkout).ToList();
     }
+
+    // Calories and distance arrive as decimals (312.4 kcal, 5023.7 m). See TryGet.
+    internal static Workout MapWorkout(JsonElement item) => new()
+    {
+        Id = item.GetProperty("id").GetString() ?? "",
+        Day = DateOnly.Parse(item.GetProperty("day").GetString() ?? ""),
+        Activity = item.TryGetProperty("activity", out var act) ? act.GetString() ?? "" : "",
+        StartTime = item.TryGetProperty("start_datetime", out var st) && st.ValueKind == JsonValueKind.String ? DateTime.Parse(st.GetString()!) : null,
+        EndTime = item.TryGetProperty("end_datetime", out var et) && et.ValueKind == JsonValueKind.String ? DateTime.Parse(et.GetString()!) : null,
+        Calories = item.TryGetNullable<int>("calories"),
+        Distance = item.TryGetNullable<int>("distance"),
+        Intensity = item.TryGetProperty("intensity", out var inten) ? inten.GetString() : null,
+        Label = item.TryGetProperty("label", out var lbl) ? lbl.GetString() : null,
+        Source = item.TryGetProperty("source", out var src) ? src.GetString() : null,
+    };
 
     // ── Helpers ──
 
@@ -376,10 +374,18 @@ public class OuraClient : IOuraClient
 
 internal static class JsonElementExtensions
 {
+    // A whole-number field sent with a decimal point (312.4, or 28800.0) is rounded rather than
+    // lost. Convert.ChangeType throws on "312.4", the catch below swallowed it, and the field
+    // came back missing: that is how every Oura workout lost its calories and distance.
     public static bool TryGet<T>(this JsonElement el, string prop, out T value) where T : struct
     {
         if (el.TryGetProperty(prop, out var p) && p.ValueKind != JsonValueKind.Null)
         {
+            if (typeof(T) == typeof(int) && p.ValueKind == JsonValueKind.Number && p.TryGetDouble(out var d))
+            {
+                value = (T)(object)(int)Math.Round(d, MidpointRounding.AwayFromZero);
+                return true;
+            }
             try { value = (T)Convert.ChangeType(p.GetRawText().Trim('"'), typeof(T)); return true; }
             catch { }
         }
