@@ -28,7 +28,7 @@ public class BioAgeController(IVitaraRepository repo) : ControllerBase
         var from = to.AddDays(-30);
 
         var profile   = await repo.GetProfileAsync();
-        var sleep     = await repo.GetSleepAsync(from, to);
+        var sleep     = SleepNights.MainPerDay(await repo.GetSleepAsync(from, to));   // nights, not naps
         var readiness = await repo.GetReadinessAsync(from, to);
         var cvAge     = await repo.GetCardiovascularAgeAsync(from, to);
         var vo2       = await repo.GetVo2MaxAsync(from, to);

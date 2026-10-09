@@ -107,7 +107,7 @@ public class HealthImportController(IVitaraRepository repo, ILogger<HealthImport
         var to = byDay[^1].Key;
 
         var activity = (await repo.GetActivityAsync(from, to)).ToDictionary(a => a.Day);
-        var sleep = (await repo.GetSleepAsync(from, to)).GroupBy(s => s.Day).ToDictionary(g => g.Key, g => g.First());
+        var sleep = (await repo.GetSleepAsync(from, to)).GroupBy(s => s.Day).ToDictionary(g => g.Key, g => SleepNights.Main(g));
 
         var activityChanged = new List<DailyActivity>();
         var sleepChanged = new List<SleepSession>();

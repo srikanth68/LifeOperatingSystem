@@ -53,7 +53,7 @@ public static class ObservationProjector
 
         // The night, by duration. Ties do not matter -- any of them is as good a source
         // for a point-in-time reading as the other.
-        var main = sessionsOnOneDay.OrderByDescending(s => s.TotalSleepMinutes).First();
+        var main = SleepNights.Main(sessionsOnOneDay);
 
         var at = main.BedtimeEnd == default ? day.ToDateTime(new TimeOnly(7, 0)) : main.BedtimeEnd;
 

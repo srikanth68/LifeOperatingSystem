@@ -62,7 +62,7 @@ public class ProtocolsController(IVitaraRepository repo) : ControllerBase
         const string desc = "Consistent bedtime, dark cold room, no screens 1h before sleep, morning sunlight.";
         const int targetMin = 480;
 
-        var nights = sleep.Where(s => s.TotalSleepMinutes >= 60).ToList(); // exclude naps
+        var nights = SleepNights.MainPerDay(sleep).Where(s => s.TotalSleepMinutes >= 60).ToList();
         if (nights.Count == 0)
             return new ProtocolResult(name, icon, target, desc, "manual", null, "No sleep data synced yet");
 

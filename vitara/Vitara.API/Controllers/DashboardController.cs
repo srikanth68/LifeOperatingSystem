@@ -14,7 +14,10 @@ public class DashboardController(IVitaraRepository repo) : ControllerBase
         var weekAgo = today.AddDays(-7);
 
         var profile    = await repo.GetProfileAsync();
-        var sleep      = await repo.GetSleepAsync(weekAgo, today);
+        // One night per day. Oura also returns naps and short segments, and taking whichever
+        // session came last showed an afternoon nap as last night's sleep -- with the nap's HRV,
+        // resting heart rate and skin temperature beside it. See SleepNights.
+        var sleep      = SleepNights.MainPerDay(await repo.GetSleepAsync(weekAgo, today));
         var readiness  = await repo.GetReadinessAsync(weekAgo, today);
         var activity   = await repo.GetActivityAsync(weekAgo, today);
         var stress     = await repo.GetStressAsync(weekAgo, today);

@@ -19,7 +19,7 @@ public class ReadinessController(IVitaraRepository repo) : ControllerBase
         // lives on the night, and the tab that draws this asks for bpm.
         var nights = (await repo.GetSleepAsync(from, to))
             .GroupBy(s => s.Day)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.TotalSleepMinutes).First());
+            .ToDictionary(g => g.Key, g => SleepNights.Main(g));
 
         return Ok(data.Select(r => new
         {

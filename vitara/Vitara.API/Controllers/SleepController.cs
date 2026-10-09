@@ -21,7 +21,9 @@ public class SleepController(IVitaraRepository repo) : ControllerBase
     {
         var to   = LocalTime.Today;
         var from = to.AddDays(-days);
-        var data = await repo.GetSleepAsync(from, to);
+        // Nights, not sessions: a nap counted as a night halves the average and drags the
+        // HRV toward the nap's. `count` is the number of nights.
+        var data = SleepNights.MainPerDay(await repo.GetSleepAsync(from, to));
         if (!data.Any()) return Ok(new { count = 0 });
 
         return Ok(new

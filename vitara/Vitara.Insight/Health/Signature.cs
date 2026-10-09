@@ -1,4 +1,5 @@
 using Vitara.Domain.Entities;
+using Vitara.Domain.Health;
 
 namespace Vitara.Insight.Health;
 
@@ -34,7 +35,8 @@ public static class Signature
 
     public static Chronotype? WhenTheySleep(IReadOnlyList<SleepSession> nights, int minNights = 21)
     {
-        var usable = nights.Where(n => n.TotalSleepMinutes > 0).ToList();
+        // Nights only: a 3pm nap read as a bedtime drags the usual bedtime into the afternoon.
+        var usable = SleepNights.MainPerDay(nights).Where(n => n.TotalSleepMinutes > 0).ToList();
         if (usable.Count < minNights) return null;
 
         var bed = usable.Select(n => AroundMidnight(n.BedtimeStart)).ToList();

@@ -29,7 +29,7 @@ public static class DayRowBuilder
         var readinessByDay = readiness.GroupBy(r => r.Day).ToDictionary(g => g.Key, g => g.Last());
         var activityByDay = activity.GroupBy(a => a.Day).ToDictionary(g => g.Key, g => g.Last());
         var sleepByDay = sleep.GroupBy(x => x.Day)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.TotalSleepMinutes).First());
+            .ToDictionary(g => g.Key, g => SleepNights.Main(g));
 
         var observed = Index(observations);
 
