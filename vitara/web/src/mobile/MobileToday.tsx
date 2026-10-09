@@ -1,20 +1,25 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { moduleApi } from '../services/apiHost';
-import { vitaraHeaders, profileQuery } from '../services/profile';
-import { formatClock } from '../services/timezone';
-import { Chip, Spark, Delta } from '../components/health/HealthKit';
-import { RangeBar } from '../components/health/InsightCharts';
+import { vitaraHeaders, profileQuery, getProfile, useProfileId } from '../services/profile';
+import { formatClock, zonedNow } from '../services/timezone';
 import { greeting } from '../pages/VitaraModule';
 import type { Dashboard, Sleep, Activity, Readiness, OuraStatus } from '../pages/VitaraModule';
-import { TripleRing } from './TripleRing';
-import type { RingSpec } from './TripleRing';
+import { Rings } from './Rings';
+import type { RingItem, RingMode } from './Rings';
+import { UsualSpark, vsUsual, dateLine } from './Parts';
+import { clamp, ease, useReveal } from './motion';
 
 // The home screen of the phone app.
 //
 // Read top to bottom the way a morning goes: how are you (three rings and one sentence), what
-// moved (a row of cards you swipe through), what is likely tomorrow, anything that needs a look,
-// and last night. Every block asks for its own data, so a slow or missing one leaves a gap in
-// that block and nothing else, and every number is measured against YOUR own recent average.
+// moved (cards you swipe through, each against YOUR usual), what is likely tomorrow, anything
+// that needs a look, and last night. Every block asks for its own data, so a slow or missing one
+// leaves a gap in that block and nothing else.
+//
+// Honesty rules the design set and this keeps: an empty ring is a dashed track, never a zero;
+// stale data says it is stale; a missing sensor is named, with a way to fix it; and nothing is
+// red for being below your usual.
 
 const VITARA = moduleApi(5100);
 const INSIGHT = moduleApi(5110);
@@ -25,8 +30,10 @@ const get = <T,>(url: string): Promise<T> =>
     return r.json() as Promise<T>;
   });
 
-const fmtMin = (m: number) => { const h = Math.floor(m / 60), min = Math.round(m % 60); return h > 0 ? `${h}h ${min}m` : `${min}m`; };
-const word = (s?: number | null) => s == null ? 'no score yet' : s >= 85 ? 'optimal' : s >= 70 ? 'good' : s >= 50 ? 'fair' : 'rest';
+export const fmtMin = (m: number) => {
+  const h = Math.floor(m / 60), min = Math.round(m % 60);
+  return h > 0 ? `${h}h ${String(min).padStart(2, '0')}m` : `${min}m`;
+};
 
 interface Forecast { value: number; low: number; high: number; method: 'model' | 'today' | 'none' }
 interface Finding { key: string; metric: string; severity: string; summary: string; daysRunning: number }
@@ -34,146 +41,237 @@ interface InsightSummary { computedThrough: string | null; activeFindings: numbe
 
 export type TodayGo = (target: 'sleep' | 'recovery' | 'move' | 'insight') => void;
 
-export function MobileToday({ status, go }: { status?: OuraStatus; go: TodayGo }) {
+const partOfDay = () => {
+  const h = zonedNow().getHours();
+  return h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+};
+
+export function MobileToday({ status, go, tick, header }: {
+  status?: OuraStatus;
+  go: TodayGo;
+  tick: number;                       // bumped by pull-to-refresh: replays the draw-in
+  header: (greetingLine: string, eyebrow: string) => ReactNode;
+}) {
+  const person = useProfileId();
+  const t = useReveal(`${person}:${tick}`);
+  const k = ease(clamp(t / 0.85));    // the count-up clock for numbers
+
   const dash = useQuery<Dashboard>({ queryKey: ['dashboard'], queryFn: () => get(`${VITARA}/api/dashboard`), refetchInterval: 60_000 });
-  const sleepQ = useQuery<Sleep[]>({ queryKey: ['sleep', 7], queryFn: () => get(`${VITARA}/api/sleep?days=7`) });
-  const actQ = useQuery<Activity[]>({ queryKey: ['activity', 7], queryFn: () => get(`${VITARA}/api/activity?days=7`) });
+  const sleepQ = useQuery<Sleep[]>({ queryKey: ['sleep', 14], queryFn: () => get(`${VITARA}/api/sleep?days=14`) });
+  const actQ = useQuery<Activity[]>({ queryKey: ['activity', 14], queryFn: () => get(`${VITARA}/api/activity?days=14`) });
   const readyQ = useQuery<Readiness[]>({ queryKey: ['readiness', 14], queryFn: () => get(`${VITARA}/api/readiness?days=14`) });
   const forecastQ = useQuery<{ readiness: Forecast | null }>({ queryKey: ['forecasts'], queryFn: () => get(`${INSIGHT}/api/health/forecast`), retry: false });
   const summaryQ = useQuery<InsightSummary>({ queryKey: ['insight-summary'], queryFn: () => get(`${INSIGHT}/api/health/summary`), retry: false });
+  const nameQ = useQuery({ queryKey: ['profile-name', person], queryFn: () => getProfile(person), retry: false, staleTime: 5 * 60_000 });
 
   const d = dash.data;
-  if (dash.isPending) return <div className="vm-skel" aria-busy="true" />;
-  if (dash.isError || !d) {
+  const firstName = nameQ.data?.name?.trim().split(/\s+/)[0];
+  const hello = firstName ? `${partOfDay()}, ${firstName}` : partOfDay();
+  const eyebrow = dateLine();
+
+  if (dash.isPending) return <>{header(hello, eyebrow)}<div className="vm-skel" aria-busy="true" /></>;
+  if (!d) {
     return (
-      <div className="vm-card vm-note">
-        <b>Can&apos;t reach your data.</b>
-        <p>Check you are on the same network as your server, then pull down to try again.</p>
-      </div>
+      <>
+        {header(hello, eyebrow)}
+        <div className="vm-card vm-note">
+          <b>Data out of reach</b>
+          <p>Check you are on the same network as your server, then pull down to try again.</p>
+        </div>
+      </>
     );
   }
 
-  const { line, sub } = greeting(d);
+  // Last good data is on screen while the server cannot be reached: say so, and say since when.
+  const offline = dash.isError || (typeof navigator !== 'undefined' && navigator.onLine === false);
+  const mode: RingMode = offline ? 'stale' : 'live';
+  const asOf = dash.dataUpdatedAt ? formatClock(new Date(dash.dataUpdatedAt)) : '';
+
   const sleepScore = d.sleep?.score ?? null;
   const readiness = d.readiness?.score ?? null;
   const activityScore = d.activity?.score ?? null;
+  const nothingYet = sleepScore == null && readiness == null && activityScore == null && !d.sleep && !d.activity;
 
-  // One entry per night / day, oldest first, for the little trend lines.
   const nights = oneNightPerDay(sleepQ.data ?? []);
   const days = [...(actQ.data ?? [])].sort((a, b) => a.day.localeCompare(b.day));
   const ready = [...(readyQ.data ?? [])].sort((a, b) => a.day.localeCompare(b.day));
+  const usual = d.weeklyAvg;
 
-  const rings: RingSpec[] = [
-    { key: 'sleep', label: 'Sleep', score: sleepScore, color: 'var(--hx-4)' },
-    { key: 'recovery', label: 'Recovery', score: readiness, color: 'var(--hx-1)' },
-    { key: 'move', label: 'Activity', score: activityScore, color: 'var(--hx-3)' },
+  const rings: RingItem[] = [
+    { key: 'sleep', label: 'Sleep', value: sleepScore == null ? null : sleepScore / 100, hue: 'sleep', mode: sleepScore == null ? 'empty' : mode },
+    { key: 'recovery', label: 'Recovery', value: readiness == null ? null : readiness / 100, hue: 'recovery', mode: readiness == null ? 'empty' : mode },
+    { key: 'move', label: 'Activity', value: activityScore == null ? null : activityScore / 100, hue: 'activity', mode: activityScore == null ? 'empty' : mode },
   ];
+  const legend = [
+    { key: 'sleep', label: 'Sleep', color: 'var(--sleep)', score: sleepScore },
+    { key: 'recovery', label: 'Recovery', color: 'var(--teal)', score: readiness },
+    { key: 'move', label: 'Activity', color: 'var(--gold)', score: activityScore },
+  ] as const;
 
+  const { line, sub } = greeting(d);
+  const readinessDiff = readiness != null && usual?.readinessScore != null ? Math.round(readiness - usual.readinessScore) : null;
   const lastNight = nights[nights.length - 1];
   const forecast = forecastQ.data?.readiness ?? null;
   const lead = summaryQ.data?.findings?.[0];
 
+  const missingCards = nothingYet;
+  const cards: CardSpec[] = [
+    {
+      label: 'HRV', value: d.sleep?.hrv != null ? String(Math.round(d.sleep.hrv * k)) : null, unit: 'ms',
+      vs: vsUsual(d.sleep?.hrv, usual?.hrv, ' ms', { up: 'above your usual', down: 'below your usual' }),
+      data: nights.map(n => n.avgHrv ?? null), usual: usual?.hrv, accent: 'var(--teal)', needs: 'sensor', go: 'recovery',
+    },
+    {
+      label: 'Resting heart rate', value: d.readiness?.restingHr != null ? String(Math.round(d.readiness.restingHr * k)) : null, unit: 'bpm',
+      vs: vsUsual(d.readiness?.restingHr, usual?.rhr, ' bpm', { up: 'higher than usual', down: 'calmer than usual' }),
+      data: ready.map(r => r.restingHeartRate ?? null), usual: usual?.rhr, accent: 'var(--teal)', needs: 'sensor', go: 'recovery',
+    },
+    {
+      label: 'Time asleep', value: d.sleep ? fmtMin(d.sleep.totalMinutes * k) : null, unit: '',
+      vs: d.sleep && nights.length > 1 ? sleepVsUsual(d.sleep.totalMinutes, nights.slice(0, -1)) : null,
+      data: nights.map(n => n.totalSleepMinutes), usual: avg(nights.slice(0, -1).map(n => n.totalSleepMinutes)), accent: 'var(--sleep)', needs: 'night', go: 'sleep',
+    },
+    {
+      label: 'Steps', value: d.activity?.steps != null ? Math.round(d.activity.steps * k).toLocaleString('en-US') : null, unit: '',
+      vs: vsUsual(d.activity?.steps, usual?.steps, '', { up: 'more than usual', down: 'fewer than usual' }, 0.04),
+      data: days.map(a => a.steps), usual: usual?.steps, accent: 'var(--gold)', needs: 'day', go: 'move',
+    },
+  ];
+
   return (
     <div className="vm-today">
-      {status && !status.linked && (
-        <a className="vm-banner" href={`${VITARA}/api/oura/auth${profileQuery()}`} target="_blank" rel="noreferrer">
-          <span className="hx-dot bad" /> Ring not connected <b>Link →</b>
-        </a>
-      )}
-      {status?.linked && status.expired && (
-        <a className="vm-banner warn" href={`${VITARA}/api/oura/auth${profileQuery()}`} target="_blank" rel="noreferrer">
-          <span className="hx-dot warn" /> Oura needs reconnecting <b>Fix →</b>
-        </a>
+      {header(hello, eyebrow)}
+
+      {offline && (
+        <div className="vm-card vm-dashed vm-offline" role="status">
+          <i className="vm-dashed-ring" aria-hidden="true" />
+          <div>
+            <b>Data out of reach</b>
+            <p>Showing what we had{asOf ? ` at ${asOf}` : ''}. We&apos;ll catch up when you&apos;re back online.</p>
+          </div>
+          <button type="button" onClick={() => { void dash.refetch(); }}>Retry</button>
+        </div>
       )}
 
       {/* ── The rings ─────────────────────────────────────────────────── */}
       <section className="vm-hero">
-        <TripleRing
-          rings={rings}
-          onPick={k => go(k as 'sleep' | 'recovery' | 'move')}
-          center={
-            <>
-              <b style={{ color: readiness == null ? 'var(--text3)' : undefined }}>{readiness ?? '—'}</b>
-              <span>readiness</span>
-            </>
-          }
+        <Rings
+          items={rings} size={256} stroke={18} gap={6} t={t}
+          onPick={key => go(key as 'sleep' | 'recovery' | 'move')}
+          center={readiness != null
+            ? (
+              <>
+                <span className="vm-eyebrow-s">Readiness</span>
+                <b className="vm-hero-num">{Math.round(readiness * k)}</b>
+                {readinessDiff != null && (
+                  <span className="vm-hero-vs">
+                    {readinessDiff === 0 ? '≈ your usual' : `${readinessDiff > 0 ? '↑' : '↓'} ${Math.abs(readinessDiff)} vs usual`}
+                  </span>
+                )}
+              </>
+            )
+            : (
+              <>
+                <span className="vm-hero-title">{nothingYet ? 'Learning your usual' : 'Readiness needs recovery data'}</span>
+                <span className="vm-hero-sub">{nothingYet ? 'Your first nights set the baseline' : 'Link a sensor below'}</span>
+              </>
+            )}
         />
-        <ul className="vm-hero-key">
-          {rings.map(r => (
-            <li key={r.key}>
-              <button type="button" onClick={() => go(r.key as 'sleep' | 'recovery' | 'move')}>
-                <i style={{ background: r.color }} aria-hidden="true" />
-                <span>{r.label}</span>
-                <b>{r.score ?? '—'}</b>
-                <em>{word(r.score)}</em>
+
+        <ul className="vm-legend">
+          {legend.map(l => (
+            <li key={l.key}>
+              <button type="button" onClick={() => go(l.key)}>
+                <span><i style={{ background: l.color }} aria-hidden="true" />{l.label}</span>
+                <b>{l.score != null ? Math.round(l.score) : nothingYet ? 'Learning' : 'Not linked'}</b>
               </button>
             </li>
           ))}
         </ul>
-        <h2 className="vm-verdict">{line}</h2>
-        <p className="vm-verdict-sub">{sub}</p>
+
+        <p className="vm-voice">{nothingYet ? 'Welcome. Wear your sensor tonight — after about a week, Vitara will know what your usual looks like.' : line}</p>
+        {!nothingYet && sub && <p className="vm-voice-sub">{sub}</p>}
       </section>
 
       {/* ── Swipeable cards ───────────────────────────────────────────── */}
-      <div className="vm-rail" role="list" aria-label="Today's measures, swipe sideways">
-        <MetricCard
-          label="HRV" value={d.sleep?.hrv != null ? Math.round(d.sleep.hrv) : null} unit="ms"
-          delta={<Delta value={d.sleep?.hrv} reference={d.weeklyAvg?.hrv} goodWhen="higher" unit=" ms" />}
-          spark={nights.map(n => n.avgHrv ?? null)} color="var(--hx-2)" onClick={() => go('recovery')}
-        />
-        <MetricCard
-          label="Resting HR" value={d.readiness?.restingHr != null ? Math.round(d.readiness.restingHr) : null} unit="bpm"
-          delta={<Delta value={d.readiness?.restingHr} reference={d.weeklyAvg?.rhr} goodWhen="lower" unit=" bpm" />}
-          spark={ready.map(r => r.restingHeartRate ?? null)} color="var(--hx-5)" onClick={() => go('recovery')}
-        />
-        <MetricCard
-          label="Time asleep" value={d.sleep ? fmtMin(d.sleep.totalMinutes) : null}
-          delta={d.sleep ? <span className="hx-delta flat">{Math.round(d.sleep.efficiency * 100)}% efficient</span> : undefined}
-          spark={nights.map(n => n.totalSleepMinutes)} color="var(--hx-4)" onClick={() => go('sleep')}
-        />
-        <MetricCard
-          label="Steps" value={d.activity?.steps != null ? d.activity.steps.toLocaleString() : null}
-          delta={<Delta value={d.activity?.steps} reference={d.weeklyAvg?.steps} goodWhen="higher" />}
-          spark={days.map(a => a.steps)} color="var(--hx-1)" kind="bar" onClick={() => go('move')}
-        />
-      </div>
+      <section aria-label="Your body today">
+        <p className="vm-label"><span>Your body today</span><em>vs your usual</em></p>
+        <div className="vm-rail" role="list">
+          {cards.map(c => (
+            <MetricCard key={c.label} c={c} t={t} missing={missingCards || c.value == null} offline={offline} asOf={asOf}
+                        onClick={() => go(c.go)} />
+          ))}
+        </div>
+      </section>
+
+      {/* ── Last night ────────────────────────────────────────────────── */}
+      {d.sleep && (
+        <button type="button" className="vm-card vm-tap" onClick={() => go('sleep')}>
+          <p className="vm-label"><span>Last night</span>
+            <em>{lastNight ? `${formatClock(lastNight.bedtimeStart)} – ${formatClock(lastNight.bedtimeEnd)} ›` : ''}</em></p>
+          <Stages s={d.sleep} awake={lastNight?.awakeMinutes} t={t} />
+        </button>
+      )}
 
       {/* ── Tomorrow ──────────────────────────────────────────────────── */}
       {forecast && forecast.method !== 'none' && (
-        <section className="vm-card" onClick={() => go('insight')} role="button" tabIndex={0}>
-          <p className="vm-eyebrow">Tomorrow · readiness</p>
-          <div className="vm-forecast">
-            <b>{Math.round(forecast.value)}</b>
-            <span>usually {Math.round(forecast.low)}–{Math.round(forecast.high)}</span>
+        <button type="button" className="vm-card vm-tap vm-forecast-card" onClick={() => go('insight')}>
+          <p className="vm-label"><span style={{ color: 'var(--blue)' }}>Tomorrow</span><em>Forecast</em></p>
+          <div className="vm-forecast-row">
+            <div className="vm-forecast-word">{forecastWord(forecast.value, readiness)}</div>
+            <div className="vm-forecast-num"><small>recovery</small><b>~{Math.round(forecast.value)}</b></div>
           </div>
-          <RangeBar low={forecast.low} high={forecast.high} value={forecast.value} bounds={[0, 100]} unit="/100" />
-          <p className="vm-fine">{forecast.method === 'today' ? 'Same as today: nothing here beat that.' : 'From a model fitted on your own history.'}</p>
-        </section>
+          <RangeTrack low={forecast.low} high={forecast.high} value={forecast.value} />
+          <p className="vm-fine">
+            {forecast.method === 'today' ? 'Same as today: nothing here beat that.' : 'From a model fitted on your own history.'}
+          </p>
+        </button>
       )}
 
       {/* ── A heads-up, only when there is one ───────────────────────── */}
       {lead && (
-        <section className={`vm-card vm-heads sev-${lead.severity}`} onClick={() => go('insight')} role="button" tabIndex={0}>
-          <p className="vm-eyebrow">
-            Worth a look
-            <Chip tone={lead.severity === 'high' ? 'bad' : 'warn'}>
-              {lead.severity === 'high' ? 'act on it' : 'keep an eye on'}
-            </Chip>
+        <button type="button" className="vm-card vm-tap" onClick={() => go('insight')}>
+          <p className="vm-label">
+            <span>Top finding</span>
+            <span className={`vm-sev sev-${lead.severity}`}>
+              <i aria-hidden="true" />{lead.severity === 'high' ? 'Act on it' : 'Keep an eye on'}
+            </span>
           </p>
-          <p className="vm-heads-text">{lead.summary}</p>
+          <p className="vm-finding">{firstSentence(lead.summary)}</p>
           <p className="vm-fine">
             Day {lead.daysRunning}
             {summaryQ.data && summaryQ.data.activeFindings > 1 ? ` · ${summaryQ.data.activeFindings - 1} more in Insight` : ''}
           </p>
-        </section>
+          <p className="vm-link">See the pattern →</p>
+        </button>
       )}
 
-      {/* ── Last night ────────────────────────────────────────────────── */}
-      {d.sleep && (
-        <section className="vm-card" onClick={() => go('sleep')} role="button" tabIndex={0}>
-          <p className="vm-eyebrow">Last night <span>{lastNight ? `${formatClock(lastNight.bedtimeStart)}–${formatClock(lastNight.bedtimeEnd)}` : ''}</span></p>
-          <Stages s={d.sleep} />
-        </section>
+      {/* ── Honest empty states ──────────────────────────────────────── */}
+      {nothingYet && (
+        <div className="vm-card vm-dashed vm-learn">
+          <p className="vm-label"><span>Getting to know you</span></p>
+          <div className="vm-nights" aria-hidden="true">{Array.from({ length: 7 }, (_, i) => <i key={i} className={i === 0 ? 'on' : ''} />)}</div>
+          <p>Your usual takes about 7 nights to learn. Forecasts and patterns arrive after about 14 days.</p>
+        </div>
+      )}
+
+      {status && !status.linked && (
+        <div className="vm-card vm-dashed vm-link-card">
+          <div className="vm-link-head"><i aria-hidden="true">+</i><b>No sensor linked</b></div>
+          <p>
+            {readiness == null
+              ? 'Recovery and readiness need overnight heart data from a ring or watch.'
+              : 'New readings stop arriving until a sensor is linked again. What you see here is the last it sent.'}
+          </p>
+          <a className="vm-cta" href={`${VITARA}/api/oura/auth${profileQuery()}`} target="_blank" rel="noreferrer">Link a sensor</a>
+        </div>
+      )}
+      {status?.linked && status.expired && (
+        <div className="vm-card vm-dashed vm-link-card">
+          <div className="vm-link-head"><i aria-hidden="true">!</i><b>Your sensor needs reconnecting</b></div>
+          <p>The link expired, so nothing new is arriving.</p>
+          <a className="vm-cta" href={`${VITARA}/api/oura/auth${profileQuery()}`} target="_blank" rel="noreferrer">Reconnect</a>
+        </div>
       )}
 
       <p className="vm-foot">
@@ -183,47 +281,113 @@ export function MobileToday({ status, go }: { status?: OuraStatus; go: TodayGo }
   );
 }
 
-function MetricCard({ label, value, unit, delta, spark, color, kind = 'line', onClick }: {
+// ── Pieces ────────────────────────────────────────────────────────────────────
+
+interface CardSpec {
   label: string;
-  value: string | number | null;
-  unit?: string;
-  delta?: React.ReactNode;
-  spark: (number | null)[];
-  color: string;
-  kind?: 'line' | 'bar';
-  onClick: () => void;
+  value: string | null;
+  unit: string;
+  vs: { arrow: string; text: string } | null;
+  data: (number | null)[];
+  usual?: number | null;
+  accent: string;
+  needs: 'sensor' | 'night' | 'day';
+  go: 'sleep' | 'recovery' | 'move';
+}
+
+function MetricCard({ c, t, missing, offline, asOf, onClick }: {
+  c: CardSpec; t: number; missing: boolean; offline: boolean; asOf: string; onClick: () => void;
 }) {
-  const missing = value == null;
+  if (missing) {
+    return (
+      <button type="button" role="listitem" className="vm-metric vm-dashed is-empty" onClick={onClick}>
+        <span className="vm-metric-head"><b>{c.label}</b></span>
+        <span className="vm-rule" aria-hidden="true" />
+        <span className="vm-metric-miss">{c.needs === 'sensor' ? 'Needs a sensor' : 'Nothing yet'}</span>
+        <span className="vm-metric-miss-sub">No value shown, never a 0</span>
+      </button>
+    );
+  }
   return (
-    <button type="button" role="listitem" className={`vm-metric ${missing ? 'is-empty' : ''}`} onClick={onClick}>
-      <span className="vm-metric-label">{label}</span>
-      <span className="vm-metric-value">
-        <b>{missing ? '—' : value}</b>{!missing && unit && <small>{unit}</small>}
+    <button type="button" role="listitem" className="vm-metric" onClick={onClick} style={offline ? { opacity: 0.8 } : undefined}>
+      <span className="vm-metric-head"><b>{c.label}</b><em>{offline && asOf ? `as of ${asOf}` : 'today'}</em></span>
+      <span className="vm-metric-value"><b>{c.value}</b>{c.unit && <small>{c.unit}</small>}</span>
+      <span className="vm-metric-vs">
+        {c.vs
+          ? <><i style={{ color: c.accent }} aria-hidden="true">{c.vs.arrow}</i>{c.vs.text}</>
+          : 'no comparison yet'}
       </span>
-      <span className="vm-metric-delta">{missing ? 'Nothing yet' : delta}</span>
-      <span className="vm-metric-spark"><Spark data={spark} color={color} kind={kind} height={30} /></span>
+      <UsualSpark data={c.data} usual={c.usual} color={c.accent} t={t} />
+      <span className="vm-metric-foot"><span>14 days</span><span>- - usual</span></span>
     </button>
   );
 }
 
-// Deep, REM, light and awake as one bar, with the words under it.
-function Stages({ s }: { s: NonNullable<Dashboard['sleep']> }) {
-  const total = s.deepMinutes + s.remMinutes + s.lightMinutes || 1;
+// Deep, REM, light and awake as one strip. This is the proportion of the night, not its timeline:
+// the order of the stages through the night is on the Sleep screen.
+function Stages({ s, awake, t }: { s: NonNullable<Dashboard['sleep']>; awake?: number; t: number }) {
+  // The dashboard's efficiency is already a percentage (94), not a fraction (0.94).
+  const awakeMin = awake ?? Math.max(0, Math.round(s.totalMinutes / Math.max(s.efficiency / 100, 0.01) - s.totalMinutes));
+  const parts = [
+    { name: 'Deep', min: s.deepMinutes, c: 'var(--deep)' },
+    { name: 'REM', min: s.remMinutes, c: 'var(--rem)' },
+    { name: 'Light', min: s.lightMinutes, c: 'var(--lt)' },
+    { name: 'Awake', min: awakeMin, c: 'var(--awake)' },
+  ];
+  const grow = ease(clamp((t - 0.1) / 0.8));
   return (
     <>
-      <div className="hx-stages" style={{ marginTop: '0.6rem' }}>
-        <span style={{ width: `${s.deepMinutes / total * 100}%`, background: 'var(--hx-2)' }} />
-        <span style={{ width: `${s.remMinutes / total * 100}%`, background: 'var(--hx-4)' }} />
-        <span style={{ width: `${s.lightMinutes / total * 100}%`, background: 'var(--hx-6)' }} />
+      <div className="vm-strip" aria-hidden="true" style={{ clipPath: `inset(0 ${((1 - grow) * 100).toFixed(1)}% 0 0)` }}>
+        {parts.map(p => <span key={p.name} style={{ flex: `${p.min} 0 0`, background: p.c }} />)}
       </div>
       <div className="vm-stage-key">
-        <span><i style={{ background: 'var(--hx-2)' }} />Deep {fmtMin(s.deepMinutes)}</span>
-        <span><i style={{ background: 'var(--hx-4)' }} />REM {fmtMin(s.remMinutes)}</span>
-        <span><i style={{ background: 'var(--hx-6)' }} />Light {fmtMin(s.lightMinutes)}</span>
+        {parts.map(p => (
+          <div key={p.name}>
+            <span><i style={{ background: p.c }} />{p.name}</span>
+            <b>{fmtMin(p.min)}</b>
+          </div>
+        ))}
       </div>
-      <p className="vm-big-sleep">{fmtMin(s.totalMinutes)} <span>asleep</span></p>
+      <p className="vm-fine" style={{ marginTop: '0.6rem' }}>{fmtMin(s.totalMinutes)} asleep · {Math.round(s.efficiency)}% efficiency</p>
     </>
   );
+}
+
+// A track with the likely range as a band and the forecast as a dot.
+function RangeTrack({ low, high, value }: { low: number; high: number; value: number }) {
+  const p = (v: number) => `${clamp(v / 100) * 100}%`;
+  return (
+    <div className="vm-range" aria-label={`Likely between ${Math.round(low)} and ${Math.round(high)}`}>
+      <i className="vm-range-track" />
+      <i className="vm-range-band" style={{ left: p(low), width: `${clamp((high - low) / 100) * 100}%` }} />
+      <i className="vm-range-dot" style={{ left: p(value) }} />
+      <span style={{ left: p(low) }}>{Math.round(low)}</span>
+      <span style={{ left: p(high) }}>{Math.round(high)}</span>
+    </div>
+  );
+}
+
+const forecastWord = (value: number, today: number | null) => {
+  if (today == null) return 'Likely';
+  const diff = value - today;
+  return Math.abs(diff) <= 4 ? 'Likely steady' : diff > 0 ? 'Likely better' : 'Likely lower';
+};
+
+// A finding's summary is a paragraph; the home screen carries only its first sentence.
+const firstSentence = (text: string) => {
+  const m = /^.*?[.!?](?=\s+[A-Z0-9]|$)/s.exec(text.trim());
+  return m ? m[0] : text;
+};
+
+const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+
+// Time asleep against the average of the nights before it.
+function sleepVsUsual(minutes: number, before: Sleep[]) {
+  const usual = avg(before.map(n => n.totalSleepMinutes));
+  if (usual == null) return null;
+  const diff = Math.round(minutes - usual);
+  if (Math.abs(diff) <= 5) return { arrow: '≈', text: 'about your usual' };
+  return diff > 0 ? { arrow: '↑', text: `${diff} min more than usual` } : { arrow: '↓', text: `${-diff} min less than usual` };
 }
 
 // A nap is not a night: keep the longest session per day, oldest first.
@@ -234,9 +398,4 @@ function oneNightPerDay(sessions: Sleep[]): Sleep[] {
     if (!cur || s.totalSleepMinutes > cur.totalSleepMinutes) best.set(s.day, s);
   }
   return [...best.values()].sort((a, b) => a.day.localeCompare(b.day));
-}
-
-export function useRefreshAll() {
-  const qc = useQueryClient();
-  return () => qc.invalidateQueries();
 }

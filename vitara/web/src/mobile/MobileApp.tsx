@@ -13,8 +13,10 @@ import { VitaraMetricsCatalogue } from '../components/VitaraMetricsCatalogue';
 import { ProfileMenu } from '../components/health/ProfileMenu';
 import { moduleApi } from '../services/apiHost';
 import { vitaraHeaders } from '../services/profile';
-import { todayInTz } from '../services/timezone';
 import { MobileToday } from './MobileToday';
+import { RingDefs } from './Rings';
+import { dateLine } from './Parts';
+import { useVmTheme } from './motion';
 import { useInstall } from './useMobile';
 import '../styles/mobile.css';
 
@@ -30,23 +32,23 @@ type MoreKey = 'body' | 'food' | 'labs' | 'protocols' | 'record' | 'import' | 'a
 const TABS: { id: Tab; label: string; title: string; icon: ReactNode }[] = [
   {
     id: 'today', label: 'Today', title: 'Today',
-    icon: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /></svg>,
+    icon: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" strokeWidth="2" /><circle cx="12" cy="12" r="3" /></svg>,
   },
   {
     id: 'sleep', label: 'Sleep', title: 'Sleep',
-    icon: <svg viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5z" /></svg>,
+    icon: <svg viewBox="0 0 24 24"><path d="M20.500 14.500A8.500 8.500 0 1 1 9.500 3.500a7 7 0 0 0 11 11z" /></svg>,
   },
   {
     id: 'recovery', label: 'Recovery', title: 'Recovery',
-    icon: <svg viewBox="0 0 24 24"><path d="M12 21c-5 0-8-3.2-8-7.5C4 8 9 4 12 3c3 1 8 5 8 10.500C20 17.800 17 21 12 21z" /><path d="M12 8v9M8.500 13.500 12 17l3.500-3.500" /></svg>,
+    icon: <svg viewBox="0 0 24 24"><rect x="6.500" y="6.500" width="11" height="11" rx="2.500" transform="rotate(45 12 12)" fill="none" strokeWidth="2" /></svg>,
   },
   {
     id: 'move', label: 'Activity', title: 'Activity',
-    icon: <svg viewBox="0 0 24 24"><path d="M3 13h3l3 7 4-16 3 9h5" /></svg>,
+    icon: <svg viewBox="0 0 24 24"><rect x="4" y="12" width="4" height="8" rx="2" /><rect x="10" y="4" width="4" height="16" rx="2" /><rect x="16" y="9" width="4" height="11" rx="2" /></svg>,
   },
   {
     id: 'insight', label: 'Insight', title: 'Insight',
-    icon: <svg viewBox="0 0 24 24"><circle cx="5.500" cy="17.500" r="2.500" /><circle cx="18.500" cy="6.500" r="2.500" /><circle cx="18" cy="18" r="2" /><path d="M7.700 16.200 16.300 8M8 17.700l8 .2" /></svg>,
+    icon: <svg viewBox="0 0 24 24"><circle cx="12" cy="5.500" r="3" /><circle cx="5.500" cy="18" r="2.800" fill="none" strokeWidth="1.800" /><circle cx="18.500" cy="18" r="2.800" fill="none" strokeWidth="1.800" /></svg>,
   },
 ];
 
@@ -60,16 +62,13 @@ const MORE: { id: MoreKey; label: string; note: string }[] = [
   { id: 'all', label: 'Everything we track', note: 'Every measure, and how it is read' },
 ];
 
-const dateLine = () => {
-  const d = new Date(todayInTz() + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-};
-
 function Inner({ onSignOut }: { onSignOut: () => void }) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('today');
   const [more, setMore] = useState<MoreKey | null>(null);
   const [sheet, setSheet] = useState(false);
+  const [tick, setTick] = useState(0);                 // bumped on refresh: the home screen redraws
+  const [theme, setTheme] = useVmTheme();
   const install = useInstall();
 
   const { data: status, isPending, isError } = useQuery<OuraStatus>({
@@ -87,42 +86,55 @@ function Inner({ onSignOut }: { onSignOut: () => void }) {
   };
   const goMore = (m: MoreKey) => { setMore(m); setSheet(false); window.scrollTo?.({ top: 0 }); };
 
-  const { pull, busy } = usePullToRefresh(() => qc.invalidateQueries());
+  const { pull, busy } = usePullToRefresh(async () => {
+    await qc.invalidateQueries();
+    setTick(n => n + 1);
+  });
 
   const moreLabel = MORE.find(m => m.id === more)?.label;
   const title = more ? moreLabel : TABS.find(t => t.id === tab)?.title;
+  const onMore = more !== null || sheet;
+
+  // The sync pill: what the sensor last said, in words, with a dot that is hollow when there is
+  // nothing to be in sync with.
+  const sync = !status ? null
+    : !status.linked ? { dot: 'none', label: 'Not linked' }
+    : status.expired ? { dot: 'warn', label: 'Reconnect' }
+    : { dot: 'ok', label: `Synced ${relTime(status.lastSyncedAt)}` };
+
+  const header = (heading: string, eyebrow: string, big = false) => (
+    <header className={`vm-head ${big ? 'is-big' : ''}`}>
+      {more ? <button className="vm-back" onClick={() => setMore(null)} aria-label="Back">‹</button> : null}
+      <div className="vm-head-text">
+        <p>{eyebrow}</p>
+        <h1>{heading}</h1>
+      </div>
+      <div className="vm-head-right">
+        {sync && <span className="vm-pill" title="Last sync"><i className={`dot-${sync.dot}`} />{sync.label}</span>}
+        <ProfileMenu />
+      </div>
+    </header>
+  );
 
   return (
-    <div className="hx vm">
-      <div className="vm-ptr" style={{ height: busy ? 44 : pull }} aria-hidden="true">
-        <span className={`vm-spin ${busy ? 'is-on' : ''}`} style={{ opacity: busy ? 1 : Math.min(1, pull / 56) }} />
+    <div className="hx vm" data-vm={theme}>
+      <div className="vm-ptr" style={{ height: busy ? 48 : pull }} aria-hidden="true">
+        <svg viewBox="0 0 30 30" className={busy ? 'is-on' : ''} style={{ opacity: busy ? 1 : Math.min(1, pull / 40) }}>
+          <circle cx="15" cy="15" r="11" fill="none" strokeWidth="3" className="vm-ptr-track" />
+          <circle cx="15" cy="15" r="11" fill="none" strokeWidth="3" strokeLinecap="round" pathLength={1}
+                  className="vm-ptr-arc" style={{ strokeDasharray: `${busy ? 0.75 : Math.min(1, pull / 56)} 1` }} />
+        </svg>
       </div>
-
-      <header className="vm-top">
-        {more ? (
-          <button className="vm-back" onClick={() => setMore(null)} aria-label="Back">‹</button>
-        ) : null}
-        <div className="vm-title">
-          <h1>{title}</h1>
-          <p>{more ? 'Vitara' : dateLine()}</p>
-        </div>
-        <div className="vm-top-right">
-          {status?.linked && !status.expired && (
-            <span className="vm-sync" title="Last sync"><span className="hx-dot" />{relTime(status.lastSyncedAt)}</span>
-          )}
-          <ProfileMenu />
-          <button className="vm-more" onClick={() => setSheet(true)} aria-label="More">
-            <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.600" /><circle cx="12" cy="12" r="1.600" /><circle cx="19" cy="12" r="1.600" /></svg>
-          </button>
-        </div>
-      </header>
 
       <main className="vm-main">
         {isPending && <div className="vm-skel" aria-busy="true" />}
         {!isPending && isError && <BackendDown />}
         {!isPending && !isError && (
           <PanelBoundary key={more ?? tab} name={String(title)}>
-            {more === null && tab === 'today' && <MobileToday status={status} go={t => goTab(t)} />}
+            {more === null && tab === 'today' && (
+              <MobileToday status={status} tick={tick} go={t => goTab(t)} header={(h, e) => header(h, e, true)} />
+            )}
+            {(more !== null || tab !== 'today') && header(String(title), more ? 'Vitara' : dateLine())}
             {more === null && tab === 'sleep' && <SleepPage />}
             {more === null && tab === 'recovery' && <ReadinessPage />}
             {more === null && tab === 'move' && <ActivityPage />}
@@ -139,39 +151,55 @@ function Inner({ onSignOut }: { onSignOut: () => void }) {
       </main>
 
       <nav className="vm-nav" aria-label="Sections">
-        {TABS.map(t => (
-          <button key={t.id} className={more === null && tab === t.id ? 'is-on' : ''} onClick={() => goTab(t.id)}
-                  aria-current={more === null && tab === t.id ? 'page' : undefined}>
-            {t.icon}
-            <span>{t.label}</span>
-          </button>
-        ))}
+        {TABS.map(t => {
+          const on = more === null && !sheet && tab === t.id;
+          return (
+            <button key={t.id} className={on ? 'is-on' : ''} onClick={() => goTab(t.id)} aria-current={on ? 'page' : undefined}>
+              <i className="vm-tick" aria-hidden="true" />
+              {t.icon}
+              <span>{t.label}</span>
+            </button>
+          );
+        })}
+        <button className={onMore ? 'is-on' : ''} onClick={() => setSheet(true)} aria-haspopup="dialog" aria-expanded={sheet}>
+          <i className="vm-tick" aria-hidden="true" />
+          <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
+          <span>More</span>
+        </button>
       </nav>
 
-      {sheet && (
-        <div className="vm-sheet-wrap" onClick={() => setSheet(false)}>
-          <div className="vm-sheet" role="dialog" aria-label="More" onClick={e => e.stopPropagation()}>
-            <span className="vm-grab" aria-hidden="true" />
-            <ul>
-              {MORE.map(m => (
-                <li key={m.id}>
-                  <button onClick={() => goMore(m.id)}>
-                    <b>{m.label}</b><span>{m.note}</span><i aria-hidden="true">›</i>
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {!install.standalone && (install.canPrompt || install.ios) && (
-              <div className="vm-install">
-                {install.canPrompt
-                  ? <button className="hx-btn" onClick={() => install.prompt()}>Install Vitara on this phone</button>
-                  : <p>To install: tap <b>Share</b>, then <b>Add to Home Screen</b>.</p>}
-              </div>
-            )}
-            <button className="vm-signout" onClick={onSignOut}>Sign out</button>
+      <div className={`vm-scrim ${sheet ? 'is-on' : ''}`} onClick={() => setSheet(false)} aria-hidden="true" />
+      <div className={`vm-sheet ${sheet ? 'is-on' : ''}`} role="dialog" aria-label="More" aria-hidden={!sheet}>
+        <span className="vm-grab" aria-hidden="true" />
+        <h2>More</h2>
+        <ul>
+          {MORE.map(m => (
+            <li key={m.id}>
+              <button onClick={() => goMore(m.id)} tabIndex={sheet ? 0 : -1}>
+                <i className={`vm-shape s-${m.id}`} aria-hidden="true" />
+                <span className="vm-sheet-text"><b>{m.label}</b><small>{m.note}</small></span>
+                <em aria-hidden="true">›</em>
+              </button>
+            </li>
+          ))}
+          <li className="vm-appearance">
+            <span>Appearance</span>
+            <div role="group" aria-label="Appearance">
+              <button className={theme === 'dark' ? 'is-on' : ''} onClick={() => setTheme('dark')} tabIndex={sheet ? 0 : -1}>Dark</button>
+              <button className={theme === 'light' ? 'is-on' : ''} onClick={() => setTheme('light')} tabIndex={sheet ? 0 : -1}>Light</button>
+            </div>
+          </li>
+        </ul>
+        {!install.standalone && (install.canPrompt || install.ios) && (
+          <div className="vm-install">
+            {install.canPrompt
+              ? <button className="vm-cta" onClick={() => install.prompt()}>Install Vitara on this phone</button>
+              : <p>To install: tap <b>Share</b>, then <b>Add to Home Screen</b>.</p>}
           </div>
-        </div>
-      )}
+        )}
+        <button className="vm-signout" onClick={onSignOut} tabIndex={sheet ? 0 : -1}>Sign out</button>
+      </div>
+      <RingDefs />
     </div>
   );
 }
