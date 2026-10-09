@@ -70,3 +70,6 @@ mfp-mcp/
 # Per-machine: they carry the signing team and build output, and are recreated from the web app.
 vitara/web/ios/
 vitara/web/android/
+
+# Python bytecode (from running scripts/test_recover_sqlite.py)
+__pycache__/
