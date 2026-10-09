@@ -55,6 +55,10 @@ public static class ObservationProjector
         // for a point-in-time reading as the other.
         var main = SleepNights.Main(sessionsOnOneDay);
 
+        // One source per total: Oura's periods, or else Apple's night -- never both, because
+        // Oura writes its night to Apple Health and the same night would be counted twice.
+        var counted = SleepNights.Countable(sessionsOnOneDay);
+
         var at = main.BedtimeEnd == default ? day.ToDateTime(new TimeOnly(7, 0)) : main.BedtimeEnd;
 
         // Stable across a re-projection even if Oura adds or revises a session later:
@@ -64,9 +68,9 @@ public static class ObservationProjector
 
         var observations = new List<Observation>
         {
-            Make(MetricKeys.TotalSleepMinutes, sessionsOnOneDay.Sum(s => s.TotalSleepMinutes), "min", day, at, id),
-            Make(MetricKeys.DeepSleepMinutes, sessionsOnOneDay.Sum(s => s.DeepMinutes), "min", day, at, id),
-            Make(MetricKeys.RemSleepMinutes, sessionsOnOneDay.Sum(s => s.RemMinutes), "min", day, at, id),
+            Make(MetricKeys.TotalSleepMinutes, counted.Sum(s => s.TotalSleepMinutes), "min", day, at, id),
+            Make(MetricKeys.DeepSleepMinutes, counted.Sum(s => s.DeepMinutes), "min", day, at, id),
+            Make(MetricKeys.RemSleepMinutes, counted.Sum(s => s.RemMinutes), "min", day, at, id),
         };
 
         // Optional metrics are omitted when absent rather than written as zero. A

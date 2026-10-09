@@ -283,7 +283,8 @@ CREATE TABLE "Sleep" (
     "LowestHr" REAL NULL,
     "AvgBreathingRate" REAL NULL,
     "AvgSpo2" REAL NULL,
-    "SkinTempDeviation" REAL NULL
+    "SkinTempDeviation" REAL NULL,
+    "Type" TEXT NULL
 );
 CREATE TABLE "Spo2" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Spo2" PRIMARY KEY,

@@ -153,7 +153,14 @@ public class OuraSyncWorker(IServiceProvider services, ILogger<OuraSyncWorker> l
             logger.LogInformation("Profile synced: age={a}", incoming.Age);
         }, failures);
 
-        var sleep = await SafeSync("sleep", () => client.GetSleepAsync(token.AccessToken, From("sleep"), to), failures);
+        // Oura's label for each sleep period (long_sleep, late_nap ...) was not stored before, so
+        // recent nights have none. While any does, sleep is fetched from the cold-start window
+        // again and the upsert writes the labels in; once they are all labelled this is the
+        // usual window. Nights older than that keep no label and fall back to the longest.
+        var sleepFrom = SleepNights.NeedsLabels(await repo.GetSleepAsync(to.AddDays(-ColdStartDays), to))
+            ? to.AddDays(-ColdStartDays)
+            : From("sleep");
+        var sleep = await SafeSync("sleep", () => client.GetSleepAsync(token.AccessToken, sleepFrom, to), failures);
         var readiness = await SafeSync("readiness", () => client.GetReadinessAsync(token.AccessToken, From("readiness"), to), failures);
         var activity = await SafeSync("activity", () => client.GetActivityAsync(token.AccessToken, From("activity"), to), failures);
         var stress = await SafeSync("stress", () => client.GetStressAsync(token.AccessToken, From("stress"), to), failures);

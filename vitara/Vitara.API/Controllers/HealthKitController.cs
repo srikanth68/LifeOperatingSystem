@@ -64,6 +64,7 @@ public class HealthKitController(IVitaraRepository repo) : ControllerBase
                 BedtimeStart = req.SleepStart.Value.ToUniversalTime(),
                 BedtimeEnd = req.SleepEnd.Value.ToUniversalTime(),
                 TotalSleepMinutes = (int)Math.Round(req.SleepHours.Value * 60),
+                Type = SleepNights.AppleNight,
             };
             await repo.UpsertSleepAsync(new[] { session });
             applied.Add("sleep");

@@ -343,6 +343,8 @@ public class OuraClient : IOuraClient
                 AvgBreathingRate = item.TryGetNullable<double>("average_breath"),
                 AvgSpo2      = item.TryGetNullable<double>("average_spo2"),
                 SkinTempDeviation = item.TryGetNullable<double>("skin_temp_deviation"),
+                // long_sleep, sleep, late_nap, rest, deleted: which of these periods is the night.
+                Type = item.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String ? type.GetString() : null,
             };
     }
 

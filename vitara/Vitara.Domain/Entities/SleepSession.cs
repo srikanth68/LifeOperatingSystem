@@ -17,6 +17,11 @@ public class SleepSession
     public double? AvgBreathingRate { get; set; }
     public double? AvgSpo2 { get; set; }        // %
     public double? SkinTempDeviation { get; set; } // °C from baseline
+
+    // What the source says this period is. Oura: long_sleep (the night), sleep, late_nap, rest,
+    // deleted. Apple Health has no such label; a night Vitara assembles from its stages is
+    // "apple_night". Null on rows stored before this existed. See SleepNights.
+    public string? Type { get; set; }
     public double Efficiency => TotalSleepMinutes > 0
         ? (double)TotalSleepMinutes / (BedtimeEnd - BedtimeStart).TotalMinutes
         : 0;

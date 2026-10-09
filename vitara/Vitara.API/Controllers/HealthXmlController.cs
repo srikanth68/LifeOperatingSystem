@@ -140,7 +140,11 @@ public class HealthXmlController(IVitaraRepository repo, ILogger<HealthXmlContro
         var to = byDay[^1].Key;
 
         var activity = (await repo.GetActivityAsync(from, to)).ToDictionary(a => a.Day);
-        var sleep = (await repo.GetSleepAsync(from, to)).GroupBy(s => s.Day).ToDictionary(g => g.Key, g => SleepNights.Main(g));
+        // Apple's own row for each day, never Oura's: Apple's numbers used to be written into the
+        // Oura session for the day, overwriting the ring's night with the phone's. Apple keeps its
+        // own row, and SleepNights decides which one is the night.
+        var sleep = (await repo.GetSleepAsync(from, to)).Where(SleepNights.IsApple)
+            .GroupBy(s => s.Day).ToDictionary(g => g.Key, g => g.First());
 
         var activityChanged = new List<DailyActivity>();
         var sleepChanged = new List<SleepSession>();
@@ -179,6 +183,7 @@ public class HealthXmlController(IVitaraRepository repo, ILogger<HealthXmlContro
                         Id = $"healthkit-{day.Key:yyyy-MM-dd}",
                         Day = day.Key,
                         BedtimeEnd = day.Key.ToDateTime(new TimeOnly(7, 0)),
+                        Type = SleepNights.AppleNight,
                     };
 
                 if (v.TryGetValue(MetricKeys.TotalSleepMinutes, out var mins)) row.TotalSleepMinutes = (int)Math.Round(mins);

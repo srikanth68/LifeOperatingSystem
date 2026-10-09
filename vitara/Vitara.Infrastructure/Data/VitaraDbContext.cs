@@ -293,6 +293,12 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
         await AddColumnIfMissingAsync(db, "Profiles", "DateOfBirth", "TEXT");
         await AddColumnIfMissingAsync(db, "Profiles", "LockedFields", "TEXT");
 
+        // Oura's own label for each sleep period (long_sleep, late_nap, rest, deleted ...).
+        // Thrown away until now, which left Vitara guessing which session was the night.
+        // Null on every older row until the next sync rewrites it; SleepNights falls back to
+        // the longest session for those.
+        await AddColumnIfMissingAsync(db, "Sleep", "Type", "TEXT");
+
         // Renamed rather than added: the column holds Oura's 0-100 readiness contributor
         // and was called RestingHeartRate, which is how it ended up served as bpm and fed
         // to the bio-age model as a pulse. The data is kept -- it is a real score -- and
