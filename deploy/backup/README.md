@@ -30,6 +30,8 @@ the Mac opened them while containers had them open:
 |---|---|---|
 | 2026-10-07 | `vitara.db` (first page destroyed) | this script's previous version (`sqlite3 … VACUUM INTO`) |
 | 2026-10-08 | `san.db` (six pages destroyed) | DB Browser for SQLite |
+| found 2026-10-10 | `northstar.db` (`Memories` table: 77 of 149 rows lost) | DB Browser for SQLite; caught by this script's first run |
+| 2026-10-10 | `northstar.db` again, minutes after recovery | the recovered file copied in from the Mac side (see Restoring) |
 
 **Rule: never open a live Maaya database from the Mac**, with any tool. To look inside one,
 copy the files first (`x.db`, `x.db-wal`, `x.db-shm`) and open the copy, read-only.
@@ -77,22 +79,35 @@ tail -30 ~/Documents/maaya/deploy/backups/backup.log && cat ~/Documents/maaya/de
 
 ## Restoring
 
-Snapshots are plain SQLite files in the same layout as `deploy/data`, so a restore is a copy.
-**Stop the stack (or the one service) first**: restoring underneath a running process is how
-to get a second damaged database on the worst possible day. Check the snapshot's `RESULT`
-file says `ok` first.
+Snapshots are plain SQLite files in the same layout as `deploy/data`, so a restore is a copy,
+with two rules:
 
-Everything:
+- **Stop the service first.** Restoring underneath a running process is how to get a second
+  damaged database on the worst possible day. Check the snapshot's `RESULT` file says `ok`.
+- **Copy from inside the VM, never from the Mac.** The VM caches the files it serves. Replace
+  one from the Mac side and the VM keeps serving pieces of the old file, and the service
+  writes on top of that mix. On 2026-10-10 a freshly recovered `northstar.db` (checked `ok`)
+  was copied in from the Mac with NorthStar stopped; within minutes of starting it, the file
+  was damaged again, and the Mac and the VM reported *different* damage in the same file.
+  A throwaway container does the copy inside the VM, so its view stays true.
+
+One module (for example NorthStar). The replaced file is moved out of `deploy/data` (into
+`~/maaya-rescue`, where the next backup will not pick it up), with any `-wal`/`-shm` beside
+it, so an old log cannot be replayed into the restored file:
 
 ```bash
-cd ~/Documents/maaya && docker compose stop && cp -R deploy/backups/2026-10-18T073000Z/. deploy/data/ && docker compose start
+mkdir -p ~/maaya-rescue && cd ~/Documents/maaya && docker compose stop northstar && docker run --rm -v "$PWD/deploy/data/northstar:/d" -v "$PWD/deploy/backups/2026-10-18T073000Z/northstar:/b:ro" -v "$HOME/maaya-rescue:/r" alpine:3.20 sh -c 'out=/r/northstar-replaced-$(date +%Y%m%dT%H%M%S) && mkdir -p $out && mv /d/northstar.db* $out/ && cp /b/northstar.db* /d/ && chmod 666 /d/northstar.db*' && docker compose start northstar
 ```
 
-One module (for example San):
+Everything (whole stack stopped). Every live `-wal`/`-shm` is deleted first for the same
+reason; a `-wal` the snapshot itself holds belongs to its database and is copied back with it:
 
 ```bash
-cd ~/Documents/maaya && docker compose stop san san-worker && cp deploy/backups/2026-10-18T073000Z/san/san.db deploy/data/san/ && docker compose start san san-worker
+cd ~/Documents/maaya && docker compose stop && docker run --rm -v "$PWD/deploy/data:/d" -v "$PWD/deploy/backups/2026-10-18T073000Z:/b:ro" alpine:3.20 sh -c 'find /d \( -name "*.db-wal" -o -name "*.db-shm" \) -delete && cp -R /b/. /d/ && rm -f /d/RESULT' && docker compose start
 ```
+
+If a file was already replaced from the Mac side, `colima restart` (with the service stopped)
+makes the VM forget its cached copy; then restore again from inside the VM.
 
 ## Configuration (environment variables, all optional)
 
