@@ -60,7 +60,7 @@ copy the files first (`x.db`, `x.db-wal`, `x.db-shm`) and open the copy, read-on
 2. Install the weekly job:
 
 ```bash
-cp ~/Documents/maaya/deploy/backup/com.maaya.backup.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.maaya.backup.plist
+mkdir -p ~/MaayaBackups && cp ~/Documents/maaya/deploy/backup/com.maaya.backup.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.maaya.backup.plist
 ```
 
 3. Run it once **through launchd**, not by hand, so the permission in step 1 is tested too:
@@ -72,7 +72,7 @@ launchctl start com.maaya.backup
 4. A minute later, read the result:
 
 ```bash
-tail -30 ~/Documents/maaya/deploy/backups/backup.log && cat ~/Documents/maaya/deploy/data/backup-status.json
+tail -30 ~/MaayaBackups/backup.log && cat ~/Documents/maaya/deploy/data/backup-status.json
 ```
 
 `"ok": true` and one `ok` line per database means it works.
@@ -96,14 +96,14 @@ One module (for example NorthStar). The replaced file is moved out of `deploy/da
 it, so an old log cannot be replayed into the restored file:
 
 ```bash
-mkdir -p ~/maaya-rescue && cd ~/Documents/maaya && docker compose stop northstar && docker run --rm -v "$PWD/deploy/data/northstar:/d" -v "$PWD/deploy/backups/2026-10-18T073000Z/northstar:/b:ro" -v "$HOME/maaya-rescue:/r" alpine:3.20 sh -c 'out=/r/northstar-replaced-$(date +%Y%m%dT%H%M%S) && mkdir -p $out && mv /d/northstar.db* $out/ && cp /b/northstar.db* /d/ && chmod 666 /d/northstar.db*' && docker compose start northstar
+mkdir -p ~/maaya-rescue && cd ~/Documents/maaya && docker compose stop northstar && docker run --rm -v "$PWD/deploy/data/northstar:/d" -v "$HOME/MaayaBackups/2026-10-18T073000Z/northstar:/b:ro" -v "$HOME/maaya-rescue:/r" alpine:3.20 sh -c 'out=/r/northstar-replaced-$(date +%Y%m%dT%H%M%S) && mkdir -p $out && mv /d/northstar.db* $out/ && cp /b/northstar.db* /d/ && chmod 666 /d/northstar.db*' && docker compose start northstar
 ```
 
 Everything (whole stack stopped). Every live `-wal`/`-shm` is deleted first for the same
 reason; a `-wal` the snapshot itself holds belongs to its database and is copied back with it:
 
 ```bash
-cd ~/Documents/maaya && docker compose stop && docker run --rm -v "$PWD/deploy/data:/d" -v "$PWD/deploy/backups/2026-10-18T073000Z:/b:ro" alpine:3.20 sh -c 'find /d \( -name "*.db-wal" -o -name "*.db-shm" \) -delete && cp -R /b/. /d/ && rm -f /d/RESULT' && docker compose start
+cd ~/Documents/maaya && docker compose stop && docker run --rm -v "$PWD/deploy/data:/d" -v "$HOME/MaayaBackups/2026-10-18T073000Z:/b:ro" alpine:3.20 sh -c 'find /d \( -name "*.db-wal" -o -name "*.db-shm" \) -delete && cp -R /b/. /d/ && rm -f /d/RESULT' && docker compose start
 ```
 
 If a file was already replaced from the Mac side, `colima restart` (with the service stopped)
@@ -115,7 +115,7 @@ makes the VM forget its cached copy; then restore again from inside the VM.
 |---|---|---|
 | `MAAYA_REPO` | the repo this script is in | where `docker compose` runs |
 | `MAAYA_DATA` | `deploy/data` | live data (the compose bind mount) |
-| `MAAYA_BACKUP_DIR` | `deploy/backups` | tier 1 destination |
+| `MAAYA_BACKUP_DIR` | `deploy/backups` (the plist sets `~/MaayaBackups`) | tier 1 destination |
 | `MAAYA_BACKUP_MIRROR` | *(unset)* | tier 2, an external drive; unmounted is not an error |
 | `MAAYA_KEEP` | `12` | snapshots kept (about three months of weekly runs) |
 | `MAAYA_BACKUP_EVERY_HOURS` | `168` | written to the status file so San knows when a run is overdue |
@@ -124,7 +124,7 @@ makes the VM forget its cached copy; then restore again from inside the VM.
 
 | Tier | Where | Protects against |
 |---|---|---|
-| 1 | `deploy/backups/` (same disk) | a bad deploy, a damaged database, a migration that eats a table, deleting the wrong thing |
+| 1 | `~/MaayaBackups` (same disk, outside the checkout) | a bad deploy, a damaged database, a migration that eats a table, deleting the wrong thing |
 | 2 | external drive (`MAAYA_BACKUP_MIRROR`) | disk failure, which tier 1 cannot |
 | 3 | off-site, encrypted | theft, fire: **not built** |
 

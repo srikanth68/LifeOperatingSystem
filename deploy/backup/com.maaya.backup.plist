@@ -14,7 +14,8 @@
   /bin/bash has Full Disk Access (System Settings > Privacy & Security > Full Disk
   Access > + > /bin/bash). README.md walks through it.
 
-  Install:
+  Install (launchd does not create the log's folder, so make it first):
+    mkdir -p ~/MaayaBackups
     cp deploy/backup/com.maaya.backup.plist ~/Library/LaunchAgents/
     launchctl load ~/Library/LaunchAgents/com.maaya.backup.plist
 -->
@@ -36,6 +37,10 @@
         <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
         <key>MAAYA_REPO</key>
         <string>/Users/kanth/Documents/maaya</string>
+        <!-- Snapshots live outside the Maaya folder, so a bad deploy or a deleted
+             checkout cannot take the backups with it. -->
+        <key>MAAYA_BACKUP_DIR</key>
+        <string>/Users/kanth/MaayaBackups</string>
         <key>MAAYA_KEEP</key>
         <string>12</string>
         <!-- Tier 2, an external drive. Uncomment and set once a drive is attached; an
@@ -54,9 +59,9 @@
     </dict>
 
     <key>StandardOutPath</key>
-    <string>/Users/kanth/Documents/maaya/deploy/backups/backup.log</string>
+    <string>/Users/kanth/MaayaBackups/backup.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/kanth/Documents/maaya/deploy/backups/backup.log</string>
+    <string>/Users/kanth/MaayaBackups/backup.log</string>
 
     <key>RunAtLoad</key>
     <false/>
