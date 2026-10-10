@@ -1,19 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  Nightly Maaya backup, run by launchd on the Mac mini.
+  Weekly Maaya backup, run by launchd on the Mac mini (Everest): Sundays at 03:30.
 
-  launchd rather than cron: it is the supported mechanism on macOS, it survives
-  reboots without a crontab, and StartCalendarInterval catches up a run that was
-  missed because the machine was asleep — which cron does not, and which is exactly
-  when a backup is most likely to be skipped.
+  It stops the stack for about a minute, copies every database while nothing has it
+  open, starts the stack again, then checks the copies. See maaya-backup.sh for why.
 
-  EDIT THE PATHS BELOW before installing: replace /Users/kanth/maaya with wherever
-  the repo actually lives, and set MAAYA_BACKUP_MIRROR to the external drive (or
-  delete that pair of lines to run tier 1 only).
+  launchd rather than cron: it is the supported mechanism on macOS, survives reboots,
+  and StartCalendarInterval catches up a run missed while the machine was asleep.
+
+  The paths assume the repo at /Users/kanth/Documents/maaya. Because that is inside
+  Documents, macOS privacy protection blocks a background job from reading it unless
+  /bin/bash has Full Disk Access (System Settings > Privacy & Security > Full Disk
+  Access > + > /bin/bash). README.md walks through it.
 
   Install:
-    cp com.maaya.backup.plist ~/Library/LaunchAgents/
+    cp deploy/backup/com.maaya.backup.plist ~/Library/LaunchAgents/
     launchctl load ~/Library/LaunchAgents/com.maaya.backup.plist
 -->
 <plist version="1.0">
@@ -24,36 +26,37 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/kanth/maaya/deploy/backup/maaya-backup.sh</string>
+        <string>/Users/kanth/Documents/maaya/deploy/backup/maaya-backup.sh</string>
     </array>
 
     <key>EnvironmentVariables</key>
     <dict>
-        <key>MAAYA_DATA</key>
-        <string>/Users/kanth/maaya/deploy/data</string>
-        <key>MAAYA_BACKUP_DIR</key>
-        <string>/Users/kanth/maaya/deploy/backups</string>
-        <!-- Tier 2. An unmounted drive is not an error; tier 1 still runs. -->
+        <!-- launchd starts jobs with a bare PATH; docker (and colima) come from Homebrew. -->
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>MAAYA_REPO</key>
+        <string>/Users/kanth/Documents/maaya</string>
+        <key>MAAYA_KEEP</key>
+        <string>12</string>
+        <!-- Tier 2, an external drive. Uncomment and set once a drive is attached; an
+             unmounted drive is not an error, tier 1 still runs.
         <key>MAAYA_BACKUP_MIRROR</key>
         <string>/Volumes/MaayaBackup/maaya</string>
-        <key>MAAYA_KEEP_DAILY</key>
-        <string>14</string>
-        <key>MAAYA_KEEP_WEEKLY</key>
-        <string>8</string>
+        -->
     </dict>
 
-    <!-- 03:15 local. Late enough that the day's data has settled, and off the
-         :00 boundary so it does not contend with every other scheduled job. -->
+    <!-- Sunday 03:30 local: the quietest hour of the week for a one-minute stop. -->
     <key>StartCalendarInterval</key>
     <dict>
+        <key>Weekday</key><integer>0</integer>
         <key>Hour</key><integer>3</integer>
-        <key>Minute</key><integer>15</integer>
+        <key>Minute</key><integer>30</integer>
     </dict>
 
     <key>StandardOutPath</key>
-    <string>/Users/kanth/maaya/deploy/backups/backup.log</string>
+    <string>/Users/kanth/Documents/maaya/deploy/backups/backup.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/kanth/maaya/deploy/backups/backup.log</string>
+    <string>/Users/kanth/Documents/maaya/deploy/backups/backup.log</string>
 
     <key>RunAtLoad</key>
     <false/>

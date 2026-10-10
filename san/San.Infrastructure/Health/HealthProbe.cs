@@ -205,10 +205,10 @@ public class HealthProbe(
                                 || DateTime.UtcNow - a.LastCheckedAt > TimeSpan.FromHours(2)))).ToList());
     }
 
-    // The nightly backup runs on the HOST, outside Docker, so nothing in the stack
-    // would ever notice it stopping — and a backup discovered to have been broken for
-    // three weeks is the same as no backup. It leaves a status file in the data
-    // directory, which every container sees at /data/backup-status.json.
+    // The backup runs on the HOST, outside Docker, so nothing in the stack would ever
+    // notice it stopping -- and a backup discovered to have been broken for three weeks
+    // is the same as no backup. It leaves a status file in the data directory, which
+    // every container sees at /data/backup-status.json.
     //
     // Silent when the file is absent: a deployment that has not set the launchd job up
     // yet should not be nagged every fifteen minutes about a feature it never enabled.
@@ -217,10 +217,22 @@ public class HealthProbe(
     {
         var path = Environment.GetEnvironmentVariable("BACKUP_STATUS_PATH") ?? "/data/backup-status.json";
         if (!File.Exists(path)) return null;
+        try { return BackupProblem(File.ReadAllText(path), DateTime.UtcNow); }
+        catch (IOException) { return null; }
+    }
 
+    // The judgement, apart from the file, so it can be tested.
+    //
+    // The job says how often it runs (expectedEveryHours: 168 for the weekly backup,
+    // which stops the stack for a minute and so does not run nightly). A run is overdue
+    // a day after it was due -- one missed run is noticed the next day, not a week
+    // later. A status file written before the field existed came from the nightly job,
+    // and keeps the old 48-hour rule.
+    internal static HealthProblem? BackupProblem(string statusJson, DateTime nowUtc)
+    {
         try
         {
-            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+            using var doc = System.Text.Json.JsonDocument.Parse(statusJson);
             var root = doc.RootElement;
 
             var ok = !root.TryGetProperty("ok", out var okEl) || okEl.ValueKind != System.Text.Json.JsonValueKind.False;
@@ -236,16 +248,18 @@ public class HealthProbe(
                     DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var last))
                 return null;
 
-            var age = DateTime.UtcNow - last;
-            // Nightly job, so 48h means two consecutive nights were missed — past the
-            // point where it could be a one-off.
-            if (age > TimeSpan.FromHours(48))
+            var every = root.TryGetProperty("expectedEveryHours", out var everyEl) && everyEl.TryGetInt32(out var h) && h > 0
+                ? TimeSpan.FromHours(h)
+                : TimeSpan.FromHours(24);
+
+            var age = nowUtc - last;
+            if (age > every + TimeSpan.FromHours(24))
                 return new HealthProblem(HealthProblemKeys.Backup, "high",
-                    $"No successful backup in {age.TotalDays:F1} days — the nightly job has stopped.");
+                    $"No successful backup in {age.TotalDays:F1} days -- the scheduled backup has stopped.");
 
             return null;
         }
-        catch
+        catch (System.Text.Json.JsonException)
         {
             // A malformed status file is not evidence of a failed backup, and guessing
             // either way would be worse than saying nothing.

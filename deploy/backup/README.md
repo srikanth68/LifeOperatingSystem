@@ -1,100 +1,142 @@
 # Maaya backup
 
-Every byte of Maaya is a handful of SQLite files under `deploy/data`. Most of it
-cannot be reconstructed — NorthStar's accumulated memory, Aasthi's property history,
-years of habit streaks and health data. Statements and Oura pulls could be
-re-imported; that lot could not.
+Every byte of Maaya is a handful of SQLite files under `deploy/data`. Most of it cannot be
+reconstructed: NorthStar's accumulated memory, Aasthi's property history, years of habit
+streaks and health data. Statements and Oura pulls could be re-imported; that lot could not.
 
-## What it does
+## How it works: weekly, while Maaya is stopped
 
-| Tier | Where | Protects against |
+Every Sunday at 03:30 the job:
+
+1. **Stops** the stack (`docker compose stop`), remembering which services were running.
+2. **Copies** every database and any side file a stop can leave (`-wal`, `-journal`), plus
+   module `storage/` folders. Nothing is writing, so a plain copy is exactly consistent.
+3. **Starts** again exactly what was running. This happens however the script ends: on
+   success, on a failure, or on Ctrl-C.
+4. **Checks** every copy with `PRAGMA integrity_check`, after the stack is back up.
+5. Writes `deploy/data/backup-status.json`, which San's health check reads.
+
+Downtime is about a minute.
+
+### Why it stops Maaya instead of copying live
+
+On Everest the containers run inside Colima's virtual machine (`vmType: vz`) while the
+databases live on the Mac, shared in through **virtiofs**. SQLite coordinates several
+programs on one database through file locks and a shared-memory file, and those do not
+reliably cross that boundary. In October 2026 two databases were damaged after a program on
+the Mac opened them while containers had them open:
+
+| Date | Database | Opened from the Mac by |
 |---|---|---|
-| 1 | `deploy/backups/` (same disk) | bad deploy, `docker compose down -v`, a migration that eats a table, deleting the wrong thing |
-| 2 | external drive (`MAAYA_BACKUP_MIRROR`) | disk failure, which tier 1 cannot |
-| 3 | off-site, encrypted | theft, fire — **not built yet** |
+| 2026-10-07 | `vitara.db` (first page destroyed) | this script's previous version (`sqlite3 … VACUUM INTO`) |
+| 2026-10-08 | `san.db` (six pages destroyed) | DB Browser for SQLite |
 
-Tier 1 covers the overwhelming majority of real incidents and costs nothing. Tier 2
-is one env var away once a drive is attached.
+**Rule: never open a live Maaya database from the Mac**, with any tool. To look inside one,
+copy the files first (`x.db`, `x.db-wal`, `x.db-shm`) and open the copy, read-only.
 
-## Two things it does NOT do the obvious way, on purpose
+### What it guarantees
 
-**It does not copy the `.db` files.** Copying a live SQLite database can capture a
-half-applied transaction and produce a backup that looks perfectly fine until the day
-you restore it. It uses `VACUUM INTO`, which takes a consistent snapshot of a database
-that is actively being written to. **Nothing has to be stopped.**
+- **One damaged database never costs the others.** Every good copy is kept; the damaged one
+  is kept too (it is the starting point for a repair) and listed by name in the snapshot's
+  `RESULT` file and the status file, with SQLite's own error message.
+- **It catches damage in the live data.** The copy is taken from files nothing is writing to,
+  so a copy that fails the check means the live database is damaged. San raises it as
+  critical.
+- **Retention never deletes the newest snapshot that passed every check**, however old: if a
+  database has been quietly damaged for months, the last good copy is the one that matters.
+- **It never stops a stack it cannot restart cleanly:** if `docker compose stop` fails, it
+  copies nothing and starts everything again.
 
-**It verifies before it deletes.** Every snapshot gets `PRAGMA integrity_check`, and
-retention pruning only runs after the new snapshot has passed. A bad backup night can
-never take the last good copies with it.
+## Install (on Everest)
 
-## Install (on the Mac mini)
+1. **Give the background job access to Documents.** The repo is in `~/Documents`, which macOS
+   protects. A job run by launchd is blocked from reading it ("Operation not permitted")
+   unless `/bin/bash` has Full Disk Access:
+   System Settings → Privacy & Security → **Full Disk Access** → **+** → press
+   ⌘⇧G, type `/bin/bash`, add it, and make sure it is switched on.
 
-1. Edit `com.maaya.backup.plist` — replace `/Users/kanth/maaya` with the real repo
-   path, and set `MAAYA_BACKUP_MIRROR` to the external drive (or delete those two
-   lines for tier 1 only).
-
-2. Install and start it:
-
-```bash
-cp deploy/backup/com.maaya.backup.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.maaya.backup.plist
-```
-
-3. Run it once by hand to confirm it works before trusting the schedule:
+2. Install the weekly job:
 
 ```bash
-bash deploy/backup/maaya-backup.sh
+cp ~/Documents/maaya/deploy/backup/com.maaya.backup.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.maaya.backup.plist
 ```
 
-Runs nightly at 03:15 local. Log: `deploy/backups/backup.log`.
+3. Run it once **through launchd**, not by hand, so the permission in step 1 is tested too:
+
+```bash
+launchctl start com.maaya.backup
+```
+
+4. A minute later, read the result:
+
+```bash
+tail -30 ~/Documents/maaya/deploy/backups/backup.log && cat ~/Documents/maaya/deploy/data/backup-status.json
+```
+
+`"ok": true` and one `ok` line per database means it works.
 
 ## Restoring
 
-Snapshots are plain SQLite files in the same layout as `deploy/data`, so a restore is
-a copy. **Stop the stack first** — restoring underneath a running process gives you a
-second corruption to debug on the worst possible day.
+Snapshots are plain SQLite files in the same layout as `deploy/data`, so a restore is a copy.
+**Stop the stack (or the one service) first**: restoring underneath a running process is how
+to get a second damaged database on the worst possible day. Check the snapshot's `RESULT`
+file says `ok` first.
+
+Everything:
 
 ```bash
-docker compose down && cp -R deploy/backups/2026-08-11T031500Z/. deploy/data/ && docker compose up -d
+cd ~/Documents/maaya && docker compose stop && cp -R deploy/backups/2026-10-18T073000Z/. deploy/data/ && docker compose start
 ```
 
-Single module (e.g. just NorthStar):
+One module (for example San):
 
 ```bash
-docker compose stop northstar && cp deploy/backups/2026-08-11T031500Z/northstar/run/northstar.db deploy/data/northstar/run/ && docker compose start northstar
+cd ~/Documents/maaya && docker compose stop san san-worker && cp deploy/backups/2026-10-18T073000Z/san/san.db deploy/data/san/ && docker compose start san san-worker
 ```
 
-## Configuration
+## Configuration (environment variables, all optional)
 
 | Variable | Default | Meaning |
 |---|---|---|
+| `MAAYA_REPO` | the repo this script is in | where `docker compose` runs |
 | `MAAYA_DATA` | `deploy/data` | live data (the compose bind mount) |
 | `MAAYA_BACKUP_DIR` | `deploy/backups` | tier 1 destination |
-| `MAAYA_BACKUP_MIRROR` | *(unset)* | tier 2 destination; unmounted is not an error |
-| `MAAYA_KEEP_DAILY` | `14` | every snapshot kept for this many days |
-| `MAAYA_KEEP_WEEKLY` | `8` | then one per week for this many weeks |
+| `MAAYA_BACKUP_MIRROR` | *(unset)* | tier 2, an external drive; unmounted is not an error |
+| `MAAYA_KEEP` | `12` | snapshots kept (about three months of weekly runs) |
+| `MAAYA_BACKUP_EVERY_HOURS` | `168` | written to the status file so San knows when a run is overdue |
 
-The databases total well under a megabyte, so retention is generous by default — a
-year of snapshots costs less than a single photo.
+## Tiers
+
+| Tier | Where | Protects against |
+|---|---|---|
+| 1 | `deploy/backups/` (same disk) | a bad deploy, a damaged database, a migration that eats a table, deleting the wrong thing |
+| 2 | external drive (`MAAYA_BACKUP_MIRROR`) | disk failure, which tier 1 cannot |
+| 3 | off-site, encrypted | theft, fire: **not built** |
+
+On the drive: a USB flash drive is the worst choice for repeated backup writes. They wear out
+and fail silently. Prefer a cheap external SSD.
 
 ## Monitoring
 
-Each run writes `deploy/data/backup-status.json`, which every container sees at
-`/data/backup-status.json`. San's self-check reads it and raises a problem if the last
-successful backup is more than 48h old or the last run failed — so a backup that
-silently stopped three weeks ago tells you, rather than waiting to be discovered on
-the day you need it.
+San's health check reads `backup-status.json`. It raises **critical** when the last run
+reported a problem (naming each database), and **high** when no run has succeeded for a day
+longer than `expectedEveryHours`, so a missed Sunday is noticed on Monday.
 
-## On the destination drive
+## Tests
 
-A USB **flash drive / pendrive** is the worst choice for repeated backup writes: they
-wear out and fail *silently*, which is precisely the failure mode you cannot afford
-in a backup. Prefer a cheap external SSD. If a pendrive is what is available, use it
-— it still beats tier 1 alone — but rotate two and treat it as temporary.
+```bash
+python3 deploy/backup/test_maaya_backup.py
+```
+
+Runs the script against a fake Docker and real SQLite files: a normal run, a database left
+with an unfolded WAL, one damaged database, a stack that will not stop, Docker down, retention,
+and a second run while one is running.
 
 ## Not yet done
 
-- **Tier 3, off-site.** This data is financial, medical and personal; if it ever
-  leaves the Mac it must be encrypted *before* upload (`age` or `gpg`), never by
-  trusting the destination.
-- **A restore drill.** A backup nobody has ever restored is a hypothesis, not a
-  backup. Worth doing once, deliberately, into a scratch directory.
+- **Tier 3, off-site.** The data is financial, medical and personal; if it ever leaves the
+  Mac it must be encrypted *before* upload (`age` or `gpg`), never by trusting the destination.
+- **A restore drill.** A backup nobody has restored is a hypothesis. Worth doing once,
+  deliberately, into a scratch folder.
+- **Moving the databases into the VM's own disk** (a Docker volume) would remove the file-lock
+  boundary entirely. Bigger change, separate decision.
