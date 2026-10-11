@@ -364,3 +364,67 @@
   .ns-tabs { gap: 0.3rem; }
   .ns-tab { padding: 0.35rem 0.7rem; font-size: 0.72rem; }
 }
+
+/* ── Memory (review, browse, entities) ── */
+.ns-mem-list { display: flex; flex-direction: column; gap: 0.45rem; }
+.ns-mem-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 0.7rem 0.875rem; min-width: 0;
+}
+.ns-mem-card.ns-mem-proposed { border-color: rgba(212,168,67,0.3); }
+.ns-mem-card.ns-mem-superseded, .ns-mem-card.ns-mem-retracted { opacity: 0.6; }
+.ns-mem-head { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
+.ns-mem-spacer { flex: 1; }
+.ns-mem-kind {
+  font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text3); border: 1px solid var(--border); border-radius: 6px; padding: 0.05rem 0.35rem;
+}
+.ns-mem-status {
+  font-size: 0.62rem; font-weight: 600; border-radius: 6px; padding: 0.05rem 0.4rem;
+  background: rgba(148,163,184,0.12); color: var(--text2);
+}
+.ns-mem-status-active { background: rgba(31,200,122,0.12); color: #1fc87a; }
+.ns-mem-status-proposed { background: rgba(212,168,67,0.14); color: var(--gold); }
+.ns-mem-status-retracted { background: rgba(239,68,68,0.1); color: #ef4444; }
+.ns-mem-meta { font-size: 0.68rem; color: var(--text3); }
+.ns-mem-content {
+  font-size: 0.85rem; color: var(--text); line-height: 1.5; margin-top: 0.4rem;
+  overflow-wrap: anywhere;
+}
+.ns-mem-card.ns-mem-retracted .ns-mem-content { text-decoration: line-through; }
+.ns-mem-line { font-size: 0.75rem; color: var(--text2); margin-top: 0.3rem; overflow-wrap: anywhere; }
+.ns-mem-label {
+  font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text3); margin-right: 0.35rem;
+}
+.ns-mem-evidence {
+  font-size: 0.75rem; color: var(--text2); font-style: italic; margin-top: 0.35rem;
+  border-left: 2px solid var(--border); padding-left: 0.6rem; overflow-wrap: anywhere;
+}
+.ns-mem-error { font-size: 0.72rem; color: #ef4444; margin-top: 0.35rem; }
+.ns-mem-more {
+  background: none; border: none; padding: 0; margin-top: 0.4rem; cursor: pointer;
+  font-size: 0.7rem; color: var(--text3); font-family: inherit;
+}
+.ns-mem-more:hover { color: var(--gold); }
+.ns-mem-detail { margin-top: 0.35rem; border-top: 1px solid var(--border); padding-top: 0.35rem; }
+.ns-mem-chip {
+  display: inline-block; font-size: 0.7rem; color: var(--text); margin: 0 0.3rem 0.2rem 0;
+  border: 1px solid var(--border); border-radius: 10px; padding: 0.05rem 0.5rem;
+}
+.ns-mem-history { list-style: none; margin: 0.4rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.ns-mem-history li {
+  font-size: 0.75rem; color: var(--text2); border-left: 2px solid var(--border); padding-left: 0.6rem;
+  display: flex; flex-wrap: wrap; gap: 0.2rem 0.4rem; align-items: center;
+}
+.ns-mem-history li > div { flex-basis: 100%; overflow-wrap: anywhere; }
+.ns-mem-history li.ns-mem-here { border-left-color: var(--gold); color: var(--text); }
+.ns-mem-edit { margin-top: 0.4rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.ns-mem-edit-btns { display: flex; gap: 0.4rem; }
+.ns-ent-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.ns-ent-name { font-size: 0.85rem; font-weight: 600; color: var(--text); min-width: 120px; }
+.ns-ent-aliases { flex: 1; min-width: 160px; }
+.ns-ent-links { list-style: none; margin: 0.4rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.ns-ent-links li { font-size: 0.75rem; color: var(--text2); display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+.ns-fact-history { list-style: none; margin: 0.2rem 0 0.4rem 1rem; padding: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+.ns-fact-history li { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }

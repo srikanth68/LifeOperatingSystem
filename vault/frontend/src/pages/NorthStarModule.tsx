@@ -3,6 +3,7 @@ import { authHeaders } from '../services/auth';
 import { moduleApi } from '../services/apiHost';
 import { ApiUnreachable } from '../components/ApiUnreachable';
 import KnowledgeGraph from '../components/KnowledgeGraph';
+import MemoryPage from './NorthStarMemory';
 import '../styles/northstar.css';
 import '../styles/modules.css';
 
@@ -14,10 +15,11 @@ const patch = (url: string, body: unknown) => af(url, { method: 'PATCH', headers
 const put = (url: string, body: unknown) => af(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 const del = (url: string) => af(url, { method: 'DELETE' });
 
-type Page = 'brain' | 'actions' | 'knowledge' | 'facts' | 'insights';
+type Page = 'brain' | 'memory' | 'actions' | 'knowledge' | 'facts' | 'insights';
 
 const TABS: { id: Page; label: string; icon: string }[] = [
   { id: 'brain',     label: 'Brain',     icon: '🧠' },
+  { id: 'memory',    label: 'Memory',    icon: '💭' },
   { id: 'actions',   label: 'Actions',   icon: '⚡' },
   { id: 'knowledge', label: 'Knowledge', icon: '📚' },
   { id: 'facts',     label: 'Profile',   icon: '👤' },
@@ -353,12 +355,41 @@ function KnowledgePage() {
 // ── FACTS (user profile) ──
 
 interface UserFact { key: string; value: string; source: string; updatedAt: string }
+interface FactRevision { id: number; value: string; source: string; validFrom: string; validTo: string; change: string }
+
+// A fact keeps every value it is moved off (see NorthStar's FactRevision), so a change
+// made by San -- or by mistake -- can be seen and put back.
+function FactHistory({ factKey }: { factKey: string }) {
+  const [revs, setRevs] = useState<FactRevision[] | null>(null);
+  useEffect(() => {
+    af(`${API}/api/facts/${encodeURIComponent(factKey)}/history`)
+      .then(r => r.ok ? r.json() : { previous: [] })
+      .then(d => setRevs(d.previous ?? []))
+      .catch(() => setRevs([]));
+  }, [factKey]);
+
+  if (!revs) return <div className="ns-fact-history ns-mem-meta">Loading…</div>;
+  if (revs.length === 0) return <div className="ns-fact-history ns-mem-meta">No earlier values.</div>;
+  return (
+    <ul className="ns-fact-history">
+      {revs.map(r => (
+        <li key={r.id}>
+          <span className="ns-fact-val">{r.value}</span>
+          <span className="ns-mem-meta">
+            {r.change === 'deleted' ? 'deleted' : 'replaced'} {formatInstant(r.validTo, { month: 'short', day: 'numeric', year: 'numeric' })} · set by {r.source}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function FactsPage() {
   const [facts, setFacts] = useState<UserFact[]>([]);
   const [newKey, setNewKey] = useState('');
   const [newVal, setNewVal] = useState('');
   const [err, setErr] = useState('');
+  const [historyOf, setHistoryOf] = useState<string | null>(null);
 
   const load = useCallback(() => {
     af(`${API}/api/facts`)
@@ -395,11 +426,16 @@ function FactsPage() {
 
       <div className="ns-facts-list">
         {facts.map(f => (
-          <div key={f.key} className="ns-fact-row">
-            <span className="ns-fact-key">{f.key}</span>
-            <span className="ns-fact-val">{f.value}</span>
-            <span className="ns-fact-source">{f.source}</span>
-            <button className="ns-btn-sm ns-btn-dismiss" onClick={() => remove(f.key)}>×</button>
+          <div key={f.key}>
+            <div className="ns-fact-row">
+              <span className="ns-fact-key">{f.key}</span>
+              <span className="ns-fact-val">{f.value}</span>
+              <span className="ns-fact-source">{f.source}</span>
+              <button className="ns-btn-sm" title="Earlier values" aria-label={`Earlier values of ${f.key}`}
+                onClick={() => setHistoryOf(historyOf === f.key ? null : f.key)}>🕘</button>
+              <button className="ns-btn-sm ns-btn-dismiss" onClick={() => remove(f.key)}>×</button>
+            </div>
+            {historyOf === f.key && <FactHistory factKey={f.key} />}
           </div>
         ))}
         {facts.length === 0 && <div className="ns-empty-mini">No facts stored. Add your name, preferences, and routines above.</div>}
@@ -508,6 +544,7 @@ export default function NorthStarModule() {
 
       <div className="m-content">
         {page === 'brain'     && <BrainPage />}
+        {page === 'memory'    && <MemoryPage />}
         {page === 'actions'   && <ActionsPage />}
         {page === 'knowledge' && <KnowledgePage />}
         {page === 'facts'     && <FactsPage />}
