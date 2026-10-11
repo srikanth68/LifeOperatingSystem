@@ -140,6 +140,20 @@ public static partial class MemorySearch
         return 0.60 * relevance + 0.20 * importanceNorm + 0.12 * recency + 0.08 * reinforcement;
     }
 
+    // A memory reached through an entity the message names (by name or alias) rather
+    // than by sharing a word with it. High enough to be recalled, below a strong text
+    // match, so naming the car brings its memories without drowning a direct hit.
+    public const double EntityRelevance = 0.75;
+
+    // An unconfirmed memory ranks a little below a confirmed one that matches as well.
+    // It is still recalled -- San is better off knowing it, labelled -- but where the
+    // two compete for the last slot, the confirmed one wins.
+    public const double ProposedWeight = 0.85;
+
+    public static double Score(double relevance, int importance, DateTime createdAt, int accessCount, DateTime now, string? status) =>
+        Score(relevance, importance, createdAt, accessCount, now)
+        * (status == NorthStar.Domain.Entities.MemoryStatus.Proposed ? ProposedWeight : 1.0);
+
     // For collapsing the same memory saved twice: case, spacing and trailing punctuation
     // are not a difference worth showing San two lines for.
     public static string Normalise(string content) =>

@@ -1,12 +1,10 @@
-using System.Data;
-using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using NorthStar.Application.Interfaces;
 using NorthStar.Domain.Entities;
 
 namespace NorthStar.Infrastructure.Data;
 
-public class NorthStarRepository(NorthStarDbContext db) : INorthStarRepository
+public partial class NorthStarRepository(NorthStarDbContext db) : INorthStarRepository
 {
     // ── Knowledge ──
     public async Task<KnowledgeEntry> AddEntryAsync(KnowledgeEntry entry)
@@ -176,16 +174,26 @@ public class NorthStarRepository(NorthStarDbContext db) : INorthStarRepository
         db.Snapshots.ToListAsync();
 
     // ── User facts ──
+    // A fact holds one current value; every value it is moved off, by a change or a
+    // delete, is kept as a FactRevision. Setting the same value again changes nothing.
     public async Task UpsertFactAsync(UserFact fact)
     {
+        var now = DateTime.UtcNow;
         var existing = await db.Facts.FindAsync(fact.Key);
         if (existing is not null)
         {
+            if (existing.Value != fact.Value)
+                db.FactRevisions.Add(RevisionOf(existing, now, FactChange.Replaced));
             existing.Value = fact.Value;
             existing.Source = fact.Source;
-            existing.UpdatedAt = DateTime.UtcNow;
+            existing.SourceRef = fact.SourceRef;
+            existing.UpdatedAt = now;
         }
-        else db.Facts.Add(fact);
+        else
+        {
+            fact.UpdatedAt = now;
+            db.Facts.Add(fact);
+        }
         await db.SaveChangesAsync();
     }
 
@@ -199,10 +207,23 @@ public class NorthStarRepository(NorthStarDbContext db) : INorthStarRepository
     {
         var f = await db.Facts.FindAsync(key);
         if (f is null) return false;
+        db.FactRevisions.Add(RevisionOf(f, DateTime.UtcNow, FactChange.Deleted));
         db.Facts.Remove(f);
         await db.SaveChangesAsync();
         return true;
     }
+
+    // Newest first: what it was most recently, then before that.
+    public Task<List<FactRevision>> GetFactHistoryAsync(string key) =>
+        db.FactRevisions.Where(r => r.Key == key)
+            .OrderByDescending(r => r.ValidTo).ThenByDescending(r => r.Id)
+            .AsNoTracking().ToListAsync();
+
+    private static FactRevision RevisionOf(UserFact f, DateTime now, string change) => new()
+    {
+        Key = f.Key, Value = f.Value, Source = f.Source, SourceRef = f.SourceRef,
+        ValidFrom = f.UpdatedAt, ValidTo = now, Change = change,
+    };
 
     // ── Activity events (append-only, event-level) ──
     public async Task<bool> AddEventIfNewAsync(ActivityEvent ev)
@@ -240,127 +261,5 @@ public class NorthStarRepository(NorthStarDbContext db) : INorthStarRepository
         var q = db.Events.Where(e => e.OccurredAt > sinceUtc);
         if (source is not null) q = q.Where(e => e.Source == source);
         return await q.OrderByDescending(e => e.OccurredAt).Take(limit).AsNoTracking().ToListAsync();
-    }
-
-    // ── Agent memory (FTS5) ──
-    public async Task<MemoryEntry> SaveMemoryAsync(MemoryEntry memory)
-    {
-        db.Memories.Add(memory);
-        await db.SaveChangesAsync();
-        return memory;
-    }
-
-    public async Task<List<MemoryEntry>> RecallMemoriesAsync(string query, string? kind, int limit)
-    {
-        // Topic words only, stemmed and prefix-matched, and never raw user text in the
-        // MATCH expression -- see MemorySearch. A message with no topic words recalls
-        // nothing rather than everything that shares an "is".
-        var match = MemorySearch.BuildMatch(query);
-        if (match is null) return [];
-
-        // Candidates by text relevance, generously, then re-ranked on relevance together
-        // with importance, recency and reinforcement. bm25 is read out alongside the id
-        // because the blend needs the score itself, not just the order.
-        var conn = db.Database.GetDbConnection();
-        if (conn.State != ConnectionState.Open) await conn.OpenAsync();
-
-        var hits = new List<(Guid Id, double Bm25)>();
-        await using (var cmd = conn.CreateCommand())
-        {
-            cmd.CommandText = """
-                SELECT m.Id, bm25(MemoryFts) FROM MemoryFts
-                JOIN Memories m ON m.rowid = MemoryFts.rowid
-                WHERE MemoryFts MATCH $match AND ($kind IS NULL OR m.Kind = $kind)
-                ORDER BY bm25(MemoryFts)
-                LIMIT $take
-                """;
-            AddParameter(cmd, "$match", match);
-            AddParameter(cmd, "$kind", (object?)kind ?? DBNull.Value);
-            AddParameter(cmd, "$take", Math.Max(limit * 4, 20));
-
-            await using var reader = await cmd.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-                hits.Add((reader.GetGuid(0), reader.GetDouble(1)));
-        }
-
-        var results = new List<MemoryEntry>();
-        if (hits.Count > 0)
-        {
-            var ids = hits.Select(h => h.Id).ToList();
-            var byId = (await db.Memories.Where(m => ids.Contains(m.Id)).AsNoTracking().ToListAsync())
-                .ToDictionary(m => m.Id);
-            var relevance = MemorySearch.NormaliseBm25(hits.Select(h => h.Bm25).ToList());
-            var now = DateTime.UtcNow;
-
-            results = hits
-                .Select((h, i) => (Entry: byId.GetValueOrDefault(h.Id), Relevance: relevance[i]))
-                .Where(x => x.Entry is not null)
-                .OrderByDescending(x => MemorySearch.Score(
-                    x.Relevance, x.Entry!.Importance, x.Entry.CreatedAt, x.Entry.AccessCount, now))
-                .Select(x => x.Entry!)
-                // The same memory distilled twice is one thing to know, not two lines.
-                .DistinctBy(m => MemorySearch.Normalise(m.Content))
-                .Take(limit)
-                .ToList();
-        }
-
-        // Fallback when the index finds nothing, for a fragment inside a longer word:
-        // a substring scan per topic word, most important first.
-        if (results.Count == 0)
-        {
-            foreach (var word in MemorySearch.Keywords(query).Where(w => w.Length >= 3))
-            {
-                var q = db.Memories.Where(m => m.Content.ToLower().Contains(word) || m.Tags.ToLower().Contains(word));
-                if (kind is not null) q = q.Where(m => m.Kind == kind);
-                results.AddRange(await q.OrderByDescending(m => m.Importance)
-                    .ThenByDescending(m => m.CreatedAt)
-                    .Take(limit).AsNoTracking().ToListAsync());
-                if (results.Count >= limit) break;
-            }
-            results = results.DistinctBy(m => m.Id).Take(limit).ToList();
-        }
-
-        // Reinforcement: recalled memories get touched, so "hot" memories are observable.
-        if (results.Count > 0)
-        {
-            var ids = results.Select(r => r.Id).ToList();
-            await db.Memories.Where(m => ids.Contains(m.Id))
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(m => m.LastAccessedAt, DateTime.UtcNow)
-                    .SetProperty(m => m.AccessCount, m => m.AccessCount + 1));
-        }
-        return results;
-    }
-
-    private static void AddParameter(DbCommand cmd, string name, object value)
-    {
-        var p = cmd.CreateParameter();
-        p.ParameterName = name;
-        p.Value = value;
-        cmd.Parameters.Add(p);
-    }
-
-    public async Task<List<MemoryEntry>> GetRecentMemoriesAsync(int limit, string? kind)
-    {
-        var q = db.Memories.AsQueryable();
-        if (kind is not null) q = q.Where(m => m.Kind == kind);
-        return await q.OrderByDescending(m => m.CreatedAt).Take(limit).AsNoTracking().ToListAsync();
-    }
-
-    public async Task<bool> DeleteMemoryAsync(Guid id)
-    {
-        var m = await db.Memories.FindAsync(id);
-        if (m is null) return false;
-        db.Memories.Remove(m);
-        await db.SaveChangesAsync();
-        return true;
-    }
-
-    public async Task<(int Total, Dictionary<string, int> ByKind)> GetMemoryStatsAsync()
-    {
-        var byKind = await db.Memories.GroupBy(m => m.Kind)
-            .Select(g => new { Kind = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.Kind, x => x.Count);
-        return (byKind.Values.Sum(), byKind);
     }
 }

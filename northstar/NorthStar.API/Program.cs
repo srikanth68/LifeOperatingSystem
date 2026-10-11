@@ -85,6 +85,10 @@ using (var scope = app.Services.CreateScope())
     ";
     await cmd.ExecuteNonQueryAsync();
 
+    // Columns and tables added since the first deploy (memory lifecycle, provenance,
+    // fact history, entities and links). EnsureCreated never touches an existing file.
+    await NorthStarSchema.UpgradeAsync(conn);
+
     // The memory search index lives with the code that queries it, so tests build the
     // same index production does. It also migrates an index created before stemming.
     await MemorySearch.EnsureSchemaAsync(conn);

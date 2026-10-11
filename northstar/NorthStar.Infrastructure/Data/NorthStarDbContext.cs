@@ -14,6 +14,9 @@ public class NorthStarDbContext(DbContextOptions<NorthStarDbContext> options) : 
     public DbSet<UserFact> Facts => Set<UserFact>();
     public DbSet<MemoryEntry> Memories => Set<MemoryEntry>();
     public DbSet<ActivityEvent> Events => Set<ActivityEvent>();
+    public DbSet<FactRevision> FactRevisions => Set<FactRevision>();
+    public DbSet<NamedEntity> Entities => Set<NamedEntity>();
+    public DbSet<RecordLink> Links => Set<RecordLink>();
 
     // SQLite has no timezone-aware column type — every DateTime loses its Kind on
     // round-trip and comes back Unspecified, which System.Text.Json then serializes
@@ -75,6 +78,28 @@ public class NorthStarDbContext(DbContextOptions<NorthStarDbContext> options) : 
             e.HasIndex(m => m.Kind);
             e.HasIndex(m => m.CreatedAt);
             e.HasIndex(m => m.Importance);
+            e.HasIndex(m => m.Status);
+            e.HasIndex(m => m.ContentKey);
+        });
+
+        b.Entity<FactRevision>(e =>
+        {
+            e.HasKey(r => r.Id);
+            e.HasIndex(r => r.Key);
+        });
+
+        b.Entity<NamedEntity>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.NameKey).IsUnique();
+        });
+
+        b.Entity<RecordLink>(e =>
+        {
+            e.HasKey(x => x.Id);
+            // One edge of a given kind between two records; adding it again is a no-op.
+            e.HasIndex(x => new { x.FromType, x.FromId, x.Relation, x.ToType, x.ToId }).IsUnique();
+            e.HasIndex(x => new { x.ToType, x.ToId });
         });
 
         b.Entity<ActivityEvent>(e =>
