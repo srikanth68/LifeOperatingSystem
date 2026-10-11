@@ -156,7 +156,7 @@ That's it. One command spins up all APIs, workers, and the frontend.
 
 ### San — AI Assistant
 - **Fully local LLM** — Gemma on llama.cpp, on the same machine. Nothing is sent to a cloud model
-- **Native tool calling** — San runs its own agent loop and can act, not just answer: 44 tools across every module, served over MCP
+- **Native tool calling** — San runs its own agent loop and can act, not just answer: 56 tools across every module, served over MCP
 - **Multimodal** — send it a photo; speech-to-text runs on the same model rather than a second service
 - **Voice calls** — speak to San and hear it reply, with responses chunked so it starts talking before the whole answer is rendered
 - Chat context enriched with live data from all running modules
@@ -177,7 +177,7 @@ That's it. One command spins up all APIs, workers, and the frontend.
 | Workers | .NET BackgroundService with PeriodicTimer |
 | Notifications | Telegram Bot API |
 | AI | Gemma on llama.cpp, running locally — native tool calling, vision, and speech-to-text on one model (`IChatProvider` keeps cloud models swappable) |
-| Agent tooling | MCP (Model Context Protocol) gateway exposing 44 tools to any harness |
+| Agent tooling | MCP (Model Context Protocol) gateway exposing 56 tools to any harness |
 | Bank Sync | Plaid API |
 | Health Data | Oura Ring API (OAuth 2.0) |
 

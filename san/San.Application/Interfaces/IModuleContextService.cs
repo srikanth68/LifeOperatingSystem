@@ -23,7 +23,10 @@ public interface IModuleContextService
     // never throws — but the caller has to be able to tell, because advancing a
     // "distilled up to here" cursor past a memory that was never stored loses it
     // permanently and silently.
-    Task<bool> SaveMemoryAsync(string content, string kind, int importance, CancellationToken ct = default);
+    // The origin says how far it can be trusted and where it came from (see MemoryOrigin);
+    // without one it is saved as San's own, unconfirmed conclusion.
+    Task<bool> SaveMemoryAsync(string content, string kind, int importance,
+        MemoryOrigin? origin = null, CancellationToken ct = default);
 
     // NorthStar facts, formatted for the system prompt (stable between turns), and the
     // newest active insights, for the per-turn context. Null when there are none or

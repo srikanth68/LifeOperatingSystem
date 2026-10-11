@@ -328,39 +328,12 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
         if (result is not { } r || !r.TryGetProperty("memories", out var mems) || mems.ValueKind != JsonValueKind.Array || mems.GetArrayLength() == 0)
             return null;
 
-        // Every recalled memory carries the date it was SAVED, and this is not optional.
-        //
-        // A memory saved on 24 July read "Meeting with ECSE team scheduled for 2 PM
-        // today." It was true that day. Recalled undated 39 times since, San reported a
-        // 2 PM meeting on each of them -- correctly, given what it was shown, because
-        // nothing in the line said the sentence was three weeks old. The model was not
-        // inventing anything; it was reading a stale fact presented as a current one.
-        //
-        // The date cannot repair a memory that says "today", but it makes the staleness
-        // visible: San's time context already states the current date, so a dated
-        // "today" becomes something it can compare against and discount.
-        var lines = new List<string>();
-        foreach (var m in mems.EnumerateArray())
-        {
-            var content = m.TryGetProperty("content", out var c) ? c.GetString() : null;
-            var kind = m.TryGetProperty("kind", out var k) ? k.GetString() : null;
-            if (string.IsNullOrWhiteSpace(content)) continue;
-
-            var saved = m.TryGetProperty("createdAt", out var ca) && ca.TryGetDateTime(out var dt)
-                ? dt.ToString("yyyy-MM-dd")
-                : null;
-
-            var tag = string.Join(", ", new[] { kind, saved }.Where(x => !string.IsNullOrWhiteSpace(x)));
-            lines.Add(tag.Length > 0 ? $"- ({tag}) {content}" : $"- {content}");
-        }
-
-        if (lines.Count == 0) return null;
-
-        // Said once for the whole block rather than per line, and said at all because the
-        // model otherwise reads a recalled sentence as present tense.
-        return "(each line is dated with when it was SAVED - a memory saying \"today\" means "
-             + "the day it was saved, not now)\n"
-             + string.Join("\n", lines);
+        // Dated, and labelled when San inferred it rather than was told -- see RecalledMemories.
+        return San.Application.RecalledMemories.Format(mems.EnumerateArray().Select(m => new San.Application.RecalledMemories.Item(
+            Content: m.TryGetProperty("content", out var c) ? c.GetString() ?? "" : "",
+            Kind: m.TryGetProperty("kind", out var k) ? k.GetString() : null,
+            SavedUtc: m.TryGetProperty("createdAt", out var ca) && ca.TryGetDateTime(out var dt) ? dt : null,
+            Status: m.TryGetProperty("status", out var st) ? st.GetString() : null)));
     }
 
     public async Task<string?> BuildUserFactsAsync(CancellationToken ct = default)
@@ -387,10 +360,19 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
             limit);
     }
 
-    public Task<bool> SaveMemoryAsync(string content, string kind, int importance, CancellationToken ct = default) =>
+    // Without an origin a memory is San's own conclusion: proposed, not settled fact.
+    public Task<bool> SaveMemoryAsync(string content, string kind, int importance,
+        San.Application.MemoryOrigin? origin = null, CancellationToken ct = default) =>
         PostToBrainAsync(
             "/api/memory",
-            new { content, kind, importance, source = "san" },
+            new
+            {
+                content, kind, importance, source = "san",
+                status = origin?.Status ?? San.Application.MemoryOrigin.Proposed,
+                sourceRef = origin?.SourceRef,
+                evidence = origin?.Evidence,
+                entities = origin?.Entities,
+            },
             HealthComponents.NorthStarWrite, ct);
 
     public async Task SaveKnowledgeAsync(string source, string topic, string summary, CancellationToken ct = default) =>

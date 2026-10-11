@@ -11,7 +11,7 @@ namespace San.Application;
 // scaffolding that no amount of rewording touches. Dropping a tool is the only thing
 // that removes scaffolding.
 //
-// Nothing is deleted. The gateway still publishes all 44 to any other agent that
+// Nothing is deleted. The gateway still publishes the whole catalogue to any agent that
 // connects to it, and CHAT_TOOLS_EXCLUDE overrides this list without a rebuild -- set
 // it empty to get everything back.
 public static class ChatTools

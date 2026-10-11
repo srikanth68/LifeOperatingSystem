@@ -10,15 +10,111 @@ namespace Maaya.Mcp.Tools;
 [McpServerToolType]
 public sealed class MemoryTools(ModuleGateway gw)
 {
+    // What an agent saves is PROPOSED unless the user said it: recalled, labelled
+    // unconfirmed, and waiting in NorthStar for the owner to confirm. confirmed=true is
+    // for the user's own direct statement, never the agent's inference.
     [McpServerTool(Name = "memory_save")]
-    [Description("Persist durable memory to NorthStar - use this, not internal memory, for preferences, decisions, notable events, learned procedures. One fact per call. Write ABSOLUTE dates, never \"today\"/\"tomorrow\". Save only what you have confirmed. content* · kind observation|preference|event|decision|skill · tags csv · importance 1-5")]
+    [Description("Persist durable memory to NorthStar - use this, not internal memory, for preferences, facts, decisions, notable events, learned procedures. One fact per call. Write ABSOLUTE dates, never \"today\"/\"tomorrow\". content* · kind observation|preference|fact|event|decision|skill · confirmed true ONLY if the user told you this directly (else it is saved as unconfirmed) · evidence: the user's own words it rests on · entities: names it is about, ; separated (\"Honda Civic; vehicle:Honda Civic\") · supersedes: id of a memory this corrects · tags csv · importance 1-5")]
     public Task<string> MemorySave(
         string content,
         string kind = "observation",
+        bool confirmed = false,
+        string? evidence = null,
+        string? entities = null,
+        string? supersedes = null,
         string tags = "",
         int importance = 3) =>
         gw.SendAsync("northstar", HttpMethod.Post, "/api/memory",
-            new { content, kind, tags, importance, source = "mcp" });
+            new
+            {
+                content, kind, tags, importance, source = "mcp",
+                status = confirmed ? "active" : "proposed",
+                evidence,
+                entities = SplitNames(entities),
+                supersedes = Guid.TryParse(supersedes, out var s) ? s : (Guid?)null,
+            });
+
+    // Correct or withdraw. A correction never overwrites: the old memory is kept, marked
+    // superseded, and an unconfirmed correction of a confirmed memory waits for the owner.
+    [McpServerTool(Name = "memory_correct")]
+    [Description("Fix a memory that is wrong or out of date. memory* id (from memory_recall) · content: the corrected text (omit to withdraw the memory entirely) · reason · confirmed true ONLY if the user told you the correction directly")]
+    public async Task<string> MemoryCorrect(
+        string memory,
+        string? content = null,
+        string? reason = null,
+        bool confirmed = false)
+    {
+        if (!Guid.TryParse(memory, out var id))
+            return "{\"error\":\"memory must be the id from memory_recall\"}";
+
+        if (string.IsNullOrWhiteSpace(content))
+            return await gw.SendAsync("northstar", HttpMethod.Post, $"/api/memory/{id}/retract", new { note = reason });
+
+        // The correction keeps the kind and weight of what it corrects.
+        var original = await gw.GetAsync("northstar", $"/api/memory/{id}");
+        string kind = "observation";
+        int importance = 3;
+        try
+        {
+            using var doc = JsonDocument.Parse(original);
+            if (doc.RootElement.TryGetProperty("error", out _)) return original;
+            var m = doc.RootElement.GetProperty("memory");
+            kind = m.GetProperty("kind").GetString() ?? kind;
+            importance = m.GetProperty("importance").GetInt32();
+        }
+        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException)
+        {
+            return original;
+        }
+
+        return await gw.SendAsync("northstar", HttpMethod.Post, "/api/memory",
+            new
+            {
+                content, kind, importance, source = "mcp", supersedes = id,
+                status = confirmed ? "active" : "proposed",
+                evidence = reason,
+            });
+    }
+
+    [McpServerTool(Name = "memory_why")]
+    [Description("Where a memory came from and how it changed: its source, the user's words it rests on, what it replaced and what replaced it. For \"why do you think that?\" target* memory id, or fact:<key> for a profile fact's previous values")]
+    public Task<string> MemoryWhy(string target) =>
+        target.StartsWith("fact:", StringComparison.OrdinalIgnoreCase)
+            ? gw.GetAsync("northstar", $"/api/facts/{Uri.EscapeDataString(target[5..].Trim())}/history")
+            : Guid.TryParse(target, out var id)
+                ? gw.GetAsync("northstar", $"/api/memory/{id}")
+                : Task.FromResult("{\"error\":\"target must be a memory id or fact:<key>\"}");
+
+    [McpServerTool(Name = "entity_lookup")]
+    [Description("Everything NorthStar holds about a person, place, vehicle, project or thing, by name or alias: its linked memories, facts and events. name*")]
+    public async Task<string> EntityLookup(string name)
+    {
+        var list = await gw.GetAsync("northstar", $"/api/entities?q={Uri.EscapeDataString(name)}&limit=10");
+        try
+        {
+            using var doc = JsonDocument.Parse(list);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return list;
+            var all = doc.RootElement.EnumerateArray().ToList();
+            if (all.Count == 0) return $"{{\"error\":{JsonSerializer.Serialize($"nothing known called \"{name}\"")}}}";
+
+            // An exact name or alias wins over a partial match.
+            var exact = all.FirstOrDefault(e =>
+                string.Equals(e.GetProperty("name").GetString(), name.Trim(), StringComparison.OrdinalIgnoreCase)
+                || (e.GetProperty("aliases").GetString() ?? "").Split(',').Any(a =>
+                    string.Equals(a.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase)));
+            var pick = exact.ValueKind == JsonValueKind.Object ? exact : all[0];
+            return await gw.GetAsync("northstar", $"/api/entities/{pick.GetProperty("id").GetString()}");
+        }
+        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException)
+        {
+            return list;
+        }
+    }
+
+    private static string[]? SplitNames(string? names) =>
+        string.IsNullOrWhiteSpace(names)
+            ? null
+            : names.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     [McpServerTool(Name = "memory_recall")]
     [Description("Full-text relevance-ranked search of long-term memory. Call FIRST when you need context on the user, past decisions, or prior sessions. query* · limit 1-50")]
@@ -34,7 +130,7 @@ public sealed class MemoryTools(ModuleGateway gw)
         gw.GetAsync("northstar", $"/api/memory/recent?limit={limit}");
 
     [McpServerTool(Name = "fact_set")]
-    [Description("Set a stable single-valued profile fact (overwrites). Free-form knowledge -> memory_save. key* snake_case · value*")]
+    [Description("Set a stable single-valued profile fact (the previous value is kept in its history - memory_why fact:<key>). Free-form knowledge -> memory_save. key* snake_case · value*")]
     public Task<string> FactSet(
         string key,
         string value) =>

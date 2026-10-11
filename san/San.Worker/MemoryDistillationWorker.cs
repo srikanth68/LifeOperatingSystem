@@ -26,8 +26,10 @@ public class MemoryDistillationWorker(IServiceProvider services, ILogger<MemoryD
         "status. NEVER record that a reminder, alert, task or calendar event was created - those are " +
         "already stored in the app that owns them, and repeating them here makes the assistant claim " +
         "it set reminders it never set. Write absolute dates (2026-08-17), never today or tomorrow. " +
-        "Format: one memory per line as `kind|text`, where kind is one of preference, fact, " +
-        "decision, event. If there is nothing worth saving, output exactly: NONE. No other text.";
+        "Format: one memory per line as `kind|text|names`, where kind is one of preference, fact, " +
+        "decision, event, and names are the specific people, places, vehicles, projects or " +
+        "organisations it is about, separated by ; (leave empty if none). " +
+        "If there is nothing worth saving, output exactly: NONE. No other text.";
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -83,30 +85,31 @@ public class MemoryDistillationWorker(IServiceProvider services, ILogger<MemoryD
             return;
         }
 
+        // Everything here is San's own conclusion from the conversation, so it is saved as
+        // proposed: recalled, labelled unconfirmed, and waiting for the owner to confirm it
+        // in NorthStar. Each carries what it was drawn from -- the chat window, and the
+        // user's own words in it.
+        var sourceRef = MemoryDistillation.SourceRef(since.First().Id, since.Last().Id);
+        var evidence = MemoryDistillation.Evidence(since.Select(m => (m.Role, m.Content)));
+
         int saved = 0;
         int failed = 0;
         int rejected = 0;
-        foreach (var line in reply.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var line in MemoryDistillation.Parse(reply))
         {
-            var sep = line.IndexOf('|');
-            if (sep <= 0 || sep >= line.Length - 1) continue;
-            var kind = line[..sep].Trim().ToLowerInvariant();
-            var text = line[(sep + 1)..].Trim();
-            if (text.Length < 3) continue;
-            if (kind is not ("preference" or "fact" or "decision" or "event")) kind = "observation";
-
             // The prompt above asks for this too, but asking is not enough: every one of
             // the reminder-echo memories now polluting recall was produced by a model
             // that had been told to ignore transient status.
-            if (!MemoryWorthKeeping.Keep(text, out var why))
+            if (!MemoryWorthKeeping.Keep(line.Text, out var why))
             {
-                logger.LogInformation("Memory rejected ({Why}): {Text}", why, text);
+                logger.LogInformation("Memory rejected ({Why}): {Text}", why, line.Text);
                 rejected++;
                 continue;
             }
 
-            var importance = kind is "preference" or "decision" ? 4 : 3;
-            if (await brain.SaveMemoryAsync(text, kind, importance, ct)) saved++;
+            var importance = line.Kind is "preference" or "decision" ? 4 : 3;
+            var origin = new MemoryOrigin(MemoryOrigin.Proposed, sourceRef, evidence, line.Entities);
+            if (await brain.SaveMemoryAsync(line.Text, line.Kind, importance, origin, ct)) saved++;
             else failed++;
         }
 

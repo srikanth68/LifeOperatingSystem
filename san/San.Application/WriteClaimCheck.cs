@@ -15,7 +15,10 @@ public static class WriteClaimCheck
     // built-in registry -- share one verb convention, so a tool added later classifies
     // correctly without anyone remembering to update a list here.
     private static readonly string[] WriteVerbs =
-        ["create", "add", "log", "set", "update", "delete", "remove", "complete", "checkin", "sync", "send"];
+        // "save" and "correct" were missing, so a turn that really did call memory_save and
+        // said "I've saved that" was treated as claiming work it never did.
+        ["create", "add", "log", "set", "update", "delete", "remove", "complete", "checkin", "sync", "send",
+         "save", "correct"];
 
     public static bool IsWriteTool(string name)
     {

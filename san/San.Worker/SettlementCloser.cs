@@ -64,7 +64,11 @@ public static class SettlementCloser
             var amount = s.Amount is { } a ? $" of {a:0.00}" : "";
             await moduleContext.SaveMemoryAsync(
                 $"On {MaayaClock.Today:yyyy-MM-dd}, email confirmed the {s.Vendor} {s.What ?? "obligation"}{amount} was settled.",
-                "event", 3, ct);
+                "event", 3,
+                // The model read the email and concluded it; the closing that followed is
+                // reversible, and so is this until the owner confirms it.
+                new MemoryOrigin(MemoryOrigin.Proposed, $"san:settlement:{s.Vendor}", Entities: [s.Vendor]),
+                ct);
         }
 
         if (closedLines.Count == 0)
