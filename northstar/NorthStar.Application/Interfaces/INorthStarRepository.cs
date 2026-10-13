@@ -48,7 +48,10 @@ public interface INorthStarRepository
     // Activity events (append-only, event-level, real occurrence timestamps)
     Task<bool> AddEventIfNewAsync(ActivityEvent ev);              // false = duplicate EventKey, skipped
     Task<int> AddEventsIfNewAsync(IEnumerable<ActivityEvent> evs); // returns count actually inserted
+    Task<ActivityEvent?> GetEventByKeyAsync(string eventKey);
     Task<List<ActivityEvent>> GetEventsSinceAsync(DateTime sinceUtc, string? source = null, int limit = 200);
+    // Recent events from one source whose Detail mentions any of the needles (an address, a thread id).
+    Task<List<ActivityEvent>> FindEventsAsync(string source, IReadOnlyList<string> detailContainsAny, int days = 365, int limit = 5);
 
     // Agent memory (FTS5-ranked long-term store, with a lifecycle -- see MemoryStatus)
     Task<MemoryEntry> SaveMemoryAsync(MemoryEntry memory);   // raw insert, no rules

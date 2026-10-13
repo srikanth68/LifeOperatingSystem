@@ -28,6 +28,21 @@ public interface IModuleContextService
     Task<bool> SaveMemoryAsync(string content, string kind, int importance,
         MemoryOrigin? origin = null, CancellationToken ct = default);
 
+    // What NorthStar already holds that relates to a piece of text (an email): entities
+    // it names, matching memories, earlier events from the same senders or thread.
+    // Null when NorthStar is unreachable -- the email is still read, just without it.
+    Task<System.Text.Json.JsonElement?> GetRelatedAsync(
+        string text, IReadOnlyList<string> senders, string? thread, CancellationToken ct = default);
+
+    // An event in NorthStar's activity log; idempotent on eventKey. Returns its id
+    // (also when it already existed), or null when NorthStar could not be reached.
+    Task<Guid?> RecordEventAsync(string source, string kind, string title, string? detail,
+        DateTime occurredAtUtc, string eventKey, CancellationToken ct = default);
+
+    // Links a record to entities by name, creating any entity not yet known.
+    Task LinkToEntitiesAsync(string recordType, Guid recordId, IEnumerable<string> entityNames,
+        string source, string? sourceRef, CancellationToken ct = default);
+
     // NorthStar facts, formatted for the system prompt (stable between turns), and the
     // newest active insights, for the per-turn context. Null when there are none or
     // NorthStar is unreachable -- a chat turn never fails over either. See UserKnowledge.

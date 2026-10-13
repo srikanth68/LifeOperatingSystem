@@ -6,13 +6,22 @@ namespace San.Application.Interfaces;
 // EmailFilter treats their absence as "no bulk signal", i.e. keep, which is the safe
 // direction to fail in. Header keys are LOWERCASE by convention; the filter looks them
 // up that way.
+//
+// Id and ThreadId are the provider's own: they make each email processed exactly once
+// (ProcessedEmails) and let NorthStar find the earlier messages in a conversation.
+// Body is the full text (BodyIsHtml when the provider only had HTML); EmailText turns
+// it into what the model reads.
 public record EmailMessage(
     string From,
     string Subject,
     string Snippet,
     DateTime ReceivedAtUtc,
     IReadOnlyDictionary<string, string>? Headers = null,
-    IReadOnlyList<string>? Labels = null);
+    IReadOnlyList<string>? Labels = null,
+    string? Id = null,
+    string? ThreadId = null,
+    string? Body = null,
+    bool BodyIsHtml = false);
 
 // One implementation per provider (google, microsoft). San.API resolves the right one by
 // Provider key when starting/completing an OAuth connection; San.Worker's EmailTriageWorker

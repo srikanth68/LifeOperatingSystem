@@ -63,6 +63,10 @@ public interface ISanRepository
     Task RecordSightingAsync(NotificationLedgerEntry entry, bool notified, bool recordedKnowledge);
     Task ClearLedgerAsync();
 
+    // Emails already dealt with, by "<provider>:<message id>" -- see ProcessedEmail.
+    Task<HashSet<string>> GetProcessedEmailKeysAsync(IEnumerable<string> keys);
+    Task MarkEmailProcessedAsync(string key, string account, string outcome);
+
     // Email accounts (triage worker)
     Task<List<EmailAccount>> GetEmailAccountsAsync();
     Task<EmailAccount?> GetEmailAccountAsync(Guid id);

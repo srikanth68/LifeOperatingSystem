@@ -306,6 +306,28 @@ public class SanRepository(SanDbContext db) : ISanRepository
         await db.SaveChangesAsync();
     }
 
+    // ── Processed emails ──
+    public async Task<HashSet<string>> GetProcessedEmailKeysAsync(IEnumerable<string> keys)
+    {
+        var wanted = keys.Distinct().ToList();
+        if (wanted.Count == 0) return [];
+        var found = await db.ProcessedEmails.Where(p => wanted.Contains(p.Key)).Select(p => p.Key).ToListAsync();
+        return found.ToHashSet();
+    }
+
+    public async Task MarkEmailProcessedAsync(string key, string account, string outcome)
+    {
+        var existing = await db.ProcessedEmails.FindAsync(key);
+        if (existing is null)
+            db.ProcessedEmails.Add(new ProcessedEmail { Key = key, Account = account, Outcome = outcome, ProcessedAt = DateTime.UtcNow });
+        else
+        {
+            existing.Outcome = outcome;
+            existing.ProcessedAt = DateTime.UtcNow;
+        }
+        await db.SaveChangesAsync();
+    }
+
     // ── Email accounts ──
     public Task<List<EmailAccount>> GetEmailAccountsAsync() =>
         db.EmailAccounts.OrderBy(a => a.EmailAddress).ToListAsync();

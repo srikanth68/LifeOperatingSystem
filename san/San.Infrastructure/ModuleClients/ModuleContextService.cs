@@ -372,8 +372,44 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
                 sourceRef = origin?.SourceRef,
                 evidence = origin?.Evidence,
                 entities = origin?.Entities,
+                supersedes = origin?.Supersedes,
             },
             HealthComponents.NorthStarWrite, ct);
+
+    public Task<JsonElement?> GetRelatedAsync(
+        string text, IReadOnlyList<string> senders, string? thread, CancellationToken ct = default) =>
+        PostForJsonAsync("northstar", "/api/context/related",
+            new { text, senders, thread, source = "email", limit = 6 }, ct);
+
+    public async Task<Guid?> RecordEventAsync(string source, string kind, string title, string? detail,
+        DateTime occurredAtUtc, string eventKey, CancellationToken ct = default)
+    {
+        var result = await PostForJsonAsync("northstar", "/api/events",
+            new { source, kind, title, detail, occurredAt = occurredAtUtc, eventKey }, ct);
+        if (result is { } r && r.TryGetProperty("event", out var ev)
+            && ev.TryGetProperty("id", out var id) && id.TryGetGuid(out var g))
+            return g;
+        return null;
+    }
+
+    // Idempotent end to end: entities are upserted by name and NorthStar refuses a
+    // second copy of the same link, so re-reading an email adds nothing.
+    public async Task LinkToEntitiesAsync(string recordType, Guid recordId, IEnumerable<string> entityNames,
+        string source, string? sourceRef, CancellationToken ct = default)
+    {
+        foreach (var name in entityNames.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var upsert = await PostForJsonAsync("northstar", "/api/entities", new { name }, ct);
+            if (upsert is not { } u || !u.TryGetProperty("entity", out var e)
+                || !e.TryGetProperty("id", out var eid) || !eid.TryGetGuid(out var entityId))
+                continue;
+            await PostForJsonAsync("northstar", "/api/links", new
+            {
+                fromType = recordType, fromId = recordId.ToString(), relation = "mentions",
+                toType = "entity", toId = entityId.ToString(), basis = "observed", source, sourceRef,
+            }, ct);
+        }
+    }
 
     public async Task SaveKnowledgeAsync(string source, string topic, string summary, CancellationToken ct = default) =>
         await PostToBrainAsync(
@@ -525,6 +561,34 @@ public class ModuleContextService(IHttpClientFactory httpFactory, TokenService t
         {
             await health.RecordAsync(HealthComponents.NorthStarWrite, false, ex.Message, ct);
             return false;
+        }
+    }
+
+    // Best-effort POST that returns the JSON body, or null on any failure. Recorded
+    // against the NorthStar write health like the other brain writes.
+    private async Task<JsonElement?> PostForJsonAsync(string client, string path, object payload, CancellationToken ct)
+    {
+        try
+        {
+            var http = httpFactory.CreateClient(client);
+            using var req = new HttpRequestMessage(HttpMethod.Post, path)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"),
+            };
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ServiceToken());
+            using var resp = await http.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode)
+            {
+                await health.RecordAsync(HealthComponents.NorthStarWrite, false, $"HTTP {(int)resp.StatusCode} from {path}", ct);
+                return null;
+            }
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+            return doc.RootElement.Clone();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            await health.RecordAsync(HealthComponents.NorthStarWrite, false, ex.Message, ct);
+            return null;
         }
     }
 

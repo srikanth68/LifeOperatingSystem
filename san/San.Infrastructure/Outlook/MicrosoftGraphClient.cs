@@ -91,11 +91,14 @@ public class MicrosoftGraphClient(HttpClient http) : IEmailProviderClient
         // sees no headers and keeps the message, which is the safe direction to fail.
         var url = $"{GraphBase}/me/mailFolders/inbox/messages" +
                   $"?$filter={Uri.EscapeDataString(filter)}" +
-                  $"&$select=from,subject,bodyPreview,receivedDateTime,internetMessageHeaders" +
-                  $"&$top=25&$orderby=receivedDateTime asc";
+                  $"&$select=id,conversationId,from,subject,bodyPreview,body,receivedDateTime,internetMessageHeaders" +
+                  $"&$top=50&$orderby=receivedDateTime asc";
 
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
         req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
+        // Graph converts the body to plain text server-side when asked; without this
+        // header most mail comes back as HTML.
+        req.Headers.TryAddWithoutValidation("Prefer", "outlook.body-content-type=\"text\"");
         var resp = await http.SendAsync(req);
         resp.EnsureSuccessStatusCode();
         var page = await resp.Content.ReadFromJsonAsync<GraphMessagePage>()
@@ -117,7 +120,10 @@ public class MicrosoftGraphClient(HttpClient http) : IEmailProviderClient
                     .ToDictionary(g => g.Key, g => g.First().Value ?? ""),
                 // Graph has no equivalent of Gmail's CATEGORY_* classification, so
                 // Outlook relies on headers alone.
-                []))
+                [],
+                Id: m.Id, ThreadId: m.ConversationId,
+                Body: m.Body?.Content,
+                BodyIsHtml: string.Equals(m.Body?.ContentType, "html", StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
         return (JsonSerializer.Serialize(token), messages);
@@ -139,7 +145,9 @@ public class MicrosoftGraphClient(HttpClient http) : IEmailProviderClient
         GraphFrom? From, string? Subject, string? BodyPreview, DateTime ReceivedDateTime,
         // Null whenever Graph declines to expand it on a collection query — handled at
         // the call site rather than defaulted, so "absent" stays distinguishable.
-        List<GraphHeader>? InternetMessageHeaders);
+        List<GraphHeader>? InternetMessageHeaders,
+        string? Id = null, string? ConversationId = null, GraphBody? Body = null);
+    private record GraphBody(string? ContentType, string? Content);
     private record GraphFrom(GraphEmailAddress? EmailAddress);
     private record GraphEmailAddress(string? Address);
     private record GraphHeader(string? Name, string? Value);

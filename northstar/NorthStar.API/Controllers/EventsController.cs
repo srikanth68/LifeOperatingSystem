@@ -22,7 +22,10 @@ public class EventsController(INorthStarRepository repo) : ControllerBase
 
         var ev = ToEntity(req);
         var inserted = await repo.AddEventIfNewAsync(ev);
-        return Ok(new { inserted, @event = ToResult(ev) });
+        // A repeat returns the event that is stored, not the unsaved copy it was sent:
+        // a caller linking to the event by id needs the id that exists.
+        var stored = inserted ? ev : await repo.GetEventByKeyAsync(ev.EventKey) ?? ev;
+        return Ok(new { inserted, @event = ToResult(stored) });
     }
 
     [HttpPost("batch")]

@@ -256,10 +256,30 @@ public partial class NorthStarRepository(NorthStarDbContext db) : INorthStarRepo
         return inserted;
     }
 
+    public Task<ActivityEvent?> GetEventByKeyAsync(string eventKey) =>
+        db.Events.AsNoTracking().FirstOrDefaultAsync(e => e.EventKey == eventKey);
+
     public async Task<List<ActivityEvent>> GetEventsSinceAsync(DateTime sinceUtc, string? source, int limit)
     {
         var q = db.Events.Where(e => e.OccurredAt > sinceUtc);
         if (source is not null) q = q.Where(e => e.Source == source);
         return await q.OrderByDescending(e => e.OccurredAt).Take(limit).AsNoTracking().ToListAsync();
+    }
+
+    // In memory after a date-bounded fetch: "Detail contains any of these" does not
+    // translate, and a year of one source's events is a few thousand rows at most.
+    public async Task<List<ActivityEvent>> FindEventsAsync(string source, IReadOnlyList<string> detailContainsAny, int days = 365, int limit = 5)
+    {
+        var needles = detailContainsAny.Where(n => !string.IsNullOrWhiteSpace(n) && n.Trim().Length >= 3)
+            .Select(n => n.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (needles.Count == 0) return [];
+
+        var cutoff = DateTime.UtcNow.AddDays(-days);
+        var recent = await db.Events.Where(e => e.Source == source && e.OccurredAt > cutoff)
+            .OrderByDescending(e => e.OccurredAt).Take(2000).AsNoTracking().ToListAsync();
+        return recent
+            .Where(e => e.Detail is { } d && needles.Any(n => d.Contains(n, StringComparison.OrdinalIgnoreCase)))
+            .Take(limit)
+            .ToList();
     }
 }

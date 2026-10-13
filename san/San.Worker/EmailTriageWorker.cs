@@ -3,22 +3,34 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using San.Application;
 using San.Application.Interfaces;
+using San.Domain.Entities;
 using San.Infrastructure.Agent;
 
 namespace San.Worker;
 
 // Polls every connected mailbox (San.API's EmailController owns the OAuth connect flow;
-// this only reads what's already connected), hands new messages to Gemma with the same
-// tool catalog chat uses, and lets it decide what's worth a reminder/alert/calendar
-// event/property task versus just a mention in the Telegram summary. One combined
-// Telegram push per run, not one per email — a quiet inbox should stay quiet.
+// this only reads what's already connected) and reads each new email properly:
+//
+//   1. Bulk mail is dropped by rule (EmailFilter) before any model sees it.
+//   2. Every other email is read IN FULL, one at a time, beside what NorthStar already
+//      knows that relates to it -- earlier emails from the same sender or thread, the
+//      entities it names, matching memories (see EmailBrain).
+//   3. The model acts with the same tools chat uses (reminders, events, property
+//      tasks) and says what the email was, what it teaches, and what it corrects.
+//   4. The worker writes that to NorthStar: a dated event with the email as its key,
+//      linked to the entities it concerns; proposed memories sourced to the email; and
+//      proposed corrections of memories it contradicts. The email itself is not stored.
+//
+// Findings from the whole run go out as ONE Telegram message: a quiet inbox stays
+// quiet, and ten emails do not become ten pings.
 public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWorker> logger) : BackgroundService
 {
     private static readonly TimeSpan CheckInterval = TimeSpan.FromMinutes(15);
 
-    // Prompt + sentinel live in San.Application (EmailTriageDefaults) because San.API
-    // exposes the editor for them — keeping one copy stops the two from drifting.
-    // The sentinel is interpreted by FindingParser, not here.
+    // Reading in full is a model call per email. A backlog (a first connect, a week
+    // away) is worked through over several runs rather than in one that never ends:
+    // the mailbox cursor holds at the first email left unread.
+    private const int MaxReadsPerRun = 12;
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -38,27 +50,19 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
             using var scope = services.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<ISanRepository>();
             var providers = scope.ServiceProvider.GetServices<IEmailProviderClient>().ToList();
-            var chat = scope.ServiceProvider.GetRequiredService<IChatProvider>();
-            var toolRouter = scope.ServiceProvider.GetRequiredService<AgentToolRouter>();
             var telegram = scope.ServiceProvider.GetRequiredService<ITelegramNotifier>();
             var moduleContext = scope.ServiceProvider.GetRequiredService<IModuleContextService>();
+            var health = scope.ServiceProvider.GetRequiredService<IHealthTracker>();
 
             var accounts = (await repo.GetEmailAccountsAsync()).Where(a => a.Active).ToList();
             if (accounts.Count == 0)
             {
-                // Say so, and record the run as healthy.
-                //
-                // This used to return in silence, which made "no mailbox has ever been
-                // connected" look exactly like "the timer is dead" from the outside --
-                // no Telegram, no log line, no health entry. The same reasoning already
-                // moved the health record above the empty-batch exit further down; this
-                // branch was simply missed, and it is the one that fires when the OAuth
-                // connect was never completed.
+                // Say so, and record the run as healthy. Returning in silence made "no
+                // mailbox has ever been connected" look exactly like "the timer is dead".
                 logger.LogInformation(
                     "Email triage: no active mailbox connected, nothing to do. "
                     + "Connect one from Settings (GET /api/email/accounts lists what is linked).");
-                await scope.ServiceProvider.GetRequiredService<IHealthTracker>()
-                    .RecordAsync(HealthComponents.WorkerEmailTriage, true, ct: ct);
+                await health.RecordAsync(HealthComponents.WorkerEmailTriage, true, ct: ct);
                 return;
             }
 
@@ -67,8 +71,8 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
             var keepSenders = await repo.GetSettingAsync(EmailFilter.KeepSendersKey);
             var dropSenders = await repo.GetSettingAsync(EmailFilter.DropSendersKey);
 
+            var run = new RunState(scope.ServiceProvider, repo, moduleContext);
             var runStartedAt = DateTime.UtcNow;
-            var batch = new List<string>();
 
             foreach (var account in accounts)
             {
@@ -81,88 +85,29 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
 
                 try
                 {
-                    var since = account.LastCheckedAt ?? account.CreatedAt;
-                    var (updatedTokenJson, messages) = await provider.FetchNewMessagesAsync(account, since);
-
-                    await repo.UpdateEmailAccountAsync(account.Id, a =>
-                    {
-                        a.TokenJson = updatedTokenJson;
-                        a.LastCheckedAt = runStartedAt;
-                    });
-
-                    if (messages.Count == 0) continue;
-
-                    // Bulk mail is removed here rather than being described to the model
-                    // and hoped about. Every drop is logged with its reason: a filter
-                    // that silently ate a real bill would be worse than the spam it
-                    // prevents, so it must always be possible to see what it took.
-                    var kept = 0;
-                    foreach (var m in messages)
-                    {
-                        var verdict = EmailFilter.Classify(m, keepSenders, dropSenders);
-                        if (!verdict.Keep)
-                        {
-                            logger.LogInformation("Filtered out \"{Subject}\" from {From} — {Reason}.",
-                                Trim(m.Subject), Trim(m.From), verdict.Reason);
-                            continue;
-                        }
-                        kept++;
-                        batch.Add($"[{account.EmailAddress}] From: {m.From} | Subject: {m.Subject} | Received: {m.ReceivedAtUtc:u}\n{m.Snippet}");
-                    }
-
-                    logger.LogInformation("{Kept} of {Count} new message(s) in {Email} reached triage.",
-                        kept, messages.Count, account.EmailAddress);
+                    await ReadMailboxAsync(account, provider, run, keepSenders, dropSenders, runStartedAt, ct);
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Failed to fetch mail for {Email} — leaving its cursor untouched, will retry next run", account.EmailAddress);
+                    logger.LogError(ex, "Failed to read mail for {Email} — its cursor holds, will retry next run", account.EmailAddress);
                 }
             }
 
-            // Before the empty-batch exit: fetching every mailbox and finding nothing new
-            // is a completed run. Only recording at the bottom would make a healthy quiet
-            // worker look identical to one whose timer had died.
-            var health = scope.ServiceProvider.GetRequiredService<IHealthTracker>();
+            // Before the empty exit: reading every mailbox and finding nothing new is a
+            // completed run, and must look different from a timer that has died.
             await health.RecordAsync(HealthComponents.WorkerEmailTriage, true, ct: ct);
-
-            if (batch.Count == 0) return;
-
-            var timeContext = await moduleContext.BuildTimeContextAsync(null, ct);
-            var userTurn = new ChatTurn("user", "New emails since last check:\n\n" + string.Join("\n\n", batch));
-            var (allTools, executor) = await toolRouter.ResolveAsync(ct);
-
-            // The prompt says to make reminders, not NorthStar action items. Saying so
-            // is not enough on its own -- a tool the model can see is a tool it
-            // eventually reaches for, and this one had been quietly filling NorthStar
-            // with things the user never looked at. Taking it off the table for this
-            // run is the half that cannot be talked out of.
-            //
-            // Only for triage. action_add is still there in chat, where the user asks
-            // for a backlog item deliberately.
-            var tools = allTools.Where(t => !EmailTriageDefaults.WithheldTools.Contains(t.Name)).ToList();
-            var basePrompt = await repo.GetSettingAsync(EmailTriageDefaults.PromptKey) ?? EmailTriageDefaults.Prompt;
-            var systemPrompt = basePrompt + "\n\n" + timeContext + "\n\n" + SanOutputConventions.Text;
-
-            // enableThinking: triage has to actually read each email and judge it —
-            // important vs noise, and whether it warrants a reminder/alert/event/task.
-            // This runs on a 15-minute timer with nobody waiting, so the extra
-            // deliberation tokens cost nothing that matters here.
-            var reply = await chat.CompleteWithToolsAsync(
-                systemPrompt, [userTurn], tools, executor, maxSteps: 10, enableThinking: true, ct: ct);
-            logger.LogInformation("Email triage reply ({Length} chars): {Preview}",
-                reply.Length, reply.Length > 500 ? reply[..500] + "…" : reply);
 
             // Closing runs BEFORE raising, deliberately. If one email confirms a payment
             // and another chases it, the reminder should end the run completed rather
-            // than recreated — and DuplicateGuard only stops a second copy of something
+            // than recreated -- DuplicateGuard only stops a second copy of something
             // still open, so the order is what makes the two agree.
-            await SettlementCloser.ApplyAsync(
-                Settlements.Parse(reply), repo, telegram, moduleContext, logger, ct);
+            if (run.Settlements.Count > 0)
+                await SettlementCloser.ApplyAsync(run.Settlements, repo, telegram, moduleContext, logger, ct);
 
-            // Keyed findings through the shared ledger — same key namespace as the
-            // system audit, so a bill both of them notice is reported once. Also
-            // records to NorthStar so San's time context surfaces it in chat.
-            await FindingDispatcher.DispatchAsync(reply, "email", repo, telegram, moduleContext, logger, ct);
+            // Keyed findings through the shared ledger -- same key namespace as the
+            // system audit, so a bill both of them notice is reported once.
+            if (run.Findings.Count > 0)
+                await FindingDispatcher.DispatchFindingsAsync(run.Findings, "email", repo, telegram, moduleContext, logger, ct);
         }
         catch (Exception ex)
         {
@@ -177,8 +122,199 @@ public class EmailTriageWorker(IServiceProvider services, ILogger<EmailTriageWor
         }
     }
 
+    private async Task ReadMailboxAsync(
+        EmailAccount account, IEmailProviderClient provider, RunState run,
+        string? keepSenders, string? dropSenders, DateTime runStartedAt, CancellationToken ct)
+    {
+        var since = account.LastCheckedAt ?? account.CreatedAt;
+        var (updatedTokenJson, messages) = await provider.FetchNewMessagesAsync(account, since);
+
+        // The token now, before anything else can fail: refresh tokens rotate, and
+        // losing the new one locks the mailbox out until it is reconnected.
+        await run.Repo.UpdateEmailAccountAsync(account.Id, a => a.TokenJson = updatedTokenJson);
+
+        var keys = messages.Select(m => KeyOf(account.Provider, m)).ToList();
+        var done = await run.Repo.GetProcessedEmailKeysAsync(keys);
+
+        DateTime? holdAt = null;
+        int read = 0, filtered = 0, deferred = 0;
+
+        try
+        {
+            foreach (var m in messages.OrderBy(m => m.ReceivedAtUtc))
+            {
+                var key = KeyOf(account.Provider, m);
+                if (done.Contains(key)) continue;
+
+                // Bulk mail is removed here rather than described to the model and
+                // hoped about. Every drop is logged with its reason: a filter that
+                // silently ate a real bill would be worse than the spam it prevents.
+                var verdict = EmailFilter.Classify(m, keepSenders, dropSenders);
+                if (!verdict.Keep)
+                {
+                    logger.LogInformation("Filtered out \"{Subject}\" from {From} — {Reason}.",
+                        Trim(m.Subject), Trim(m.From), verdict.Reason);
+                    await run.Repo.MarkEmailProcessedAsync(key, account.EmailAddress, "filtered");
+                    filtered++;
+                    continue;
+                }
+
+                if (run.Reads >= MaxReadsPerRun)
+                {
+                    holdAt ??= m.ReceivedAtUtc.AddSeconds(-1);
+                    deferred++;
+                    continue;
+                }
+
+                // Held here before the read: if it throws, the next run starts at this
+                // email rather than past it.
+                holdAt ??= m.ReceivedAtUtc.AddSeconds(-1);
+                var outcome = await ReadOneAsync(account, m, run, ct);
+                await run.Repo.MarkEmailProcessedAsync(key, account.EmailAddress, outcome);
+                run.Reads++;
+                read++;
+                if (deferred == 0) holdAt = null;
+            }
+        }
+        finally
+        {
+            // Past everything read; held at the first email still to read, if any.
+            var cursor = holdAt ?? runStartedAt;
+            await run.Repo.UpdateEmailAccountAsync(account.Id, a => a.LastCheckedAt = cursor);
+        }
+
+        if (messages.Count > 0)
+            logger.LogInformation(
+                "{Email}: {Count} new — {Read} read, {Filtered} filtered as bulk, {Deferred} left for the next run.",
+                account.EmailAddress, messages.Count, read, filtered, deferred);
+    }
+
+    private async Task<string> ReadOneAsync(EmailAccount account, EmailMessage m, RunState run, CancellationToken ct)
+    {
+        var (senderName, senderAddress) = EmailSender.Parse(m.From);
+        var hasBody = !string.IsNullOrWhiteSpace(m.Body);
+        var body = EmailText.Clean(EmailText.ToPlainText(hasBody ? m.Body : m.Snippet, hasBody && m.BodyIsHtml));
+
+        var related = await run.Context.GetRelatedAsync(
+            $"{m.Subject}\n{body}",
+            senderAddress is null ? [] : [senderAddress],
+            m.ThreadId, ct);
+
+        var turn = EmailBrainPrompt.UserTurn(
+            account.EmailAddress, m.From, m.Subject, m.ReceivedAtUtc, body, EmailBrainPrompt.Related(related));
+
+        var (system, tools, executor) = await run.PromptAndToolsAsync(ct);
+        var reply = await run.Chat.CompleteWithToolsAsync(
+            system, [new ChatTurn("user", turn)], tools, executor,
+            // Thinking on: this has to actually read and judge an email, and nobody is
+            // waiting on a 15-minute timer.
+            maxSteps: 8, enableThinking: true, ct: ct);
+
+        run.Findings.AddRange(FindingParser.Parse(reply));
+        run.Settlements.AddRange(Settlements.Parse(reply));
+
+        var notes = EmailNotes.Parse(reply);
+        logger.LogInformation("Read \"{Subject}\" from {From}: {Importance}{Summary}",
+            Trim(m.Subject), Trim(m.From), notes.Importance, notes.Summary is null ? "" : $" — {notes.Summary}");
+        if (!notes.Keep) return notes.Importance;
+
+        await RememberAsync(account, m, senderName, senderAddress, notes, related, run.Context, ct);
+        return notes.Importance;
+    }
+
+    // What the email teaches, written to NorthStar with the email as its source. All of
+    // it best-effort: a NorthStar outage costs the brain an email, never the reminders
+    // the model already made.
+    private async Task RememberAsync(
+        EmailAccount account, EmailMessage m, string? senderName, string? senderAddress,
+        EmailNotes notes, System.Text.Json.JsonElement? related, IModuleContextService context, CancellationToken ct)
+    {
+        var messageId = m.Id ?? $"{senderAddress}:{m.ReceivedAtUtc:O}";
+        var sourceRef = EmailBrainPrompt.SourceRef(account.Provider, messageId);
+        var evidence = $"Email \"{m.Subject}\" from {senderName ?? senderAddress ?? m.From}, {m.ReceivedAtUtc:yyyy-MM-dd}";
+
+        var title = notes.Summary ?? $"Email from {senderName ?? senderAddress}: {m.Subject}";
+        var eventId = await context.RecordEventAsync(
+            "email", "email", Cap(title, 300),
+            EmailBrainPrompt.Detail(senderAddress, m.ThreadId, m.Subject),
+            m.ReceivedAtUtc, EmailBrainPrompt.EventKey(account.Provider, messageId), ct);
+
+        // What it is about: what the model named, what NorthStar recognised in the
+        // text, and -- when the email mattered enough to act on or remember -- the
+        // sender, so the next email from them is read beside this one.
+        var about = notes.Remember.SelectMany(r => r.About)
+            .Concat(EmailBrainPrompt.RelatedEntityNames(related))
+            .Concat(senderName is not null && (notes.Importance == EmailNotes.Act || notes.Remember.Count > 0)
+                ? [senderName] : [])
+            .ToList();
+        if (eventId is { } id && about.Count > 0)
+            await context.LinkToEntitiesAsync("event", id, about, "san", sourceRef, ct);
+
+        foreach (var r in notes.Remember)
+        {
+            if (!MemoryWorthKeeping.Keep(r.Text, out var why))
+            {
+                logger.LogInformation("Email memory rejected ({Why}): {Text}", why, r.Text);
+                continue;
+            }
+            await context.SaveMemoryAsync(r.Text, r.Kind, 3,
+                new MemoryOrigin(MemoryOrigin.Proposed, sourceRef, evidence, r.About), ct);
+        }
+
+        var shown = EmailBrainPrompt.RelatedMemoryKinds(related);
+        foreach (var c in notes.Corrects)
+        {
+            if (!shown.TryGetValue(c.Memory, out var kind))
+            {
+                logger.LogInformation("Correction ignored: memory {Id} was not among those shown for this email.", c.Memory);
+                continue;
+            }
+            await context.SaveMemoryAsync(c.Text, kind, 3,
+                new MemoryOrigin(MemoryOrigin.Proposed, sourceRef, evidence, Supersedes: c.Memory), ct);
+        }
+    }
+
+    private static string KeyOf(string provider, EmailMessage m) =>
+        $"{provider}:{m.Id ?? $"{m.From}|{m.Subject}|{m.ReceivedAtUtc:O}"}";
+
+    private static string Cap(string s, int max) => s.Length <= max ? s : s[..max];
+
     // Log lines only — a 200-character marketing subject should not make the filter's
     // decisions unreadable in the logs.
     private static string Trim(string? s) =>
         string.IsNullOrEmpty(s) ? "(none)" : s.Length > 70 ? s[..70] + "…" : s;
+
+    // Everything one run shares across mailboxes: the model, the tools (resolved once,
+    // and only if something is read), and the findings and settlements gathered for
+    // the single notification at the end.
+    private sealed class RunState(IServiceProvider sp, ISanRepository repo, IModuleContextService context)
+    {
+        public ISanRepository Repo { get; } = repo;
+        public IModuleContextService Context { get; } = context;
+        public IChatProvider Chat { get; } = sp.GetRequiredService<IChatProvider>();
+        public List<AgentFinding> Findings { get; } = [];
+        public List<Settlement> Settlements { get; } = [];
+        public int Reads { get; set; }
+
+        private (string, List<ToolDefinition>, Func<ToolCall, CancellationToken, Task<string>>)? resolved;
+
+        public async Task<(string System, List<ToolDefinition> Tools, Func<ToolCall, CancellationToken, Task<string>> Executor)>
+            PromptAndToolsAsync(CancellationToken ct)
+        {
+            if (resolved is { } r) return r;
+
+            var (allTools, executor) = await sp.GetRequiredService<AgentToolRouter>().ResolveAsync(ct);
+            // A tool the model can see is a tool it eventually reaches for: the
+            // withheld ones are taken off the table, not just discouraged.
+            var tools = allTools.Where(t => !EmailTriageDefaults.WithheldTools.Contains(t.Name)).ToList();
+
+            var basePrompt = await Repo.GetSettingAsync(EmailTriageDefaults.PromptKey) ?? EmailTriageDefaults.Prompt;
+            var timeContext = await Context.BuildTimeContextAsync(null, ct);
+            var system = basePrompt + "\n\n" + timeContext + "\n\n" + SanOutputConventions.Text
+                         + "\n\n" + EmailTriageDefaults.OutputContract;
+
+            resolved = (system, tools, executor);
+            return resolved.Value;
+        }
+    }
 }

@@ -36,10 +36,12 @@ public class EmailTriageDefaultsTests
     [Fact]
     public void NothingElseIsWithheld()
     {
-        // Withholding is a blunt instrument. Reminders, alerts, calendar events,
-        // property tasks and memory saves are all still on the table, and the list
-        // should stay short enough to justify each entry.
-        Assert.Single(EmailTriageDefaults.WithheldTools);
+        // Withholding is a blunt instrument. Reminders, alerts, calendar events and
+        // property tasks are all still on the table, and the list should stay short
+        // enough to justify each entry: action_add (email belongs in reminders), and
+        // the two memory writes, because the worker writes what an email teaches from
+        // the reply's "remember"/"corrects" fields, sourced to the email and proposed.
+        Assert.Equal(["action_add", "memory_correct", "memory_save"], EmailTriageDefaults.WithheldTools.Order());
     }
 
     // ── reminder vs calendar event ──────────────────────────────────────────────

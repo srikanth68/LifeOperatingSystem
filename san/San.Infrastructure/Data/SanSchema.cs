@@ -77,6 +77,14 @@ public static class SanSchema
             -- Failures are the rows worth finding: each one is a labelled training
             -- example whose correct answer is already known.
             CREATE INDEX IF NOT EXISTS IX_TurnLogs_Claimed ON TurnLogs(ClaimedUnverifiedWrite);
+
+            CREATE TABLE IF NOT EXISTS ProcessedEmails (
+                Key TEXT PRIMARY KEY,
+                Account TEXT NOT NULL DEFAULT '',
+                ProcessedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00',
+                Outcome TEXT NOT NULL DEFAULT ''
+            );
+            CREATE INDEX IF NOT EXISTS IX_ProcessedEmails_ProcessedAt ON ProcessedEmails(ProcessedAt);
             """, ct);
 
         // Columns added to tables that already exist in deployed databases. SQLite has

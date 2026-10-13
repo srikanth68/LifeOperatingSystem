@@ -35,6 +35,7 @@ public class SanDbContext(DbContextOptions<SanDbContext> options) : DbContext(op
     public DbSet<EmailAccount> EmailAccounts => Set<EmailAccount>();
     public DbSet<NotificationLedgerEntry> NotificationLedger => Set<NotificationLedgerEntry>();
     public DbSet<TurnLog> TurnLogs => Set<TurnLog>();
+    public DbSet<ProcessedEmail> ProcessedEmails => Set<ProcessedEmail>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -88,6 +89,12 @@ public class SanDbContext(DbContextOptions<SanDbContext> options) : DbContext(op
         {
             e.HasKey(a => a.Id);
             e.HasIndex(a => new { a.Provider, a.EmailAddress }).IsUnique();
+        });
+
+        b.Entity<ProcessedEmail>(e =>
+        {
+            e.HasKey(x => x.Key);
+            e.HasIndex(x => x.ProcessedAt);
         });
 
         b.Entity<NotificationLedgerEntry>(e =>

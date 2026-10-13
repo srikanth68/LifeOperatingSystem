@@ -9,11 +9,14 @@ namespace San.Application;
 //   Evidence: the user's own words it was drawn from, kept with the memory so "why do
 //           you think that?" has an answer after the chat is gone.
 //   Entities: who or what it is about; NorthStar links the memory to each.
+//   Supersedes: the memory this one corrects. Proposed, it waits for the owner to
+//           confirm before it replaces anything (NorthStar enforces that).
 public record MemoryOrigin(
     string Status,
     string? SourceRef = null,
     string? Evidence = null,
-    IReadOnlyList<string>? Entities = null)
+    IReadOnlyList<string>? Entities = null,
+    Guid? Supersedes = null)
 {
     public const string Proposed = "proposed";
     public const string Active = "active";
