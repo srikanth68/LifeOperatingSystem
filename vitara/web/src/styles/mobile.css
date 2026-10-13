@@ -160,6 +160,7 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
   display: flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 24px; border-radius: 24px; border: 0;
   background: var(--teal); color: var(--on-accent); font: 600 16px 'Instrument Sans', system-ui, sans-serif; text-decoration: none; cursor: pointer; width: 100%;
 }
+.vm-cta:disabled { opacity: .45; cursor: default; }
 .vm-signout { width: 100%; min-height: 48px; margin-top: 14px; border-radius: 24px; border: 1px solid var(--line2); background: transparent; color: var(--t2); font: 600 15px 'Instrument Sans', system-ui, sans-serif; cursor: pointer; }
 
 /* ── Today ───────────────────────────────────────────────────────────────── */
@@ -582,6 +583,55 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
 .vmi-ah .vmi-eyebrow { margin: 0; }
 .vmi-ah-big { font-size: 22px; font-weight: 700; }
 .vm-shape.s-apple::after { background: var(--coral); border-radius: 50%; }
+
+/* Patterns */
+.vmi-ring-thin { fill: none; stroke: var(--track); stroke-width: 2; }
+.b-bad { fill: var(--gold); } .b-good { fill: var(--teal); } .b-steady { fill: var(--line2); }
+.b-none { fill: none; stroke: var(--t3); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.vmi-bead-num { font: 700 24px 'Instrument Sans', system-ui, sans-serif; fill: var(--t1); }
+.vmi-together { display: flex; gap: 16px; align-items: center; border-color: var(--line2); }
+.vmi-together > svg { flex: none; }
+.vmi-together-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.vmi-together-body .vmi-eyebrow { margin: 0; }
+.vmi-together-title { font-size: 17px; font-weight: 600; line-height: 1.25; }
+.vmi-quiet { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 10px 16px; border: 1px dashed var(--line2); border-radius: 16px; background: transparent; color: var(--t2); font: 400 13px 'Instrument Sans', system-ui, sans-serif; text-align: left; cursor: pointer; }
+.vmi-quiet i { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--line2); }
+.vmi-quiet span { flex: 1; } .vmi-quiet em { font-style: normal; font-size: 18px; }
+.vmi-comp { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.vmi-comp li { display: flex; gap: 10px; align-items: baseline; }
+.vmi-comp li i { flex: none; width: 10px; height: 10px; border-radius: 50%; transform: translateY(1px); }
+.vmi-comp li i.b-bad { background: var(--gold); } .vmi-comp li i.b-good { background: var(--teal); } .vmi-comp li i.b-steady { background: var(--line2); }
+.vmi-comp li i.b-none { border: 1.5px dashed var(--t3); }
+.vmi-comp li em { font-style: normal; font-weight: 700; color: var(--blue); }
+.vmi-comp li span { color: var(--t2); } .vmi-comp li b { color: var(--t1); font-weight: 600; }
+.vmi-rel { display: flex; flex-direction: column; }
+.vmi-rel-row { display: grid; grid-template-columns: minmax(0, 1fr) 96px 44px; align-items: center; gap: 10px; min-height: 52px; padding: 6px 0; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--t1); font: inherit; text-align: left; cursor: pointer; }
+.vmi-rel-row:first-child { border-top: 0; }
+.vmi-rel-name { font-size: 14px; font-weight: 600; line-height: 1.25; }
+.vmi-rel-name small { display: block; font-size: 12px; font-weight: 400; color: var(--t2); }
+.vmi-rel-bar { position: relative; height: 10px; border-radius: 5px; background: var(--track); }
+.vmi-rel-mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--t3); }
+.vmi-rel-fill { position: absolute; top: 0; bottom: 0; border-radius: 5px; }
+.vmi-rel-fill.is-pos { background: var(--sleep); } .vmi-rel-fill.is-neg { background: var(--blue); }
+.vmi-rel-row > b { text-align: right; font-size: 14px; }
+.vmi-btn-s { min-height: 36px; padding: 0 14px; font-size: 13px; }
+.vmi-trials { display: flex; flex-direction: column; gap: 16px; }
+.vmi-trial { display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+.vmi-trial:first-child { border-top: 0; padding-top: 0; }
+.vmi-tag.t-steady { color: var(--t2); background: var(--s3); }
+.vmi-seg-before { fill: var(--line2); } .vmi-seg-settle { fill: var(--track); }
+.vmi-seg-after { fill: var(--sleep); opacity: .2; } .vmi-seg-done { fill: var(--sleep); opacity: .55; }
+.vmi-now { stroke: var(--t1); stroke-width: 2; }
+.vmi-t-violet { fill: var(--sleep); }
+.vmi-dot-before { fill: var(--t2); } .vmi-dot-after { fill: var(--sleep); }
+.vmi-rebound { fill: none; stroke: var(--t1); stroke-dasharray: 3 3; }
+.vmi-link-dim { color: var(--t2); }
+.vmi-form { display: flex; flex-direction: column; gap: 14px; }
+.vmi-form label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--t2); }
+.vmi-form input, .vmi-form select { min-height: 48px; padding: 0 14px; border-radius: 14px; border: 1px solid var(--line2); background: var(--bg); color: var(--t1); font: 400 16px 'Instrument Sans', system-ui, sans-serif; }
+.vmi-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.vmi-chips button { min-height: 40px; padding: 0 14px; border-radius: 20px; border: 1px solid var(--line2); background: transparent; color: var(--t2); font: 600 14px 'Instrument Sans', system-ui, sans-serif; cursor: pointer; }
+.vmi-chips button.is-on { background: var(--t1); color: var(--bg); border-color: var(--t1); }
 
 /* Tap targets of at least 44px for the controls the existing pages use. */
 .vm .hx-btn, .vm .hx-btn-ghost, .vm select, .vm input:not([type="checkbox"]):not([type="radio"]) { min-height: 44px; }

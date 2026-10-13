@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { moduleApi } from '../services/apiHost';
 import { vitaraHeaders } from '../services/profile';
 import { addDays, todayInTz } from '../services/timezone';
-import { InsightTabBody, label as metricLabel, fmtValue } from '../pages/InsightModule';
+import { InsightTabBody } from '../pages/InsightModule';
+import { API, VITARA, get, num, useNamer, WhySheet, WhyLink, f1, lc } from './insightKit';
+import type { Why, Correlation } from './insightKit';
 import type { TabId } from '../pages/InsightModule';
 import { ScenarioSection } from '../components/health/Direction';
 import type { Readiness } from '../pages/VitaraModule';
 import { dateLine } from './Parts';
+import { PatternsView } from './MobileInsightPatterns';
 
 // Insight, drawn for the phone (design canvas: Main, Direction, Explain).
 //
@@ -16,15 +18,6 @@ import { dateLine } from './Parts';
 // opens one sheet that says what the picture means and how sure it is. Overview and
 // Direction are designed here; Patterns, You and Check borrow the desktop sections until
 // they get their own pass.
-const API = moduleApi(5110);
-const VITARA = moduleApi(5100);
-
-async function get<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: vitaraHeaders() });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-  return res.json() as Promise<T>;
-}
-
 // ── Types (only the fields drawn here) ──────────────────────────────────────
 
 interface Finding { key: string; type: string; metric: string; severity: string; summary: string; daysRunning: number }
@@ -39,9 +32,6 @@ interface Baseline { metric: string; mean: number; stdDev: number; median: numbe
 interface Derived { metric: string; day: string; value: number; inputs: string | null }
 interface Evidence { modelMae: number | null; persistenceMae: number; testedOnDays: number; modelWins: boolean; verdict: string }
 interface Forecast { day: string; value: number; low: number; high: number; method: 'model' | 'today' | 'none'; basis: string; evidence: Evidence }
-interface Split { cut: number | null; low: number; lowN: number | null; high: number; highN: number | null }
-interface Correlation { driver: string; outcome: string; lagDays: number; rho: number; n: number; split?: Split | null }
-interface CatalogueRow { key: string; label: string; unit: string; decimals: number }
 interface Hold {
   metric: string; label: string; unit: string | null; signature: string; changePoint: string; direction: string;
   before: number; after: number; open: boolean; heldForDays: number;
@@ -52,41 +42,6 @@ interface Projection {
   label: string; projected: boolean; horizonDays: number; currentLevel: number | null;
   projectedLow: number | null; projectedHigh: number | null; basis: string; grade: string; caveat: string;
   refusal: string | null; history: { day: string; value: number; n: number }[];
-}
-
-// ── Numbers ─────────────────────────────────────────────────────────────────
-
-function useCatalogue() {
-  const q = useQuery({
-    queryKey: ['insight-metrics'],
-    queryFn: () => get<{ metrics: CatalogueRow[] }>(`${API}/api/health/metrics`),
-    staleTime: 10 * 60_000,
-  });
-  return useMemo(() => new Map((q.data?.metrics ?? []).map(m => [m.key, m])), [q.data]);
-}
-
-// "1 h 32" for minutes, "6.5 h" for hours, otherwise the number at the catalogue's precision.
-function num(v: number | null | undefined, unit?: string | null, decimals = 0): string {
-  if (v == null || !Number.isFinite(v)) return '—';
-  if (unit === 'min') {
-    const m = Math.round(Math.abs(v));
-    const s = v < 0 ? '−' : '';
-    return m >= 60 ? `${s}${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${s}${m} min`;
-  }
-  const n = Math.abs(v) >= 1000 ? Math.round(v).toLocaleString('en-US') : v.toFixed(decimals);
-  return unit && unit !== 'score' && unit !== 'steps' ? `${n} ${unit}` : n;
-}
-
-function useNamer() {
-  const cat = useCatalogue();
-  return {
-    name: (m: string) => cat.get(m)?.label ?? metricLabel(m),
-    fmt: (m: string, v: number | null | undefined, withUnit = true) => {
-      const c = cat.get(m);
-      if (!c) return v == null ? '—' : fmtValue(m, v);
-      return num(v, withUnit ? c.unit : (c.unit === 'min' ? 'min' : null), c.decimals);
-    },
-  };
 }
 
 // Each metric's normal, today's reading against it, and its last two weeks as real values.
@@ -125,34 +80,6 @@ function useTiles() {
 }
 
 type Tile = ReturnType<typeof useTiles>['tiles'][number];
-
-// ── The Why sheet ───────────────────────────────────────────────────────────
-
-type Why = { title: string; body: ReactNode };
-
-function WhySheet({ why, close }: { why: Why | null; close: () => void }) {
-  return (
-    <>
-      <div className={`vm-scrim ${why ? 'is-on' : ''}`} onClick={close} aria-hidden="true" />
-      <div className={`vm-sheet vmi-why ${why ? 'is-on' : ''}`} role="dialog" aria-label={why?.title ?? 'Why'} aria-hidden={!why}>
-        <span className="vm-grab" aria-hidden="true" />
-        <div className="vmi-why-head">
-          <h2>{why?.title}</h2>
-          <button className="vmi-close" onClick={close} aria-label="Close" tabIndex={why ? 0 : -1}>×</button>
-        </div>
-        <div className="vmi-why-body">{why?.body}</div>
-      </div>
-    </>
-  );
-}
-
-const WhyLink = ({ onClick, children = 'Why? ›' }: { onClick: () => void; children?: ReactNode }) => (
-  <button type="button" className="vmi-link" onClick={onClick}>{children}</button>
-);
-
-// ── Charts ──────────────────────────────────────────────────────────────────
-
-const f1 = (n: number) => n.toFixed(1);
 
 // A line against the person's usual band, with the band's edges and the latest value written on it.
 function BandLine({ values, band, label: fmt, width = 318, height = 64, tone = 'var(--gold)' }: {
@@ -294,7 +221,7 @@ function WhatMovesYou({ why, more }: { why: (w: Why) => void; more: () => void }
   // so the sentence names the cut instead of saying "more caffeine".
   const s = c.split;
   const when = c.lagDays === 1 ? ' the next day' : '';
-  const drv = name(c.driver).toLowerCase(), out = name(c.outcome);
+  const drv = lc(name(c.driver)), out = name(c.outcome);
   const line = s
     ? `${out}${when} runs ${s.high > s.low ? 'higher' : 'lower'} when ${drv} is over ${fmt(c.driver, s.cut)}`
     : `${out}${when} moves ${c.rho > 0 ? 'with' : 'against'} ${drv}`;
@@ -314,7 +241,7 @@ function WhatMovesYou({ why, more }: { why: (w: Why) => void; more: () => void }
         <WhyLink onClick={() => why({
           title: 'What moves you',
           body: <>
-            {s && <p>On days {drv} was over {fmt(c.driver, s.cut)}, {out.toLowerCase()}{when} was typically {fmt(c.outcome, s.high)}. On the others, {fmt(c.outcome, s.low)}.</p>}
+            {s && <p>On days {drv} was over {fmt(c.driver, s.cut)}, {lc(out)}{when} was typically {fmt(c.outcome, s.high)}. On the others, {fmt(c.outcome, s.low)}.</p>}
             <p className="vmi-muted">{q.data!.caveat}</p>
             <p className="vmi-muted">Tested with a rank correlation over {c.n} paired days, and kept only after a correction for testing many pairs at once.</p>
           </>,
@@ -553,7 +480,7 @@ function Areas({ domains }: { domains: Domain[] }) {
                 {d.metrics.map(m => <i key={m.metric} className={DOT[m.trajectory] ?? 'd-none'} title={`${m.label}: ${m.trajectory}`} />)}
               </div>
               <span className="vmi-area-note">
-                {moved ? `${moved.label.toLowerCase()} ${num(moved.latest, moved.unit, Math.abs(moved.latest ?? 0) < 10 ? 1 : 0)}`
+                {moved ? `${lc(moved.label)} ${num(moved.latest, moved.unit, Math.abs(moved.latest ?? 0) < 10 ? 1 : 0)}`
                   : d.gaps.missingKeyTests[0] ? <em>+ {d.gaps.missingKeyTests[0]}</em> : null}
               </span>
               <span className="vmi-muted vmi-small">{parts}</span>
@@ -703,7 +630,8 @@ export function MobileInsight({ header, addChange }: { header: (h: string, e: st
           </>
         )}
         {tab === 'direction' && <DirectionView why={setWhy} addChange={addChange} />}
-        {(tab === 'patterns' || tab === 'you' || tab === 'check') && (
+        {tab === 'patterns' && <PatternsView why={setWhy} />}
+        {(tab === 'you' || tab === 'check') && (
           <div className="vmi-borrowed insight-page"><InsightTabBody tab={tab} /></div>
         )}
       </div>
