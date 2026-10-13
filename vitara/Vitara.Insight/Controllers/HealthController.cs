@@ -91,6 +91,38 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         });
     }
 
+    // Steps held rather than adopted, open and released.
+    //
+    // A held baseline is deliberately frozen at the level before a change, and that is
+    // only safe if it is visible: how old the held level is, and how it can end.
+    [HttpGet("regime-holds")]
+    public async Task<IActionResult> RegimeHolds()
+    {
+        var today = LocalTime.Today;
+        var holds = await repo.GetRegimeHoldsAsync();
+
+        return Ok(holds
+            .OrderBy(h => h.IsOpen ? 0 : 1)
+            .ThenByDescending(h => h.ChangePointLocal)
+            .Select(h => new
+            {
+                h.Metric,
+                label = MetricCatalogue.Find(h.Metric)?.Label ?? h.Metric,
+                unit = MetricCatalogue.Find(h.Metric)?.Unit,
+                signature = h.BaselineSignature,
+                changePoint = h.ChangePointLocal.ToString("yyyy-MM-dd"),
+                h.Direction,
+                before = Math.Round(h.PreLevelMedian, 1),
+                after = Math.Round(h.PostLevelMedian, 1),
+                openedOn = h.OpenedLocal.ToString("yyyy-MM-dd"),
+                open = h.IsOpen,
+                heldForDays = (h.ReleasedLocal ?? today).DayNumber - h.OpenedLocal.DayNumber,
+                releasedOn = h.ReleasedLocal?.ToString("yyyy-MM-dd"),
+                releaseReason = h.ReleaseReason,
+                h.Explanation,
+            }));
+    }
+
     // Today's z-scores, ratios and slopes, with what fed them.
     [HttpGet("derived")]
     public async Task<IActionResult> Derived([FromQuery] int days = 14)

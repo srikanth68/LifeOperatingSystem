@@ -126,7 +126,19 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
 
         // Reach back beyond the baseline window so regime detection has history to
         // compare against, and so drift has ninety days to fit a slope over.
-        var observations = await repo.GetObservationsAsync(asOf.AddDays(-(windowDays + 120)), asOf);
+        //
+        // And back to the oldest open hold's pre-change window: a held baseline is
+        // computed from before the step, which can be long gone from the usual range.
+        var holds = await repo.GetRegimeHoldsAsync();
+        var acceptances = await repo.GetRegimeAcceptancesAsync();
+        var loadFrom = asOf.AddDays(-(windowDays + 120));
+        foreach (var hold in holds.Where(h => h.IsOpen))
+        {
+            var needed = hold.ChangePointLocal.AddDays(-windowDays - 1);
+            if (needed < loadFrom) loadFrom = needed;
+        }
+
+        var observations = await repo.GetObservationsAsync(loadFrom, asOf);
         if (observations.Count == 0) return;
 
         var excluded = await repo.GetExcludedPeriodsAsync();
@@ -134,7 +146,7 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
         var devices = await repo.GetDevicesAsync();
         var interventions = await repo.GetInterventionsAsync();
 
-        var inputs = new BaselineInputs(observations, excluded, travel, devices, interventions);
+        var inputs = new BaselineInputs(observations, excluded, travel, devices, interventions, holds, acceptances);
 
         var baselines = new List<Baseline>();
         var derived = new List<DerivedMetric>();
@@ -146,12 +158,25 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
         {
             var (metric, signature) = group.Key;
 
-            var baseline = BaselineCalculator.Compute(
+            var result = BaselineCalculator.ComputeWithHold(
                 metric, signature, asOf, inputs,
                 windowDays, HealthThresholds.MinBaselineN,
-                HealthThresholds.RegimeShiftZ, HealthThresholds.RegimeDwellDays);
+                HealthThresholds.RegimeShiftZ, HealthThresholds.RegimeDwellDays,
+                HealthThresholds.RegimeRevertDays, HealthThresholds.RegimeRevertFraction);
 
+            var baseline = result.Baseline;
             baselines.Add(baseline);
+
+            // Persisted here, the one place that writes: the calculator only says what
+            // it decided. Logged, because a hold opening or closing changes what
+            // "normal" means for that metric from today.
+            if (result.Hold is { } change)
+            {
+                await repo.SaveRegimeHoldAsync(change.Hold);
+                logger.LogInformation("Regime hold {Kind}: {Metric} step at {ChangePoint} ({Reason}).",
+                    change.Kind, metric, change.Hold.ChangePointLocal,
+                    change.Hold.ReleaseReason ?? "unexplained, harmful direction");
+            }
 
             // A z-score against a baseline that has not earned validity would be a
             // confident number built on four readings. Better to have no z-score than
@@ -243,7 +268,10 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
             // selects between rows for the analytes that have more than one.
             await repo.GetReferenceRangesAsync(),
             profile?.BiologicalSex,
-            profile?.CurrentAge));
+            profile?.CurrentAge,
+            // Re-read after this pass saved its own changes, so a hold opened this
+            // morning already keeps its finding open.
+            await repo.GetRegimeHoldsAsync()));
         var sync = await repo.SyncFindingsAsync(findings, asOf);
 
         // Opened and resolved are events; continued is a condition that is still true

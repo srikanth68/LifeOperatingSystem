@@ -272,6 +272,26 @@ public class FakeRepo : IVitaraRepository
     public List<Intervention> InterventionData { get; } = [];
     public Task<List<Intervention>> GetInterventionsAsync() => Task.FromResult(InterventionData);
 
+    public List<RegimeHold> HoldData { get; } = [];
+    public Task<List<RegimeHold>> GetRegimeHoldsAsync() => Task.FromResult(HoldData);
+    public Task SaveRegimeHoldAsync(RegimeHold hold)
+    {
+        HoldData.RemoveAll(h => h.Metric == hold.Metric && h.BaselineSignature == hold.BaselineSignature
+                                && h.ChangePointLocal == hold.ChangePointLocal);
+        HoldData.Add(hold);
+        return Task.CompletedTask;
+    }
+    public List<RegimeAcceptance> AcceptanceData { get; } = [];
+    public Task<List<RegimeAcceptance>> GetRegimeAcceptancesAsync() => Task.FromResult(AcceptanceData);
+    public Task<RegimeAcceptance> SaveRegimeAcceptanceAsync(RegimeAcceptance acceptance)
+    {
+        var existing = AcceptanceData.FirstOrDefault(a => a.Metric == acceptance.Metric
+            && a.BaselineSignature == acceptance.BaselineSignature && a.ChangePointLocal == acceptance.ChangePointLocal);
+        if (existing is not null) return Task.FromResult(existing);
+        AcceptanceData.Add(acceptance);
+        return Task.FromResult(acceptance);
+    }
+
     public Task<Intervention> SaveInterventionAsync(Intervention intervention)
     {
         InterventionData.Add(intervention);

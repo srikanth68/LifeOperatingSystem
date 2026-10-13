@@ -288,6 +288,41 @@ public static class FindingDetectors
         };
     }
 
+    // A step that is being held. Same key as the regime finding it continues, so the
+    // ledger sees one condition, not a new one, when the hold takes over.
+    public static Finding FromHold(RegimeHold hold, DateOnly today)
+    {
+        var heldFor = today.DayNumber - hold.OpenedLocal.DayNumber;
+        var before = Math.Round(hold.PreLevelMedian, 1);
+        var after = Math.Round(hold.PostLevelMedian, 1);
+        return new Finding
+        {
+            Key = Key(FindingTypes.RegimeChange, hold.Metric, hold.Direction),
+            Type = FindingTypes.RegimeChange,
+            Metric = hold.Metric,
+            Direction = hold.Direction,
+            Severity = "high",
+            Summary = $"{Name(hold.Metric)} moved the wrong way around {hold.ChangePointLocal:d MMM} " +
+                      $"({before} to {after}) and nothing recorded explains it. Your normal is being held at " +
+                      $"{before}, the level before the change, since {hold.OpenedLocal:d MMM} ({heldFor} days). " +
+                      "It is released if something you record explains it, if you accept the new level, " +
+                      "or if it comes back on its own.",
+            EvidenceJson = JsonSerializer.Serialize(new
+            {
+                before = Math.Round(hold.PreLevelMedian, 2),
+                after = Math.Round(hold.PostLevelMedian, 2),
+                changePoint = hold.ChangePointLocal.ToString("yyyy-MM-dd"),
+                heldSince = hold.OpenedLocal.ToString("yyyy-MM-dd"),
+                heldForDays = heldFor,
+                signature = hold.BaselineSignature,
+                adopted = false,
+                held = true,
+            }),
+            FirstDetectedLocal = hold.ChangePointLocal,
+            LastDetectedLocal = today,
+        };
+    }
+
     // ── Strain ──────────────────────────────────────────────────────────────────
     public static Finding? Strain(double? acwr, double lowBound, double highBound, DateOnly today)
     {

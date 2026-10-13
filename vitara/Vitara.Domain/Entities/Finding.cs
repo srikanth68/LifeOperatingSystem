@@ -148,6 +148,12 @@ public static class HealthThresholds
     public static double RegimeShiftZ => Env("VITARA_REGIME_SHIFT_Z", 1.5);
     public static int RegimeDwellDays => EnvInt("VITARA_REGIME_DWELL_DAYS", 14);
 
+    // When a held step has come back on its own: the last N days' median within this
+    // fraction of the step from the old level. A quarter remaining is "most of the way
+    // home"; see BaselineCalculator.Release.
+    public static int RegimeRevertDays => EnvInt("VITARA_REGIME_REVERT_DAYS", 14);
+    public static double RegimeRevertFraction => Env("VITARA_REGIME_REVERT_FRACTION", 0.25);
+
     // Drift: how many days without movement before a slow trend is worth saying.
     public static int DriftMinDays => EnvInt("VITARA_DRIFT_MIN_DAYS", 14);
 

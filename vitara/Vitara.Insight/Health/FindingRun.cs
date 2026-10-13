@@ -22,7 +22,11 @@ public record FindingRunInputs(
     // to come in. Sex and age select between rows where an analyte has more than one.
     IReadOnlyList<ReferenceRange>? ReferenceRangeRows = null,
     string? BiologicalSex = null,
-    int? Age = null);
+    int? Age = null,
+
+    // Steps held rather than adopted. An open hold keeps its finding open however old
+    // the step is; see RegimeHold.
+    IReadOnlyList<RegimeHold>? Holds = null);
 
 // Running every detector over one day's worth of computed state.
 //
@@ -140,8 +144,18 @@ public static class FindingRun
         // Re-detected here rather than read off the baseline row. The baseline stores
         // only where the current regime starts; the size and direction of the step are
         // what a finding has to say, and those are not persisted.
+        //
+        // Open holds first. The step may be months old and long out of the detector's
+        // view, and the finding must stay open for as long as the baseline is held --
+        // otherwise the hold would be invisible, which is the one thing it must not be.
+        var openHolds = (input.Holds ?? []).Where(h => h.IsOpen).ToList();
+        foreach (var hold in openHolds)
+            findings.Add(FindingDetectors.FromHold(hold, asOf));
+
         foreach (var metric in SlowMetrics)
         {
+            if (openHolds.Any(h => h.Metric == metric)) continue;
+
             var series = input.Observations
                 .Where(o => o.Metric == metric)
                 .GroupBy(o => o.ObservedDateLocal)

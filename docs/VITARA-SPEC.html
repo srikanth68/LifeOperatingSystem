@@ -996,8 +996,7 @@ CreatedAt           TEXT</code></pre>
         <div class="schema-head"><span>RegimeHolds</span><span class="owner">insight</span></div>
         <div class="schema-body">
           <p>A step seen and deliberately not adopted, remembered after the 60-day window has moved
-          past it. While open, the baseline is computed from before the change point.
-          Not yet read by the baseline calculator: tables first, behaviour next.</p>
+          past it. While open, the baseline is computed from before the change point.</p>
           <pre><code>Id                  INTEGER PK
 Metric              TEXT
 BaselineSignature   TEXT
@@ -1292,7 +1291,7 @@ UNIQUE (Driver, Outcome, LagDays, ComputedOnLocal)</code></pre>
           <tbody>
             <tr><td class="m">deviation</td><td>|z| ≥ 2.0 for 2 consecutive days <b>in the same direction</b></td><td>info, or notable above 3.5σ</td></tr>
             <tr><td class="m">early_illness</td><td>Two of three sustained 2 days: resting HR z ≥ 1.5, HRV z ≤ −1.5, skin temp z ≥ 1.5</td><td><b>high</b> if all three every day (confidence 0.8), else <b>notable</b> (0.55)</td></tr>
-            <tr><td class="m">regime_change</td><td>Step ≥ 1.5σ that then holds for 14 days</td><td><b>notable</b> if unexplained, <b>info</b> if a candidate cause exists</td></tr>
+            <tr><td class="m">regime_change</td><td>Step ≥ 1.5σ that then holds for 14 days</td><td><b>info</b> if a candidate cause exists, <b>notable</b> if unexplained and harmless, <b>high</b> while held</td></tr>
             <tr><td class="m">strain_risk</td><td>ACWR outside 0.8–1.3, or sleep debt ≥ 300 minutes</td><td><b>info only</b></td></tr>
             <tr><td class="m">drift</td><td>A 90-day trend that passed Mann–Kendall at p &lt; 0.01</td><td>info</td></tr>
             <tr><td class="m">staleness</td><td>An expected daily metric missing for &gt; 3 days</td><td>info</td></tr>
@@ -1374,6 +1373,42 @@ UNIQUE (Driver, Outcome, LagDays, ComputedOnLocal)</code></pre>
           entire system it feeds, and it looks like it is working the whole time.
         </p>
       </div>
+
+      <h3>A harmful step is held, not absorbed</h3>
+      <p>
+        A step is adopted as the new normal only when something recorded explains it, or
+        when it is in the harmless direction for that metric. An unexplained step the
+        wrong way is <b>held</b>: the baseline is computed from the 60 days that ended at
+        the change point, and a row in <code>RegimeHolds</code> remembers the step after
+        the window has moved past it. The regime finding stays open, at <b>high</b>, for
+        as long as the hold does, and says the held level and since when.
+      </p>
+      <p>A hold ends in one of three ways, each recorded with its reason:</p>
+      <ul>
+        <li><b>explained</b> &mdash; something recorded later (a medication, a device, an
+          illness or travel period) overlaps the change point within 7 days. The new level
+          is adopted from the change point.</li>
+        <li><b>accepted</b> &mdash; the person says the new level is their normal
+          (<code>POST /api/regime-acceptances</code> on vitara). Adopted from the change point.</li>
+        <li><b>reverted</b> &mdash; the median of the last 14 days is within a quarter of
+          the step from the old level. Covers an illness nobody marked.</li>
+      </ul>
+      <div class="why trap">
+        <span class="tag">The leak this closed</span>
+        <p>
+          The first version recorded that the step was not adopted and kept the readings
+          after it in the window. At detection, 14 of the 60 days were already after the
+          step, so the mean had moved about a quarter of the way; sixty days later the
+          window was all after the step, the detector saw nothing, the finding resolved,
+          and the worse level was the baseline. Decision record: Vitara ADR 0017.
+        </p>
+      </div>
+      <p>
+        One open hold per metric; while it is open the detector is not asked again. A
+        step re-detected within the dwell of a released hold is the same episode, not a
+        new hold. Holds, open and released, are listed at
+        <code>GET /api/health/regime-holds</code> on vitara-insight.
+      </p>
 
       <p>
         Two bugs found while building it: it fired on pure noise, because MAD goes to
@@ -1561,6 +1596,8 @@ UNIQUE (Driver, Outcome, LagDays, ComputedOnLocal)</code></pre>
             <tr><td class="m">VITARA_SURFACED_MAX</td><td class="num">3</td><td>How many findings lead at once; severe ones ignore it</td></tr>
             <tr><td class="m">VITARA_REGIME_SHIFT_Z</td><td class="num">1.5</td><td>Step size to qualify</td></tr>
             <tr><td class="m">VITARA_REGIME_DWELL_DAYS</td><td class="num">14</td><td>How long the new level must hold</td></tr>
+            <tr><td class="m">VITARA_REGIME_REVERT_DAYS</td><td class="num">14</td><td>Recent days a held step is judged on for "came back on its own"</td></tr>
+            <tr><td class="m">VITARA_REGIME_REVERT_FRACTION</td><td class="num">0.25</td><td>How much of the step may remain and still count as reverted</td></tr>
             <tr><td class="m">VITARA_DRIFT_MIN_DAYS</td><td class="num">14</td><td>Points before a trend is reportable</td></tr>
             <tr><td class="m">VITARA_ACWR_LOW</td><td class="num">0.8</td><td>Lower strain band</td></tr>
             <tr><td class="m">VITARA_ACWR_HIGH</td><td class="num">1.3</td><td>Upper strain band</td></tr>

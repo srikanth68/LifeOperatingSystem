@@ -102,6 +102,13 @@ public interface IVitaraRepository
 
     Task SaveBaselinesAsync(IEnumerable<Baseline> baselines);
     Task<List<Baseline>> GetBaselinesAsync(DateOnly computedOn);
+
+    // Steps held rather than adopted, and the person's acceptances of them. Holds are
+    // written by vitara-insight, acceptances by vitara: separate write sets.
+    Task<List<RegimeHold>> GetRegimeHoldsAsync();
+    Task SaveRegimeHoldAsync(RegimeHold hold);
+    Task<List<RegimeAcceptance>> GetRegimeAcceptancesAsync();
+    Task<RegimeAcceptance> SaveRegimeAcceptanceAsync(RegimeAcceptance acceptance);
     Task SaveDerivedMetricsAsync(IEnumerable<DerivedMetric> metrics);
     Task<List<DerivedMetric>> GetDerivedMetricsAsync(DateOnly from, DateOnly to);
 

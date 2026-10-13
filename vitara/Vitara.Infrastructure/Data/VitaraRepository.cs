@@ -173,6 +173,52 @@ public class VitaraRepository(VitaraDbContext db) : IVitaraRepository
     public Task<List<Baseline>> GetBaselinesAsync(DateOnly computedOn) =>
         db.Baselines.Where(b => b.ComputedOnLocal == computedOn).ToListAsync();
 
+    public Task<List<RegimeHold>> GetRegimeHoldsAsync() =>
+        db.RegimeHolds.OrderBy(h => h.ChangePointLocal).ToListAsync();
+
+    // Upsert on the step's identity. Opening a hold that already exists, or releasing
+    // one twice, changes nothing rather than adding a row.
+    public async Task SaveRegimeHoldAsync(RegimeHold hold)
+    {
+        var existing = await db.RegimeHolds.FirstOrDefaultAsync(h =>
+            h.Metric == hold.Metric && h.BaselineSignature == hold.BaselineSignature
+            && h.ChangePointLocal == hold.ChangePointLocal);
+
+        if (existing is null)
+        {
+            hold.Id = 0;
+            db.RegimeHolds.Add(hold);
+        }
+        else
+        {
+            existing.Direction = hold.Direction;
+            existing.PreLevelMedian = hold.PreLevelMedian;
+            existing.PreLevelSpread = hold.PreLevelSpread;
+            existing.PostLevelMedian = hold.PostLevelMedian;
+            existing.ReleasedLocal = hold.ReleasedLocal;
+            existing.ReleaseReason = hold.ReleaseReason;
+            existing.Explanation = hold.Explanation;
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    public Task<List<RegimeAcceptance>> GetRegimeAcceptancesAsync() =>
+        db.RegimeAcceptances.OrderBy(a => a.AcceptedOnLocal).ToListAsync();
+
+    // Accepting the same step twice is the same statement; the first one stands.
+    public async Task<RegimeAcceptance> SaveRegimeAcceptanceAsync(RegimeAcceptance acceptance)
+    {
+        var existing = await db.RegimeAcceptances.FirstOrDefaultAsync(a =>
+            a.Metric == acceptance.Metric && a.BaselineSignature == acceptance.BaselineSignature
+            && a.ChangePointLocal == acceptance.ChangePointLocal);
+        if (existing is not null) return existing;
+
+        db.RegimeAcceptances.Add(acceptance);
+        await db.SaveChangesAsync();
+        return acceptance;
+    }
+
     public async Task SaveDerivedMetricsAsync(IEnumerable<DerivedMetric> metrics)
     {
         var incoming = metrics.ToList();
