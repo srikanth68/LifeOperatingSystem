@@ -67,6 +67,18 @@ For any MCP-capable agent (Claude, custom) that should drive Maaya's tools:
 - **Nexus + llama.cpp reachability**: Sentinel and Gemma must listen on
   `0.0.0.0` (or at least the Docker bridge) on the host — `127.0.0.1`-only
   binds are NOT reachable via `host.docker.internal` on macOS.
+- **NorthStar meaning-search (optional)**: NorthStar matches memories by meaning
+  when a local embedding model is running; without one it uses keywords and
+  entities only. A second, small `llama-server` on the host does it (an
+  embedding model is ~150 MB of RAM, nothing like Gemma's):
+  `llama-server -m nomic-embed-text-v1.5.Q8_0.gguf --embeddings --host 0.0.0.0 --port 8081 --ctx-size 2048`,
+  then in `deploy/env/northstar.env`:
+  `EMBEDDINGS_URL=http://host.docker.internal:8081`, `EMBEDDINGS_MODEL=nomic-embed-text-v1.5`,
+  `EMBEDDINGS_QUERY_PREFIX=search_query: `, `EMBEDDINGS_DOC_PREFIX=search_document: `
+  (nomic expects those prefixes; other models leave them unset), and
+  `docker compose up -d northstar`. Its log says "Embedded N memory(ies)" within
+  a minute. `EMBEDDINGS_MIN_SIMILARITY` (default 0.6) is the match threshold.
+  Stopping the model server never breaks recall; it only loses meaning-search.
 - **"Everything is down" but every module answers on its own port** — the
   dashboard shows modules offline and login falls back to the password form
   (no PIN pad), yet `curl http://<host>:5000/api/auth/probe` returns 200. That
