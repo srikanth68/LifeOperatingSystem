@@ -18,6 +18,15 @@ const svcProxy = Object.fromEntries(
       target: `http://localhost:${port}`,
       changeOrigin: true,
       rewrite: (p: string) => p.replace(new RegExp(`^/svc/${name}`), ''),
+      // A backend that is not running answers 502, as nginx does in production. Vite's
+      // default is a 500, which the UI would read as an error INSIDE the module.
+      configure: (proxy: { on: (event: 'error', handler: (err: Error, req: unknown, res: unknown) => void) => void }) => {
+        proxy.on('error', (_err, _req, res) => {
+          const r = res as { headersSent?: boolean; writeHead?: (code: number) => void; end?: () => void };
+          if (r.writeHead && !r.headersSent) r.writeHead(502);
+          r.end?.();
+        });
+      },
     },
   ])
 )

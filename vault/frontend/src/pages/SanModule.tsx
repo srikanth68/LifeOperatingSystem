@@ -101,7 +101,10 @@ function SendIcon() {
 // expired sign-in (a 401) -- which sent the fix looking in the wrong place. `get`
 // throws Error("<status>") for an HTTP error; a network failure is a TypeError.
 function ApiError({ port, error }: { port: number; error?: unknown }) {
-  const status = error instanceof Error && /^\d{3}$/.test(error.message) ? Number(error.message) : null;
+  const raw = error instanceof Error && /^\d{3}$/.test(error.message) ? Number(error.message) : null;
+  // 502-504 come from the proxy in front of San (nginx), meaning San itself did not
+  // answer: the same situation as a network failure, not an error inside San.
+  const status = raw !== null && raw >= 502 && raw <= 504 ? null : raw;
   const [title, body] =
     status === 401 || status === 403
       ? ['San needs you to sign in again', `San answered, but refused the request (HTTP ${status}). Your session has probably expired: sign out and back in.`]
