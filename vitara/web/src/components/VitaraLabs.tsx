@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { vitaraHeaders } from '../services/profile';
 import { moduleApi } from '../services/apiHost';
 import { Panel, Chip, Empty, Info, Row } from './health/HealthKit';
+import { LabContextPanel } from './health/LabContextPanel';
 
 import { todayInTz } from '../services/timezone';
 const API = moduleApi(5100);
@@ -258,6 +259,8 @@ export function VitaraLabs() {
                 </div>
               </>
             )}
+
+            <LabContextPanel panelId={p.id} />
 
             {p.gaps.length > 0 && (
               <>

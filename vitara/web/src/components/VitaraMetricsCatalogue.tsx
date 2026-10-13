@@ -42,7 +42,14 @@ interface MetricRow {
     exclusions: string | null;
   } | null;
   fillWith: string;
+  // Better, worse, steady, unclear or not enough data -- never silence (ADR 0018).
+  trajectory?: { state: string; reason: string } | null;
 }
+
+const TRAJECTORY_WORD: Record<string, string> = {
+  improving: 'Improving', worsening: 'Worsening', rising: 'Rising', falling: 'Falling',
+  stable: 'Steady', uncertain: 'Unclear', insufficient_data: 'Not enough data for a direction',
+};
 
 interface CatalogueResult {
   today: string;
@@ -70,6 +77,8 @@ const GROUP_ACCENT: Record<string, string> = {
   Body: 'var(--hx-4)',
   Vitals: 'var(--hx-3)',
   Labs: 'var(--hx-6)',
+  Strength: 'var(--hx-1)',
+  Habits: 'var(--hx-3)',
 };
 
 const GROUP_BLURB: Record<string, string> = {
@@ -79,11 +88,18 @@ const GROUP_BLURB: Record<string, string> = {
   Body: 'The slow-moving numbers: weight, shape, and fitness age.',
   Vitals: 'Readings you take yourself, with the context that changes them.',
   Labs: 'Blood work. Rare, exact, and the anchor everything else is checked against.',
+  Strength: 'What your muscles can do: the part of fitness that keeps you independent later.',
+  Habits: 'Alcohol, caffeine and late meals, logged in a tap, turned into hours before bed.',
 };
 
 // Minutes and seconds are stored raw and read badly raw: "392 min" is arithmetic, not an
 // answer.
 function display(row: MetricRow, value: number): string {
+  // Clock times, stored as minutes from (or after) midnight.
+  if (row.unit === 'min from midnight' || row.unit === 'min after midnight') {
+    const m = ((Math.round(value) % 1440) + 1440) % 1440;
+    return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  }
   if (row.unit === 'min') {
     const h = Math.floor(Math.abs(value) / 60);
     const m = Math.round(Math.abs(value) % 60);
@@ -97,7 +113,7 @@ function display(row: MetricRow, value: number): string {
 }
 
 function unitSuffix(row: MetricRow): string {
-  if (['min', 's', 'steps', 'kcal', ''].includes(row.unit)) return '';
+  if (['min', 's', 'steps', 'kcal', '', 'min from midnight', 'min after midnight'].includes(row.unit)) return '';
   if (row.unit === '/100' || row.unit === '%') return row.unit;
   return ` ${row.unit}`;
 }
@@ -159,9 +175,16 @@ function MetricCard({ row, accent }: { row: MetricRow; accent: string }) {
       {b?.regimeStart && (
         <p className="vm-note">Your normal was rebuilt from {b.regimeStart}, after a lasting change.</p>
       )}
-      {b?.exclusions?.includes('unadopted_regime_shift') && (
+      {(b?.exclusions?.includes('held_regime_shift') || b?.exclusions?.includes('unadopted_regime_shift')) && (
         <p className="vm-note vm-note-warn">
-          This moved to a new level and nothing recorded explains it, so your earlier normal is being kept.
+          This moved to a worse level and nothing recorded explains it, so your earlier normal is being held.
+          Insight → Direction shows how to release it.
+        </p>
+      )}
+
+      {row.trajectory && row.trajectory.state !== 'insufficient_data' && (
+        <p className="vm-note" title={row.trajectory.reason}>
+          <b>{TRAJECTORY_WORD[row.trajectory.state] ?? row.trajectory.state}.</b> {row.trajectory.reason}
         </p>
       )}
     </li>

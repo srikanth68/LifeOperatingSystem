@@ -453,6 +453,7 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         from = w.From.ToString("yyyy-MM-dd"),
         to = w.To.ToString("yyyy-MM-dd"),
         analytes = w.Analytes,
+        analyteLabels = w.Analytes.Select(a => MetricCatalogue.Find(a)?.Label ?? a),
         metrics = w.Metrics,
         sleepDebtAtDraw = w.SleepDebtAtDraw,
         meanLoadRatio = w.MeanLoadRatio,

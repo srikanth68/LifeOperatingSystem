@@ -34,6 +34,7 @@ const get = <T,>(url: string): Promise<T> =>
 interface Forecast { value: number; low: number; high: number; method: 'model' | 'today' | 'none' }
 interface Finding { key: string; metric: string; severity: string; summary: string; daysRunning: number }
 interface InsightSummary { computedThrough: string | null; activeFindings: number; findings: Finding[] }
+interface Hold { metric: string; label: string; unit: string | null; changePoint: string; before: number; after: number; open: boolean; heldForDays: number }
 
 export type TodayGo = (target: 'sleep' | 'recovery' | 'move' | 'insight') => void;
 
@@ -58,6 +59,8 @@ export function MobileToday({ status, go, tick, header }: {
   const readyQ = useQuery<Readiness[]>({ queryKey: ['readiness', 14], queryFn: () => get(`${VITARA}/api/readiness?days=14`) });
   const forecastQ = useQuery<{ readiness: Forecast | null }>({ queryKey: ['forecasts'], queryFn: () => get(`${INSIGHT}/api/health/forecast`), retry: false });
   const summaryQ = useQuery<InsightSummary>({ queryKey: ['insight-summary'], queryFn: () => get(`${INSIGHT}/api/health/summary`), retry: false });
+  const holdsQ = useQuery<Hold[]>({ queryKey: ['regime-holds'], queryFn: () => get(`${INSIGHT}/api/health/regime-holds`), retry: false });
+  const held = (holdsQ.data ?? []).filter(h => h.open);
   const nameQ = useQuery({ queryKey: ['profile-name', person], queryFn: () => getProfile(person), retry: false, staleTime: 5 * 60_000 });
 
   const d = dash.data;
@@ -231,6 +234,18 @@ export function MobileToday({ status, go, tick, header }: {
           <p className="vm-link">See the pattern →</p>
         </button>
       )}
+
+      {/* ── A normal being held: a step the wrong way that nothing explains ── */}
+      {held.map(h => (
+        <button key={`${h.metric}-${h.changePoint}`} type="button" className="vm-tile vm-tap" onClick={() => go('insight')}>
+          <p className="vm-label"><span>Your normal is being held</span><em>{h.heldForDays} days</em></p>
+          <p className="vm-finding">
+            {h.label} moved from {h.before} to {h.after}{h.unit ? ` ${h.unit}` : ''} and nothing you recorded explains it,
+            so your normal stays at {h.before}.
+          </p>
+          <p className="vm-link">Explain it, or accept the new level →</p>
+        </button>
+      ))}
 
       {/* ── Honest empty states ──────────────────────────────────────── */}
       {nothingYet && (

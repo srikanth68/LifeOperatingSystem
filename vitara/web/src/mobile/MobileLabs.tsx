@@ -5,6 +5,7 @@ import { vitaraHeaders } from '../services/profile';
 import { formatDay } from '../services/timezone';
 import { clamp } from './motion';
 import { OutOfReach } from './Parts';
+import { LabContextPanel } from '../components/health/LabContextPanel';
 
 // Labs, the phone screen: the latest blood draw, each result laid on its reference range.
 //
@@ -125,6 +126,8 @@ export function MobileLabs({ enter }: { enter: () => void }) {
           </div>
         </section>
       )}
+
+      <LabContextPanel panelId={p.id} phone />
 
       {p.gaps.length > 0 && (
         <details className="vm-more-box">

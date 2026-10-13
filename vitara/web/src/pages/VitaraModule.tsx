@@ -1852,7 +1852,23 @@ function MacroTile({ label, value, unit, goal, accent, info }: {
 // fasting for glucose — and a form that made that decision separately would eventually
 // disagree with the thing computing the baselines.
 
-interface MetricSpec { metric: string; unit: string; tier: string; label: string; context: string[] }
+interface MetricSpec {
+  metric: string; unit: string; tier: string; label: string; context: string[];
+  // Served with each metric: which group it sits in, whether it is a number or a clock
+  // time, a starting value (alcohol starts at 0 -- a day without a drink is the value
+  // worth having), and the range a person could actually produce.
+  group?: string | null; input?: 'number' | 'time'; defaultValue?: number | null; min?: number | null; max?: number | null;
+}
+
+// Clock times are stored as minutes after midnight and entered as times.
+const toMinutes = (hhmm: string): number => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
+const toClock = (minutes: number): string =>
+  `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(Math.round(minutes % 60)).padStart(2, '0')}`;
+
+const EXERCISES = ['squat', 'deadlift', 'bench press', 'overhead press', 'row'];
 
 interface Measurement {
   id: string;
@@ -1892,17 +1908,40 @@ export function MeasurePanel() {
   const [position, setPosition]   = useState('seated');
   const [timeOfDay, setTimeOfDay] = useState('morning');
   const [fasting, setFasting]     = useState(true);
+  const [hand, setHand]           = useState('right');
+  const [exercise, setExercise]   = useState('squat');
   const [error, setError]   = useState<string | null>(null);
 
   const spec = specs?.find(s => s.metric === metric);
   const asks = (field: string) => spec?.context.includes(field) ?? false;
+  const isTime = spec?.input === 'time';
+
+  const pickMetric = (m: string) => {
+    setMetric(m);
+    const next = specs?.find(s => s.metric === m);
+    setValue(next?.defaultValue != null ? String(next.defaultValue) : '');
+  };
+
+  // Grouped as the catalogue groups them, so strength and habits are findable among
+  // two dozen options.
+  const groups = (specs ?? []).reduce<Record<string, MetricSpec[]>>((acc, x) => {
+    const g = x.group ?? (x.tier === 'sparse' ? 'Labs' : 'Other');
+    (acc[g] ??= []).push(x);
+    return acc;
+  }, {});
 
   const save = useMutation({
-    mutationFn: async () => {
-      const body: Record<string, unknown> = { metric, value: Number(value), note: note || null };
-      if (asks('position'))  body.position  = position;
-      if (asks('timeOfDay')) body.timeOfDay = timeOfDay;
-      if (asks('fasting'))   body.fasting   = fasting;
+    mutationFn: async (override?: { metric: string; value: number }) => {
+      const m = override?.metric ?? metric;
+      const v = override ? override.value : isTime ? toMinutes(value) : Number(value);
+      const body: Record<string, unknown> = { metric: m, value: v, note: override ? null : note || null };
+      if (!override) {
+        if (asks('position'))  body.position  = position;
+        if (asks('timeOfDay')) body.timeOfDay = timeOfDay;
+        if (asks('fasting'))   body.fasting   = fasting;
+        if (asks('hand'))      body.hand      = hand;
+        if (asks('exercise'))  body.exercise  = exercise;
+      }
 
       const res = await fetch(`${API}/api/measurements`, {
         method: 'POST',
@@ -1915,7 +1954,7 @@ export function MeasurePanel() {
       return json;
     },
     onSuccess: () => {
-      setValue('');
+      setValue(spec?.defaultValue != null ? String(spec.defaultValue) : '');
       setNote('');
       setError(null);
       queryClient.invalidateQueries({ queryKey: ['measurements'] });
@@ -1933,19 +1972,43 @@ export function MeasurePanel() {
     <div>
       <SectionHead
         title="Record a reading"
-        note="Blood pressure, glucose, waist, lab results"
+        note="Blood pressure, glucose, waist, strength, habits, lab results"
         info="Anything nothing else measures for you. These feed exactly the same baselines the ring's data does. The questions beside the value are the ones that actually move the number — a standing evening reading is never compared against a seated morning one."
       />
 
       <Card>
         <div className="hx-form">
-          <select value={metric} onChange={e => setMetric(e.target.value)} style={{ minWidth: '13rem' }}>
-            {specs?.map(x => <option key={x.metric} value={x.metric}>{x.label}</option>)}
+          <select value={metric} onChange={e => pickMetric(e.target.value)} style={{ minWidth: '13rem' }}>
+            {Object.entries(groups).map(([g, list]) => (
+              <optgroup key={g} label={g}>
+                {list.map(x => <option key={x.metric} value={x.metric}>{x.label}</option>)}
+              </optgroup>
+            ))}
           </select>
 
-          <input type="number" step="any" placeholder="Value" value={value}
-                 onChange={e => setValue(e.target.value)} style={{ width: '6.5rem' }}/>
-          <span className="hx-row-meta">{spec?.unit}</span>
+          {isTime ? (
+            <input type="time" value={value} onChange={e => setValue(e.target.value)} aria-label={spec?.label} />
+          ) : (
+            <input type="number" step="any" placeholder="Value" value={value}
+                   min={spec?.min ?? undefined} max={spec?.max ?? undefined}
+                   onChange={e => setValue(e.target.value)} style={{ width: '6.5rem' }}/>
+          )}
+          {!isTime && <span className="hx-row-meta">{spec?.unit}</span>}
+
+          {asks('hand') && (
+            <select value={hand} onChange={e => setHand(e.target.value)} aria-label="Hand">
+              <option value="right">Right hand</option>
+              <option value="left">Left hand</option>
+            </select>
+          )}
+
+          {asks('exercise') && (
+            <>
+              <input list="vitara-exercises" value={exercise} onChange={e => setExercise(e.target.value)}
+                     placeholder="Exercise" style={{ width: '9rem' }} aria-label="Exercise" />
+              <datalist id="vitara-exercises">{EXERCISES.map(x => <option key={x} value={x} />)}</datalist>
+            </>
+          )}
 
           {/* Only the context that actually splits THIS metric's baseline is asked for.
               Asking about arm position for a lab result would be noise, and asking about
@@ -1979,10 +2042,22 @@ export function MeasurePanel() {
           <input placeholder="Note (optional)" value={note} onChange={e => setNote(e.target.value)}
                  style={{ flex: 1, minWidth: '10rem' }}/>
 
-          <button className="hx-btn" disabled={!value || save.isPending} onClick={() => save.mutate()}>
+          <button className="hx-btn" disabled={value === '' || save.isPending} onClick={() => save.mutate(undefined)}>
             {save.isPending ? 'Saving…' : 'Save'}
           </button>
         </div>
+
+        {/* One tap for the reading that matters most and is logged least: a day with no
+            drinks. Without the zeros, nothing about alcohol can ever be compared. */}
+        {specs?.some(x => x.metric === 'alcohol_units') && (
+          <div className="hx-form" style={{ marginTop: '0.6rem' }}>
+            <button className="hx-btn hx-btn-ghost" disabled={save.isPending}
+                    onClick={() => save.mutate({ metric: 'alcohol_units', value: 0 })}>
+              No drinks today
+            </button>
+            <span className="hx-row-meta">Logs alcohol as 0 for today.</span>
+          </div>
+        )}
         {error && <p className="hx-error">{error}</p>}
       </Card>
 
@@ -2004,7 +2079,9 @@ export function MeasurePanel() {
                     {m.note ? ` · ${m.note}` : ''}
                   </span>
                 </div>
-                <span className="hx-row-value">{m.value} <em>{m.unit}</em></span>
+                <span className="hx-row-value">
+                  {m.unit === 'min after midnight' ? toClock(m.value) : <>{m.value} <em>{m.unit}</em></>}
+                </span>
                 <button className="hx-icon-btn" onClick={() => remove.mutate(m.id)} aria-label={`Delete ${m.label} from ${m.at}`}>×</button>
               </div>
             ))}

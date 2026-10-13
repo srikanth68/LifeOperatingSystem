@@ -5,6 +5,7 @@ import { Shell, Info, Chip, Row } from '../components/health/HealthKit';
 import { DonutSplit, Legend, SleepDial, RangeBar, RangeGauge, StackBar } from '../components/health/InsightCharts';
 import type { LabReading } from '../components/health/InsightCharts';
 import { RelationshipWeb, PatternRing, Bead, TrialTrack, ShiftStrip, Tug } from '../components/health/PatternCharts';
+import { DirectionTab } from '../components/health/Direction';
 import type { ReactNode } from 'react';
 import { vitaraHeaders, useProfileKey } from '../services/profile';
 import { moduleApi } from '../services/apiHost';
@@ -1787,12 +1788,13 @@ function BaselineTable() {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-type TabId = 'overview' | 'patterns' | 'you' | 'check';
+type TabId = 'overview' | 'direction' | 'patterns' | 'you' | 'check';
 
 const ICON = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.75, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
 
 const TABS: { id: TabId; label: string; icon: ReactNode }[] = [
   { id: 'overview', label: 'Overview', icon: <svg className="ix-ico" viewBox="0 0 24 24" {...ICON}><rect x="3" y="3" width="7.5" height="9" rx="2"/><rect x="13.5" y="3" width="7.5" height="5.5" rx="2"/><rect x="13.5" y="11.5" width="7.5" height="9.5" rx="2"/><rect x="3" y="15" width="7.5" height="6" rx="2"/></svg> },
+  { id: 'direction', label: 'Direction', icon: <svg className="ix-ico" viewBox="0 0 24 24" {...ICON}><path d="M3 17l5-5 4 4 8-9"/><path d="M14 7h6v6"/></svg> },
   { id: 'patterns', label: 'Patterns', icon: <svg className="ix-ico" viewBox="0 0 24 24" {...ICON}><circle cx="5.5" cy="17.5" r="2.5"/><circle cx="18.5" cy="6.5" r="2.5"/><circle cx="18" cy="18" r="2"/><path d="M7.7 16.2 16.3 8M8 17.7l8 .2"/></svg> },
   { id: 'you', label: 'You', icon: <svg className="ix-ico" viewBox="0 0 24 24" {...ICON}><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1-4 4-6 7.5-6s6.5 2 7.5 6"/></svg> },
   { id: 'check', label: 'Check', icon: <svg className="ix-ico" viewBox="0 0 24 24" {...ICON}><path d="M12 3 4.5 6v5.5c0 4.6 3.1 8 7.5 9.5 4.4-1.5 7.5-4.9 7.5-9.5V6z"/><path d="m8.8 12 2.4 2.4 4.2-4.6"/></svg> },
@@ -1846,6 +1848,8 @@ export function InsightContent() {
               <TodayVsNormal />
             </>
           )}
+
+          {tab === 'direction' && <DirectionTab />}
 
           {tab === 'patterns' && (
             <>

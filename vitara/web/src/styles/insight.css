@@ -999,3 +999,58 @@
 
 /* An intervention's name and its kind sit in one inline group, not the flex row findings use. */
 .insight-finding-head > span > .insight-metric + .insight-type { margin-left: 0.6rem; }
+
+/* ── Direction tab (domains, held normals, what if, projection) ────────────────
+   ix-dir-* only: the phone shell and the desktop metrics page already own vm-*. */
+.ix-dir-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); gap: 0.9rem; align-items: start; }
+.ix-dir-domain { padding: 0; overflow: hidden; }
+.ix-dir-domain.is-open { grid-column: 1 / -1; }
+.ix-dir-head {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0.35rem; width: 100%;
+  padding: 1rem 1.1rem; background: none; border: 0; text-align: left; font: inherit; color: inherit; cursor: pointer;
+}
+.ix-dir-head:focus-visible { outline: 2px solid var(--insight); outline-offset: -2px; }
+.ix-dir-status { font-size: 0.92rem; line-height: 1.45; color: var(--text); }
+.ix-dir-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.ix-dir-body { padding: 0 1.1rem 1.1rem; display: grid; gap: 0.8rem; border-top: 1px solid var(--border); padding-top: 0.9rem; }
+.ix-dir-gaps { background: var(--insight-wash); border-radius: 12px; padding: 0.7rem 0.9rem; }
+.ix-dir-gaps ul { margin: 0.3rem 0 0; padding-left: 1.1rem; font-size: 0.85rem; }
+.ix-dir-metrics { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.15rem; }
+.ix-dir-metric { padding: 0.55rem 0; border-bottom: 1px solid var(--border); }
+.ix-dir-metric:last-child { border-bottom: 0; }
+.ix-dir-metric-line { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.ix-dir-metric-name { font-weight: 600; font-size: 0.9rem; flex: 1 1 10rem; }
+.ix-dir-metric-value { font-variant-numeric: tabular-nums; font-size: 0.88rem; }
+.ix-dir-reason { margin: 0.2rem 0 0; font-size: 0.8rem; color: var(--text2); line-height: 1.5; }
+.ix-dir-link { margin-top: 0.3rem; padding: 0; border: 0; background: none; color: var(--insight); font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+.ix-dir-projection { margin-top: 0.4rem; padding: 0.6rem 0.8rem; border-left: 3px solid var(--insight); background: var(--insight-wash); border-radius: 0 10px 10px 0; font-size: 0.85rem; display: grid; gap: 0.3rem; }
+.ix-dir-projection p { margin: 0; }
+.ix-dir-projection.is-refused { border-left-color: var(--text3); background: transparent; color: var(--text2); }
+.ix-dir-hold { border-left: 4px solid var(--insight-notable); }
+.ix-dir-holds.is-compact .ix-dir-hold { margin-bottom: 0.8rem; }
+.ix-dir-picks { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.ix-dir-pick {
+  border: 1px solid var(--border); background: var(--surface); color: var(--text2); border-radius: 999px;
+  padding: 0.4rem 0.85rem; font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+}
+.ix-dir-pick.is-on { background: var(--insight); border-color: var(--insight); color: #fff; }
+.ix-dir-pick:focus-visible { outline: 2px solid var(--insight); outline-offset: 2px; }
+.ix-dir-answers { display: grid; gap: 0.6rem; margin-top: 0.9rem; transition: opacity 0.15s; }
+.ix-dir-answers.is-loading { opacity: 0.55; }
+.ix-dir-answer { padding: 0.7rem 0.9rem; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); }
+.ix-dir-answer.mode-arithmetic { border-left: 4px solid var(--insight); }
+.ix-dir-answer.mode-learned { border-left: 4px solid var(--hx-4, #7a4bbd); }
+.ix-dir-answer.mode-experiment { border-left: 4px solid var(--text3); }
+.ix-dir-mode { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text3); }
+.ix-dir-q { margin: 0.2rem 0 0.15rem; font-weight: 600; font-size: 0.88rem; }
+.ix-dir-a { margin: 0.15rem 0 0; font-size: 0.86rem; line-height: 1.5; color: var(--text); }
+
+/* Lab context: the daily data before a draw */
+.ix-labctx { margin-top: 0.6rem; display: grid; gap: 0.6rem; font-size: 0.85rem; }
+.ix-labctx-window { border: 1px solid var(--border); border-radius: 12px; padding: 0.7rem 0.9rem; }
+.ix-labctx table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.ix-labctx th, .ix-labctx td { text-align: left; padding: 0.25rem 0.4rem 0.25rem 0; font-size: 0.82rem; }
+.ix-labctx th { color: var(--text3); font-weight: 600; }
+.ix-labctx td.refused { color: var(--text3); font-style: italic; }
+.ix-labctx ul { margin: 0.2rem 0 0; padding-left: 1.1rem; }
+

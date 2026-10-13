@@ -429,8 +429,10 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
   margin: 0 0 1rem; padding: 0.25rem; border-radius: 999px; box-shadow: none; z-index: 30;
   background: color-mix(in srgb, var(--bg) 94%, transparent);
 }
-.vm .ix-nav button { flex-direction: row; gap: 0.3rem; padding: 0.5rem 0.2rem; font-size: 0.78rem; border-radius: 999px; }
-.vm .ix-nav .ix-ico { width: 15px; height: 15px; }
+/* Five tabs since Direction arrived: at phone width an icon and a label each do not fit, and
+   "Overview" ran into "Direction". The words carry the meaning, so the icons go. */
+.vm .ix-nav button { flex-direction: row; gap: 0.3rem; padding: 0.5rem 0.15rem; font-size: 0.76rem; border-radius: 999px; min-width: 0; }
+.vm .ix-nav .ix-ico { display: none; }
 .vm .hx-tabs { display: none; }
 
 /* Tap targets of at least 44px for the controls the existing pages use. */

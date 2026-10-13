@@ -14,6 +14,9 @@ on a phone.
 | **Recovery** | "Body weather" (a scale for the readiness score), HRV and resting heart rate over 30 days against the middle half of your own values, and activity beside readiness for the week. |
 | **Activity** | Rings that close on *your usual* (there is no universal target), steps over 14 days, active minutes, recent workouts. |
 | **Labs** (More) | The latest draw, each result laid on its reference range with the previous draw marked; coral is used for outside-range results and nothing else. Entering a draw is one tap away. |
+| **Held normals** (Today) | When a measure steps the wrong way and nothing recorded explains it, Today shows a tile saying the normal is being held at the earlier level, and how to release it. |
+| **Direction** (Insight) | Every area of health with what moved, which way and what is not measured, never a score; normals being held, with "this is my new normal"; "What if I…" with every answer labelled Calculated, From your history, or An experiment; and "If this continues…" as a range or a reason it cannot be drawn. On the phone the Insight tabs show words only: five tabs with icons do not fit. |
+| **Before a draw** (Labs) | "What your days looked like before this draw": steps, sleep, resting HR, HRV and alcohol over the window that analyte reflects, beside the previous draw. Co-occurrence only. |
 | **Insight, and the deep pages** | Insight is the same page the desktop app uses, in the phone skin. Sleep, Recovery and Activity each end with a "Full ... detail" row that opens the desktop page for it. |
 | **Installable** | A web app manifest, generated icons (`scripts/make-icons.py`) and a service worker. |
 
