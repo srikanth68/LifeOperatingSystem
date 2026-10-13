@@ -10,7 +10,7 @@ namespace San.API.Controllers;
 // [AllowAnonymous] the same way CalendarController's are — the provider redirects the
 // user's browser here directly, with no way to attach San's own auth header.
 [ApiController, Route("api/email")]
-public class EmailController(ISanRepository repo, IEnumerable<IEmailProviderClient> providers) : ControllerBase
+public class EmailController(ISanRepository repo, IEnumerable<IEmailProviderClient> providers, OAuthState oauthState) : ControllerBase
 {
     private IEmailProviderClient Resolve(string provider) =>
         providers.FirstOrDefault(p => p.Provider == provider)
@@ -68,7 +68,10 @@ public class EmailController(ISanRepository repo, IEnumerable<IEmailProviderClie
         try
         {
             var client = Resolve(provider);
-            return Ok(new { url = client.BuildAuthUrl(RedirectUriFor(provider)) });
+            var url = client.BuildAuthUrl(RedirectUriFor(provider));
+            // The provider returns state unchanged; the callback refuses one it did not issue.
+            var state = oauthState.Issue(provider);
+            return Ok(new { url = url + (url.Contains('?') ? "&" : "?") + "state=" + Uri.EscapeDataString(state) });
         }
         catch (ArgumentException ex)
         {
@@ -78,12 +81,15 @@ public class EmailController(ISanRepository repo, IEnumerable<IEmailProviderClie
 
     [AllowAnonymous]
     [HttpGet("auth/{provider}/callback")]
-    public async Task<IActionResult> Callback(string provider, [FromQuery] string? code, [FromQuery] string? error)
+    public async Task<IActionResult> Callback(string provider, [FromQuery] string? code, [FromQuery] string? error,
+        [FromQuery] string? state)
     {
         if (!string.IsNullOrWhiteSpace(error))
             return BadRequest(new { error = $"{provider} denied the connection: {error}" });
         if (string.IsNullOrWhiteSpace(code))
             return BadRequest(new { error = "Missing code parameter." });
+        if (!oauthState.Consume(provider, state))
+            return BadRequest(new { error = "This connection link has expired or was not started from San. Click Connect again." });
 
         try
         {

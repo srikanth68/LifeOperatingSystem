@@ -56,6 +56,8 @@ builder.Services.AddScoped<IChatActionService, ChatActionService>();
 builder.Services.AddSingleton<IGoogleCalendarService, GoogleCalendarService>();
 builder.Services.AddScoped<IEmailProviderClient, GoogleGmailClient>();
 builder.Services.AddHttpClient<IEmailProviderClient, MicrosoftGraphClient>();
+// One per process: a connect started here must be finished by the same instance.
+builder.Services.AddSingleton<San.Application.OAuthState>();
 builder.Services.AddScoped<IContextReceiver, ContextReceiver>();
 builder.Services.AddHttpClient<ITelegramNotifier, TelegramNotifier>();
 

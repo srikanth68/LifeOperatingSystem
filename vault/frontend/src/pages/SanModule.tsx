@@ -96,12 +96,25 @@ function SendIcon() {
   );
 }
 
-function ApiError({ port }: { port: number }) {
+// Says what actually went wrong. Every failure used to read "Can't reach San API",
+// including a damaged database behind a perfectly reachable San (a 500) and an
+// expired sign-in (a 401) -- which sent the fix looking in the wrong place. `get`
+// throws Error("<status>") for an HTTP error; a network failure is a TypeError.
+function ApiError({ port, error }: { port: number; error?: unknown }) {
+  const status = error instanceof Error && /^\d{3}$/.test(error.message) ? Number(error.message) : null;
+  const [title, body] =
+    status === 401 || status === 403
+      ? ['San needs you to sign in again', `San answered, but refused the request (HTTP ${status}). Your session has probably expired: sign out and back in.`]
+      : status !== null && status >= 500
+        ? ['San hit an error', `San is running but failed to answer (HTTP ${status}). Its log says why: docker compose logs --tail 50 san`]
+        : status !== null
+          ? ['San could not answer that', `San is running but returned HTTP ${status} for this page.`]
+          : ["Can't reach San API", `Nothing answered on port ${port}. Check that the San container is running: docker compose ps san`];
   return (
     <div className="module-empty" style={style}>
       <div className="module-empty-icon"><Icon /></div>
-      <h2>Can't reach San API</h2>
-      <p>Make sure the San backend is running on port {port} (<code>san/start.ps1</code>).</p>
+      <h2>{title}</h2>
+      <p>{body}</p>
     </div>
   );
 }
@@ -308,7 +321,7 @@ function Assistant() {
     }
   };
 
-  if (messagesQ.isError) return <ApiError port={5300} />;
+  if (messagesQ.isError) return <ApiError port={5300} error={messagesQ.error} />;
 
   const messages = messagesQ.data ?? [];
   // A picture alone is a valid message — the server reads it as "what is this?".
@@ -513,7 +526,7 @@ function Reminders() {
     onSuccess: invalidate,
   });
 
-  if (remindersQ.isError) return <ApiError port={5300} />;
+  if (remindersQ.isError) return <ApiError port={5300} error={remindersQ.error} />;
   const reminders = remindersQ.data ?? [];
 
   return (
@@ -630,7 +643,7 @@ function Alerts() {
   const updateMut = useMutation({ mutationFn: ({ id, f }: { id: string; f: AlertFormState }) => send(`${API}/api/alerts/${id}`, 'PUT', toBody(f)), onSuccess: () => { invalidate(); setEditingId(null); } });
   const deleteMut = useMutation({ mutationFn: (id: string) => send(`${API}/api/alerts/${id}`, 'DELETE'), onSuccess: invalidate });
 
-  if (alertsQ.isError) return <ApiError port={5300} />;
+  if (alertsQ.isError) return <ApiError port={5300} error={alertsQ.error} />;
   const alerts = alertsQ.data ?? [];
 
   return (
@@ -711,7 +724,7 @@ function Email() {
     }
   };
 
-  if (accountsQ.isError) return <ApiError port={5300} />;
+  if (accountsQ.isError) return <ApiError port={5300} error={accountsQ.error} />;
   const accounts = accountsQ.data ?? [];
 
   return (
@@ -721,9 +734,11 @@ function Email() {
         <button className="btn-ghost" onClick={() => setShowRules(true)}>⚙ Triage Rules</button>
       </div>
       <p className="text-dim" style={{ fontSize: '0.82rem', marginTop: '-0.5rem' }}>
-        San checks connected inboxes every 15 minutes, summarizes what's worth your attention, and can
-        create reminders, alerts, calendar events, or property tasks from what it finds. Findings are
-        also written to NorthStar, so San can refer back to them in chat.
+        San checks connected inboxes every 15 minutes. Newsletters and marketing are set aside by rule;
+        every other email is read in full, beside what NorthStar already knows about its sender, thread
+        and subject. San creates reminders, alerts, calendar events or property tasks from it, and records
+        it in NorthStar: a dated entry, plus anything lasting it reveals as a memory for you to confirm in
+        NorthStar → Memory. The emails themselves are not stored.
       </p>
       {showRules && <TriagePromptEditor onClose={() => setShowRules(false)} />}
 
@@ -769,7 +784,7 @@ function Email() {
 /* ── Activity Feed ── */
 function Feed() {
   const feedQ = useQuery<FeedResult>({ queryKey: ['san-feed'], queryFn: () => get(`${API}/api/feed`) });
-  if (feedQ.isError) return <ApiError port={5300} />;
+  if (feedQ.isError) return <ApiError port={5300} error={feedQ.error} />;
   const data = feedQ.data;
 
   return (
@@ -845,7 +860,7 @@ function NowNext() {
   const location = contextQ.data?.location;
   const currentTime = formatClock(now);
 
-  if (nowNextQ.isError) return <ApiError port={5300} />;
+  if (nowNextQ.isError) return <ApiError port={5300} error={nowNextQ.error} />;
 
   return (
     <div className="san-now-next" style={style}>
@@ -968,7 +983,7 @@ function Calendar() {
 
   const selectedEvents = selectedDay ? (eventsByDay.get(selectedDay) ?? []) : [];
 
-  if (eventsQ.isError) return <ApiError port={5300} />;
+  if (eventsQ.isError) return <ApiError port={5300} error={eventsQ.error} />;
 
   return (
     <div className="san-calendar" style={style}>
@@ -1117,7 +1132,7 @@ function People() {
 
   const relCounts = people?.reduce((acc, p) => { acc[p.relationship] = (acc[p.relationship] ?? 0) + 1; return acc; }, {} as Record<string, number>) ?? {};
 
-  if (peopleQ.isError) return <ApiError port={5300} />;
+  if (peopleQ.isError) return <ApiError port={5300} error={peopleQ.error} />;
 
   return (
     <div className="sp" style={style}>
