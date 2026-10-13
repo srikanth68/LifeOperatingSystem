@@ -67,6 +67,8 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
     public DbSet<LabPanel>               LabPanels       => Set<LabPanel>();
     public DbSet<ReferenceRange>         ReferenceRanges => Set<ReferenceRange>();
     public DbSet<Baseline>               Baselines       => Set<Baseline>();
+    public DbSet<RegimeHold>             RegimeHolds     => Set<RegimeHold>();
+    public DbSet<RegimeAcceptance>       RegimeAcceptances => Set<RegimeAcceptance>();
     public DbSet<DerivedMetric>          DerivedMetrics  => Set<DerivedMetric>();
     public DbSet<Finding>                Findings        => Set<Finding>();
     public DbSet<Measurement>            Measurements    => Set<Measurement>();
@@ -115,6 +117,21 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
         {
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.Metric, x.BaselineSignature, x.ComputedOnLocal });
+        });
+
+        // One hold per step. Re-detecting the same step on the next run must find the
+        // existing row, not open a second one.
+        b.Entity<RegimeHold>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Ignore(x => x.IsOpen);
+            e.HasIndex(x => new { x.Metric, x.BaselineSignature, x.ChangePointLocal }).IsUnique();
+        });
+
+        b.Entity<RegimeAcceptance>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.Metric, x.BaselineSignature, x.ChangePointLocal }).IsUnique();
         });
 
         b.Entity<DerivedMetric>(e =>
@@ -425,6 +442,40 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
             );
             CREATE INDEX IF NOT EXISTS IX_Baselines_Lookup
                 ON Baselines (Metric, BaselineSignature, ComputedOnLocal);
+
+            -- A step seen and not adopted, remembered after the window moves past it.
+            -- Written by vitara-insight only.
+            CREATE TABLE IF NOT EXISTS RegimeHolds (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Metric TEXT NOT NULL DEFAULT '',
+                BaselineSignature TEXT NOT NULL DEFAULT '',
+                ChangePointLocal TEXT NOT NULL,
+                Direction TEXT NOT NULL DEFAULT '',
+                PreLevelMedian REAL NOT NULL DEFAULT 0,
+                PreLevelSpread REAL NOT NULL DEFAULT 0,
+                PostLevelMedian REAL NOT NULL DEFAULT 0,
+                OpenedLocal TEXT NOT NULL,
+                ReleasedLocal TEXT,
+                ReleaseReason TEXT,
+                Explanation TEXT,
+                CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS IX_RegimeHolds_Identity
+                ON RegimeHolds (Metric, BaselineSignature, ChangePointLocal);
+
+            -- The person accepting a held level as their normal. User input, so written
+            -- by vitara, never by vitara-insight.
+            CREATE TABLE IF NOT EXISTS RegimeAcceptances (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Metric TEXT NOT NULL DEFAULT '',
+                BaselineSignature TEXT NOT NULL DEFAULT '',
+                ChangePointLocal TEXT NOT NULL,
+                AcceptedOnLocal TEXT NOT NULL,
+                Note TEXT,
+                CreatedAt TEXT NOT NULL DEFAULT '0001-01-01T00:00:00'
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS IX_RegimeAcceptances_Identity
+                ON RegimeAcceptances (Metric, BaselineSignature, ChangePointLocal);
 
             CREATE TABLE IF NOT EXISTS DerivedMetrics (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,

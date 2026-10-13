@@ -342,7 +342,7 @@
     </p>
     <div class="masthead-meta">
       <span><b>Modules</b> vitara · vitara-worker · vitara-insight</span>
-      <span><b>Store</b> one SQLite file, 28 tables</span>
+      <span><b>Store</b> one SQLite file, 30 tables</span>
       <span><b>Tests</b> 498</span>
       <span><b>Read from</b> 44d3387</span>
     </div>
@@ -825,7 +825,7 @@ SPARSE   hba1c · total_cholesterol · ldl · hdl · triglycerides
       <h2>The database</h2>
 
       <p>
-        One SQLite file, <code>vitara.db</code>, 28 tables. Ownership is split by
+        One SQLite file, <code>vitara.db</code>, 30 tables. Ownership is split by
         process: the tables below are marked with which one writes them.
       </p>
 
@@ -988,6 +988,42 @@ N                   INTEGER   readings that survived exclusion
 IsValid             INTEGER   N >= 21
 ExclusionsJson      TEXT      what was dropped and why
 RegimeStartLocal    TEXT      null unless a step change was detected
+CreatedAt           TEXT</code></pre>
+        </div>
+      </div>
+
+      <div class="schema">
+        <div class="schema-head"><span>RegimeHolds</span><span class="owner">insight</span></div>
+        <div class="schema-body">
+          <p>A step seen and deliberately not adopted, remembered after the 60-day window has moved
+          past it. While open, the baseline is computed from before the change point.
+          Not yet read by the baseline calculator: tables first, behaviour next.</p>
+          <pre><code>Id                  INTEGER PK
+Metric              TEXT
+BaselineSignature   TEXT
+ChangePointLocal    TEXT      UNIQUE with Metric, BaselineSignature
+Direction           TEXT      up | down
+PreLevelMedian      REAL
+PreLevelSpread      REAL      what "came back on its own" is measured against
+PostLevelMedian     REAL
+OpenedLocal         TEXT
+ReleasedLocal       TEXT      null while open
+ReleaseReason       TEXT      explained | accepted | reverted
+Explanation         TEXT
+CreatedAt           TEXT</code></pre>
+        </div>
+      </div>
+
+      <div class="schema">
+        <div class="schema-head"><span>RegimeAcceptances</span><span class="owner">vitara</span></div>
+        <div class="schema-body">
+          <p>The person saying a held level is their normal now. User input, so written by vitara.</p>
+          <pre><code>Id                  INTEGER PK
+Metric              TEXT
+BaselineSignature   TEXT
+ChangePointLocal    TEXT      UNIQUE with Metric, BaselineSignature
+AcceptedOnLocal     TEXT
+Note                TEXT
 CreatedAt           TEXT</code></pre>
         </div>
       </div>

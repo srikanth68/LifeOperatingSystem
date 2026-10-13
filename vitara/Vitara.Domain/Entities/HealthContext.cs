@@ -166,6 +166,58 @@ public class Baseline
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
+// A step change that was seen and deliberately NOT taken as the new normal.
+//
+// Refusing to adopt an unexplained step the wrong way is not enough on its own: the
+// readings after the step still sit in the rolling window, and sixty days later the
+// window is nothing but the new level -- the step is no longer visible, and the worse
+// number has become normal without anyone being told. A hold is what remembers the
+// step after the window has moved past it. While it is open, the baseline is computed
+// from before the change point.
+//
+// Written only by vitara-insight. Ends in one of three ways, each recorded:
+// "explained" (something recorded later accounts for it), "accepted" (the person said
+// so, see RegimeAcceptance) or "reverted" (the level came back on its own).
+public class RegimeHold
+{
+    public long Id { get; set; }
+    public string Metric { get; set; } = "";
+    public string BaselineSignature { get; set; } = "";
+    public DateOnly ChangePointLocal { get; set; }
+    public string Direction { get; set; } = "";      // up | down, as RegimeChange reports it
+
+    // The two levels, so the finding can say what is being held against what, and the
+    // pre-change spread, which is what "came back on its own" is measured against.
+    public double PreLevelMedian { get; set; }
+    public double PreLevelSpread { get; set; }
+    public double PostLevelMedian { get; set; }
+
+    public DateOnly OpenedLocal { get; set; }
+    public DateOnly? ReleasedLocal { get; set; }
+    public string? ReleaseReason { get; set; }       // explained | accepted | reverted
+    public string? Explanation { get; set; }
+
+    public bool IsOpen => ReleasedLocal is null;
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+// The person saying a held level is their normal now.
+//
+// User input, so written by vitara rather than vitara-insight: the two processes keep
+// separate write sets. Matched to a hold on metric, signature and change point.
+public class RegimeAcceptance
+{
+    public long Id { get; set; }
+    public string Metric { get; set; } = "";
+    public string BaselineSignature { get; set; } = "";
+    public DateOnly ChangePointLocal { get; set; }
+    public DateOnly AcceptedOnLocal { get; set; }
+    public string? Note { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
 // A computed value that is not a raw measurement -- a z-score, a ratio, a slope.
 public class DerivedMetric
 {

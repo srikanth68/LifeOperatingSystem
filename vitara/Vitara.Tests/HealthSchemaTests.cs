@@ -34,7 +34,7 @@ public class HealthSchemaTests
         // production actually runs against.
         foreach (var table in new[] { "Observations", "Devices", "Interventions", "ExcludedPeriods",
                                       "TravelPeriods", "LabPanels", "ReferenceRanges", "Baselines",
-                                      "DerivedMetrics", "Findings" })
+                                      "DerivedMetrics", "Findings", "RegimeHolds", "RegimeAcceptances" })
             await db.Database.ExecuteSqlRawAsync($"DROP TABLE IF EXISTS {table}");
 
         await VitaraDbContext.CreateMissingTablesAsync(db);
@@ -66,6 +66,63 @@ public class HealthSchemaTests
         Assert.Equal(MetricKeys.SystolicBp, back.Metric);
         Assert.Equal(new DateOnly(2026, 9, 1), back.ObservedDateLocal);
         Assert.True(back.EligibleForBaseline);
+    }
+
+    [Fact]
+    public async Task RegimeHoldsRoundTripThroughTheHandWrittenSchema()
+    {
+        await using var db = await ExistingDbPatchedByHandAsync();
+
+        db.RegimeHolds.Add(new RegimeHold
+        {
+            Metric = MetricKeys.RestingHeartRate,
+            BaselineSignature = "",
+            ChangePointLocal = new DateOnly(2026, 8, 1),
+            Direction = "up",
+            PreLevelMedian = 52,
+            PreLevelSpread = 1.2,
+            PostLevelMedian = 57,
+            OpenedLocal = new DateOnly(2026, 8, 15),
+        });
+        db.RegimeAcceptances.Add(new RegimeAcceptance
+        {
+            Metric = MetricKeys.RestingHeartRate,
+            BaselineSignature = "",
+            ChangePointLocal = new DateOnly(2026, 8, 1),
+            AcceptedOnLocal = new DateOnly(2026, 9, 1),
+            Note = "new job, more stairs",
+        });
+        await db.SaveChangesAsync();
+
+        var hold = await db.RegimeHolds.SingleAsync();
+        Assert.Equal(new DateOnly(2026, 8, 1), hold.ChangePointLocal);
+        Assert.True(hold.IsOpen);
+        Assert.Null(hold.ReleaseReason);
+
+        var accepted = await db.RegimeAcceptances.SingleAsync();
+        Assert.Equal(new DateOnly(2026, 9, 1), accepted.AcceptedOnLocal);
+    }
+
+    [Fact]
+    public async Task TheSameStepCannotBeHeldTwice()
+    {
+        // Every run re-detects an open step. The unique index is what makes the
+        // worker's upsert find the existing hold instead of opening a second one.
+        await using var db = await ExistingDbPatchedByHandAsync();
+
+        RegimeHold Hold() => new()
+        {
+            Metric = MetricKeys.RestingHeartRate,
+            ChangePointLocal = new DateOnly(2026, 8, 1),
+            Direction = "up",
+            OpenedLocal = new DateOnly(2026, 8, 15),
+        };
+
+        db.RegimeHolds.Add(Hold());
+        await db.SaveChangesAsync();
+
+        db.RegimeHolds.Add(Hold());
+        await Assert.ThrowsAnyAsync<DbUpdateException>(() => db.SaveChangesAsync());
     }
 
     [Fact]

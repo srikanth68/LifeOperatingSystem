@@ -36,6 +36,41 @@ public class MigrationTests
         Assert.Contains("Vo2Max", tables);
         Assert.Contains("Workouts", tables);
         Assert.Contains("HeartRate", tables);
+        Assert.Contains("RegimeHolds", tables);
+        Assert.Contains("RegimeAcceptances", tables);
+    }
+
+    [Fact]
+    public async Task CreateMissingTables_AddsRegimeTables_WithoutTouchingBaselines()
+    {
+        // The deployed case: a database from before holds existed, already carrying
+        // baselines. Adding the two tables must leave every existing row where it was.
+        using var conn = new SqliteConnection("DataSource=:memory:");
+        conn.Open();
+
+        var opts = new DbContextOptionsBuilder<VitaraDbContext>().UseSqlite(conn).Options;
+        using var ctx = new VitaraDbContext(opts);
+        await ctx.Database.EnsureCreatedAsync();
+        await ctx.Database.ExecuteSqlRawAsync("DROP TABLE RegimeHolds");
+        await ctx.Database.ExecuteSqlRawAsync("DROP TABLE RegimeAcceptances");
+
+        ctx.Baselines.Add(new Baseline
+        {
+            Metric = "resting_hr",
+            ComputedOnLocal = new DateOnly(2026, 9, 1),
+            WindowDays = 60,
+            Mean = 52,
+            N = 58,
+            IsValid = true,
+        });
+        await ctx.SaveChangesAsync();
+
+        await VitaraDbContext.CreateMissingTablesAsync(ctx);
+
+        var kept = await ctx.Baselines.SingleAsync();
+        Assert.Equal(52, kept.Mean);
+        Assert.Empty(await ctx.RegimeHolds.ToListAsync());
+        Assert.Empty(await ctx.RegimeAcceptances.ToListAsync());
     }
 
     [Fact]

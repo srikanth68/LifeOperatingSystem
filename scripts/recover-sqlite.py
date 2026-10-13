@@ -39,7 +39,7 @@ import struct
 import sqlite3
 import sys
 
-# The app's own table and index definitions, as the Vitara code creates them (28 tables). Used ONLY to
+# The app's own table and index definitions, as the Vitara code creates them (30 tables). Used ONLY to
 # finish a rebuild when some of the schema's own pages were also destroyed: a table the damaged file no
 # longer describes is created from here, and its rows are then matched to it by shape. It contains no
 # data. If the app's tables change, regenerate this from a healthy database.
@@ -260,6 +260,30 @@ CREATE TABLE "ReferenceRanges" (
     "LabName" TEXT NULL,
     "Notes" TEXT NULL
 );
+CREATE TABLE "RegimeAcceptances" (
+    "Id" INTEGER NOT NULL CONSTRAINT "PK_RegimeAcceptances" PRIMARY KEY AUTOINCREMENT,
+    "Metric" TEXT NOT NULL,
+    "BaselineSignature" TEXT NOT NULL,
+    "ChangePointLocal" TEXT NOT NULL,
+    "AcceptedOnLocal" TEXT NOT NULL,
+    "Note" TEXT NULL,
+    "CreatedAt" TEXT NOT NULL
+);
+CREATE TABLE "RegimeHolds" (
+    "Id" INTEGER NOT NULL CONSTRAINT "PK_RegimeHolds" PRIMARY KEY AUTOINCREMENT,
+    "Metric" TEXT NOT NULL,
+    "BaselineSignature" TEXT NOT NULL,
+    "ChangePointLocal" TEXT NOT NULL,
+    "Direction" TEXT NOT NULL,
+    "PreLevelMedian" REAL NOT NULL,
+    "PreLevelSpread" REAL NOT NULL,
+    "PostLevelMedian" REAL NOT NULL,
+    "OpenedLocal" TEXT NOT NULL,
+    "ReleasedLocal" TEXT NULL,
+    "ReleaseReason" TEXT NULL,
+    "Explanation" TEXT NULL,
+    "CreatedAt" TEXT NOT NULL
+);
 CREATE TABLE "Resilience" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Resilience" PRIMARY KEY,
     "Day" TEXT NOT NULL,
@@ -346,6 +370,10 @@ CREATE TABLE "Workouts" (
     "Label" TEXT NULL,
     "Source" TEXT NULL
 );
+CREATE UNIQUE INDEX IX_RegimeHolds_Identity
+    ON RegimeHolds (Metric, BaselineSignature, ChangePointLocal);
+CREATE UNIQUE INDEX IX_RegimeAcceptances_Identity
+    ON RegimeAcceptances (Metric, BaselineSignature, ChangePointLocal);
 CREATE INDEX IX_Baselines_Lookup
     ON Baselines (Metric, BaselineSignature, ComputedOnLocal);
 CREATE INDEX "IX_Baselines_Metric_BaselineSignature_ComputedOnLocal" ON "Baselines" ("Metric", "BaselineSignature", "ComputedOnLocal");
