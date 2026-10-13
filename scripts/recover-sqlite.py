@@ -57,7 +57,8 @@ CREATE TABLE "Activity" (
     "LowActivityMinutes" INTEGER NOT NULL,
     "SedentaryMinutes" INTEGER NOT NULL,
     "RestMinutes" INTEGER NOT NULL,
-    "AvgMet" REAL NULL
+    "AvgMet" REAL NULL,
+    "Source" TEXT NULL
 );
 CREATE TABLE "Baselines" (
     "Id" INTEGER NOT NULL CONSTRAINT "PK_Baselines" PRIMARY KEY AUTOINCREMENT,
@@ -638,12 +639,31 @@ def orphan_roots(db, claimed):
     return [n for n in pages if n not in below]
 
 
+def exact_type(v, aff):
+    """A cell stored as exactly the kind its column declares: an integer in INTEGER, a float in REAL."""
+    if v is None:
+        return False
+    if aff == 'I':
+        return isinstance(v, int)
+    if aff == 'R':
+        return isinstance(v, float)
+    if aff == 'T':
+        return isinstance(v, str)
+    return False
+
+
 def shape_score(rows, cols):
-    """How well a set of rows fits a table's columns: (share that fit, share exactly as wide, non-null cells)."""
+    """How well a set of rows fits a table's columns: (share that fit, share exactly as wide, cells of exactly
+    the declared kind, non-null cells).
+
+    The third figure breaks ties that the first two cannot. fits() lets an integer sit in a REAL column, so
+    two tables of the same width can both 'fit' a tree perfectly; the one whose REAL columns actually hold
+    floats is the one it came from. Without it, Activity rows (one REAL column) were matched to Nutrition
+    (several) once both had fourteen columns."""
     n = len(cols)
     if not rows:
-        return (0.0, 0.0, 0.0)
-    good = exact = nonnull = 0
+        return (0.0, 0.0, 0.0, 0.0)
+    good = exact = typed = nonnull = 0
     for _rowid, vals in rows:
         # A row written before columns were added is shorter than the table; never longer.
         if len(vals) > n or len(vals) < max(1, n - 4):
@@ -651,8 +671,9 @@ def shape_score(rows, cols):
         if all(fits(v, cols[i][0]) for i, v in enumerate(vals)):
             good += 1
             exact += (len(vals) == n)
+            typed += sum(exact_type(v, cols[i][0]) for i, v in enumerate(vals))
             nonnull += sum(v is not None for v in vals)
-    return (good / len(rows), exact / len(rows), nonnull / len(rows))
+    return (good / len(rows), exact / len(rows), typed / len(rows), nonnull / len(rows))
 
 
 # Columns added to a table AFTER it was created are appended at the END of an existing database, but a

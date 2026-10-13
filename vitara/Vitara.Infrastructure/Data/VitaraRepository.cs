@@ -62,7 +62,10 @@ public class VitaraRepository(VitaraDbContext db) : IVitaraRepository
 
     // ── Activity ──
     public Task UpsertActivityAsync(IEnumerable<DailyActivity> records) => UpsertByIdAsync(db.Activity, records, a => a.Id);
-    public Task<List<DailyActivity>> GetActivityAsync(DateOnly from, DateOnly to) =>
+    public async Task<List<DailyActivity>> GetActivityAsync(DateOnly from, DateOnly to) =>
+        SourceResolution.Activity(await GetActivityRowsAsync(from, to));
+
+    public Task<List<DailyActivity>> GetActivityRowsAsync(DateOnly from, DateOnly to) =>
         db.Activity.Where(a => a.Day >= from && a.Day <= to).OrderBy(a => a.Day).ToListAsync();
 
     // ── Stress ──
@@ -494,10 +497,13 @@ public class VitaraRepository(VitaraDbContext db) : IVitaraRepository
     // supplies it, and SQLite sorts NULL last under DESC — so anything logged through
     // San or the UI ranked below every synced workout, and the callers that take the
     // most recent 3 or 10 then cut it off entirely. It was saved and invisible.
-    public Task<List<Workout>> GetWorkoutsAsync(DateOnly from, DateOnly to) =>
-        db.Workouts.Where(w => w.Day >= from && w.Day <= to)
+    //
+    // A ring workout the phone also recorded is the same session twice; the ring's copy is
+    // dropped on read (SourceResolution), and both stay stored.
+    public async Task<List<Workout>> GetWorkoutsAsync(DateOnly from, DateOnly to) =>
+        SourceResolution.Workouts(await db.Workouts.Where(w => w.Day >= from && w.Day <= to)
             .OrderByDescending(w => w.Day).ThenByDescending(w => w.StartTime)
-            .ToListAsync();
+            .ToListAsync());
 
     // ── Nutrition ──
     public Task UpsertNutritionAsync(IEnumerable<DailyNutrition> entries) => UpsertByIdAsync(db.Nutrition, entries, n => n.Id);

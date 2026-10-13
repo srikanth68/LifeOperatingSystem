@@ -36,7 +36,11 @@ public interface IVitaraRepository
 
     // Activity
     Task UpsertActivityAsync(IEnumerable<DailyActivity> records);
+    // Resolved: one row per day, the phone's steps and calories winning (SourceResolution).
     Task<List<DailyActivity>> GetActivityAsync(DateOnly from, DateOnly to);
+    // Every stored row, each source separately. For writers, which must never touch
+    // another source's row.
+    Task<List<DailyActivity>> GetActivityRowsAsync(DateOnly from, DateOnly to);
 
     // Stress
     Task UpsertStressAsync(IEnumerable<DailyStress> records);

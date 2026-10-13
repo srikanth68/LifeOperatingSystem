@@ -27,11 +27,11 @@ public class HealthKitController(IVitaraRepository repo) : ControllerBase
         var today = LocalTime.Today;
         var applied = new List<string>();
 
-        // ── Activity (steps + active calories) — merge into today's row, preserving any Oura fields ──
+        // ── Activity (steps + active calories) — the phone's own row; the ring's is never touched ──
         if (req.Steps.HasValue || req.ActiveCalories.HasValue)
         {
-            var existing = (await repo.GetActivityAsync(today, today)).FirstOrDefault();
-            var activity = existing ?? new DailyActivity { Id = today.ToString("yyyy-MM-dd"), Day = today };
+            var existing = (await repo.GetActivityRowsAsync(today, today)).FirstOrDefault(SourceResolution.IsPhone);
+            var activity = existing ?? new DailyActivity { Id = $"applehealth-{today:yyyy-MM-dd}", Day = today, Source = SourceResolution.PhoneHealth };
             if (req.Steps.HasValue) activity.Steps = req.Steps.Value;
             if (req.ActiveCalories.HasValue) activity.ActiveCalories = req.ActiveCalories.Value;
             await repo.UpsertActivityAsync(new[] { activity });
@@ -147,8 +147,8 @@ public class HealthKitController(IVitaraRepository repo) : ControllerBase
             {
                 if (!DateOnly.TryParseExact(d.Day, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
                     continue;
-                var existing = (await repo.GetActivityAsync(day, day)).FirstOrDefault();
-                var activity = existing ?? new DailyActivity { Id = day.ToString("yyyy-MM-dd"), Day = day };
+                var existing = (await repo.GetActivityRowsAsync(day, day)).FirstOrDefault(SourceResolution.IsPhone);
+                var activity = existing ?? new DailyActivity { Id = $"applehealth-{day:yyyy-MM-dd}", Day = day, Source = SourceResolution.PhoneHealth };
                 if (d.Steps.HasValue) activity.Steps = d.Steps.Value;
                 if (d.ActiveCalories.HasValue) activity.ActiveCalories = d.ActiveCalories.Value;
                 await repo.UpsertActivityAsync(new[] { activity });

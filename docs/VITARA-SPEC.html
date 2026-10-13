@@ -2350,6 +2350,19 @@ GET /api/health/scenario       "what if I...": arithmetic, learned or experiment
         </table>
       </div>
 
+      <h3>Ring and phone: the phone's health app wins</h3>
+      <p>
+        Steps, active calories and workouts arrive from the ring (Oura) and from the phone's health
+        app (Apple Health; Health Connect later). The phone wins on conflict: it is where every ring and
+        watch already writes, and it de-duplicates across them itself. Each source keeps its own
+        <code>Activity</code> row (<code>Source</code> = <code>apple_health</code> for the phone; the
+        phone used to overwrite the ring's row and the next Oura sync overwrote it back). Reads resolve
+        each day: the phone's steps and active calories over the ring's row, which keeps its score and
+        intensity minutes; a phone day with no data never wins. A ring workout that overlaps a phone
+        workout (starts within 10 minutes, or half the shorter one overlapping) is dropped on read as the
+        same session seen twice; hand-logged workouts are always kept. Decision record: Vitara ADR 0025.
+      </p>
+
       <h3>New inputs: strength, iron studies, habits, sleep timing</h3>
       <div class="tw">
         <table>

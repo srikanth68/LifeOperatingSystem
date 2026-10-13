@@ -290,6 +290,8 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
         await AddColumnIfMissingAsync(db, "Tokens", "LastSyncError", "TEXT");
 
         await AddColumnIfMissingAsync(db, "Meals", "Source", "TEXT NOT NULL DEFAULT 'manual'");
+        // Which source a day's activity row came from, so the phone stops overwriting the ring.
+        await AddColumnIfMissingAsync(db, "Activity", "Source", "TEXT");
         await AddColumnIfMissingAsync(db, "Measurements", "LabPanelId", "TEXT");
 
         // Nullable on purpose: every panel already stored was entered before anyone

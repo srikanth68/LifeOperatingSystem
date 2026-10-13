@@ -139,7 +139,9 @@ public class HealthXmlController(IVitaraRepository repo, ILogger<HealthXmlContro
         var from = byDay[0].Key;
         var to = byDay[^1].Key;
 
-        var activity = (await repo.GetActivityAsync(from, to)).ToDictionary(a => a.Day);
+        // The phone's own activity rows, never the ring's: Apple's steps used to be written
+        // into the Oura row and the next sync wrote the ring's back. Each source keeps its row.
+        var activity = (await repo.GetActivityRowsAsync(from, to)).Where(SourceResolution.IsPhone).ToDictionary(a => a.Day);
         // Apple's own row for each day, never Oura's: Apple's numbers used to be written into the
         // Oura session for the day, overwriting the ring's night with the phone's. Apple keeps its
         // own row, and SleepNights decides which one is the night.
@@ -161,7 +163,7 @@ public class HealthXmlController(IVitaraRepository repo, ILogger<HealthXmlContro
             {
                 var row = activity.TryGetValue(day.Key, out var a)
                     ? a
-                    : new DailyActivity { Id = day.Key.ToString("yyyy-MM-dd"), Day = day.Key };
+                    : new DailyActivity { Id = $"applehealth-{day.Key:yyyy-MM-dd}", Day = day.Key, Source = SourceResolution.PhoneHealth };
 
                 if (v.TryGetValue(MetricKeys.Steps, out var steps)) row.Steps = (int)Math.Round(steps);
                 if (v.TryGetValue(MetricKeys.ActiveCalories, out var cal)) row.ActiveCalories = (int)Math.Round(cal);
