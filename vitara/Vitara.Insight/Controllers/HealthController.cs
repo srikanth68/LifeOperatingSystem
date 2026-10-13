@@ -495,6 +495,45 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         });
     }
 
+    // "What if I...?" (Vitara ADR 0024). Every answer is labelled arithmetic, learned or
+    // experiment, and a medication is never given an expected effect.
+    [HttpGet("scenario")]
+    public async Task<IActionResult> Scenario([FromQuery] string change, [FromQuery] double? amount = null, [FromQuery] int days = 5)
+    {
+        if (!Scenarios.Changes.Contains(change))
+            return BadRequest(new { error = $"change must be one of: {string.Join(", ", Scenarios.Changes)}." });
+
+        var today = LocalTime.Today;
+        var observations = await repo.GetObservationsAsync(today.AddDays(-400), today);
+
+        List<(DateOnly, double)> Daily(string metric) => observations
+            .Where(o => o.Metric == metric)
+            .GroupBy(o => o.ObservedDateLocal)
+            .Select(g => (g.Key, g.Average(o => o.Value)))
+            .OrderBy(p => p.Key)
+            .ToList();
+
+        var result = Scenarios.Answer(change, amount, days, new Scenarios.Inputs(
+            Daily(MetricKeys.TotalSleepMinutes),
+            Daily(MetricKeys.ActiveCalories),
+            Daily(MetricKeys.BedtimeMinutes),
+            await DayRows(today.AddDays(-400), today),
+            await repo.GetLatestCorrelationsAsync(),
+            today));
+
+        return Ok(new
+        {
+            result.Change,
+            result.Title,
+            result.Mode,
+            result.Answers,
+            result.Experiment,
+            result.Caveat,
+            grade = Evidence.GradeFor(Evidence.ScenarioArithmetic)?.ToString(),
+            changes = Scenarios.Changes,
+        });
+    }
+
     private async Task<List<TrajectoryResult>> TrajectoriesAsync(
         DateOnly today, IReadOnlyList<Observation> observations, IReadOnlyList<DerivedMetric> derived)
     {
