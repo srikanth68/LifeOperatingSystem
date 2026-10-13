@@ -101,7 +101,7 @@ public static class Patterns
     // trivially-certain, not a judgement about what matters clinically. On a resting
     // heart rate of 54 it asks for about one beat; on an 88cm waist, under two
     // centimetres a year.
-    private const double MinRelativeChange = 0.02;
+    internal const double MinRelativeChange = 0.02;
 
     // How far past a metric's own expected cadence its last reading may sit before the
     // window stops describing the present.
@@ -118,12 +118,12 @@ public static class Patterns
     // Weight is expected weekly, so a month of silence; body fat fortnightly, so two
     // months; a waist monthly, so four. Generous on purpose -- missing a week is
     // normal and should not blank the component.
-    private const int StaleWindowMultiple = 4;
+    internal const int StaleWindowMultiple = 4;
 
     // Labs are the exception and borrow the lab detector's own number. A draw older
     // than this is history rather than news, and the two places must agree or the same
     // result is current in one view and stale in the other.
-    private const int SparseStaleDays = 400;
+    internal const int SparseStaleDays = 400;
 
     // A derived value does not get a vote of its own while anything it is derived from
     // is also in the pattern and measured. It is still reported.
@@ -446,7 +446,6 @@ public static class Patterns
         var shift = latest.Value - previous.Value;
 
         var range = ReferenceRanges.For(ranges, metric, sex, age);
-        var width = range is { Low: { } lo, High: { } hi } ? hi - lo : (double?)null;
 
         // Half the width of the range, OR a quarter of where it was -- whichever is
         // the smaller bar to clear.
@@ -467,11 +466,7 @@ public static class Patterns
         // of them plus a majority before it says anything, so a slightly lower bar is
         // bounded. A missed component is not: it silently removes the evidence that
         // the pattern exists at all.
-        var bar = width is { } w and > 0
-            ? Math.Min(w * 0.5, Math.Abs(previous.Value) * 0.25)
-            : Math.Abs(previous.Value) * 0.25;
-
-        var moved = Math.Abs(shift) >= bar;
+        var moved = Math.Abs(shift) >= LabMoveBar(previous.Value, range);
 
         var detail = $"{Number(previous.Value)} to {Number(latest.Value)} since {previous.ObservedDateLocal:MMM yyyy}";
 
@@ -483,6 +478,17 @@ public static class Patterns
             : Movement.Favourable;
 
         return new PatternComponent(metric, label, movement, detail, basis, true);
+    }
+
+    // How far a lab value must move from the previous draw to count as moving: the
+    // smaller of half the printed range's width and a quarter of the previous value.
+    // Shared with Trajectory so the two views cannot disagree about one draw.
+    internal static double LabMoveBar(double previous, ReferenceRange? range)
+    {
+        var width = range is { Low: { } lo, High: { } hi } ? hi - lo : (double?)null;
+        return width is { } w and > 0
+            ? Math.Min(w * 0.5, Math.Abs(previous) * 0.25)
+            : Math.Abs(previous) * 0.25;
     }
 
     // ── Saying it ───────────────────────────────────────────────────────────────

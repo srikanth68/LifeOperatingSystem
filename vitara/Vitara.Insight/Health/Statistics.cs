@@ -117,7 +117,13 @@ public static class Statistics
         return slopes.Count == 0 ? null : Median(slopes);
     }
 
-    public record TrendResult(double SlopePerDay, double Z, int N, bool IsSignificant);
+    // Variance is Mann-Kendall's Var(S), tie-corrected. Carried so the slope's confidence
+    // interval (Sen 1968) can be built from the same test rather than computed twice.
+    public record TrendResult(double SlopePerDay, double Z, int N, bool IsSignificant, double Variance = 0)
+    {
+        // Two-sided, from the normal approximation the test already uses.
+        public double PValue => 2 * (1 - NormalCdf(Math.Abs(Z)));
+    }
 
     // Whether a trend is real, and how steep.
     //
@@ -158,14 +164,59 @@ public static class Statistics
             .Sum(t => t * (t - 1) * (2 * t + 5));
 
         var variance = (n * (n - 1.0) * (2 * n + 5) - tieCorrection) / 18.0;
-        if (variance <= 0) return new TrendResult(slope.Value, 0, n, false);
+        if (variance <= 0) return new TrendResult(slope.Value, 0, n, false, 0);
 
         // The continuity correction: S is discrete, the normal is not.
         var z = s > 0 ? (s - 1) / Math.Sqrt(variance)
               : s < 0 ? (s + 1) / Math.Sqrt(variance)
               : 0;
 
-        return new TrendResult(slope.Value, z, n, Math.Abs(z) >= zThreshold);
+        return new TrendResult(slope.Value, z, n, Math.Abs(z) >= zThreshold, variance);
+    }
+
+    // Sen's rank-based confidence interval for the Theil-Sen slope.
+    //
+    // Order every pairwise slope; the bounds sit at ranks (N' - C) / 2 and (N' + C) / 2,
+    // where N' is the number of slopes and C = z * sqrt(Var(S)) from the Mann-Kendall
+    // test. No bootstrap and no library: it is two lookups in a sorted list.
+    public static (double Low, double High)? TheilSenInterval(
+        IReadOnlyList<(int Day, double Value)> points, double variance, double z = 1.96)
+    {
+        if (points.Count < 3 || variance <= 0) return null;
+
+        var slopes = new List<double>();
+        for (var i = 0; i < points.Count; i++)
+            for (var j = i + 1; j < points.Count; j++)
+            {
+                var dx = points[j].Day - points[i].Day;
+                if (dx == 0) continue;
+                slopes.Add((points[j].Value - points[i].Value) / dx);
+            }
+        if (slopes.Count < 2) return null;
+        slopes.Sort();
+
+        var c = z * Math.Sqrt(variance);
+        var n = slopes.Count;
+        // 1-based ranks, clamped to the list: a very short series has an interval as wide
+        // as its slopes, which is the honest answer.
+        var lower = (int)Math.Round((n - c) / 2.0);
+        var upper = (int)Math.Round((n + c) / 2.0) + 1;
+        lower = Math.Clamp(lower, 1, n);
+        upper = Math.Clamp(upper, 1, n);
+        return (slopes[lower - 1], slopes[upper - 1]);
+    }
+
+    // Abramowitz & Stegun 7.1.26, accurate to about 1.5e-7.
+    public static double NormalCdf(double z)
+    {
+        var x = z / Math.Sqrt(2);
+        var t = 1 / (1 + 0.3275911 * Math.Abs(x));
+
+        var erf = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t
+                       + 0.254829592) * t * Math.Exp(-x * x);
+
+        if (x < 0) erf = -erf;
+        return 0.5 * (1 + erf);
     }
 
     // Acute load against chronic load: a short window's mean over a long window's.

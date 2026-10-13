@@ -367,7 +367,8 @@
       <li><a href="#schedule"><span class="n">15</span><span>Scheduling</span></a></li>
       <li><a href="#failures"><span class="n">16</span><span>Failures that shaped this</span></a></li>
       <li><a href="#restraint"><span class="n">17</span><span>Restraint and proof</span></a></li>
-      <li><a href="#gaps"><span class="n">18</span><span>What is not built</span></a></li>
+      <li><a href="#longevity"><span class="n">18</span><span>Direction over months</span></a></li>
+      <li><a href="#gaps"><span class="n">19</span><span>What is not built</span></a></li>
     </ol>
   </nav>
 
@@ -1659,6 +1660,8 @@ GET    /api/interventions          what was started, with its declared target
 POST   /api/interventions          start one: name, kind, target metric, date
 GET    /api/interventions/targets  metrics with a better and a worse direction
 POST   /api/interventions/{id}/stop  ended, not deleted
+GET    /api/regime-acceptances     the person's "this is my normal now"
+POST   /api/regime-acceptances     accept an open hold: metric, signature, change point
 DELETE /api/interventions/{id}
 
 GET    /api/measurements           manual readings
@@ -1688,7 +1691,9 @@ GET /api/health/visit-brief    what to take to a doctor, and what this cannot se
 GET /api/health/signature      the bio signature: clock, week, recovery, responses
 GET /api/health/signature/export  the same, portable: statistics and weights, no readings
 GET /api/health/forecast       tomorrow for four targets, each with its own record
-GET /api/health/simulate       what if I had slept more, and what cannot be answered</code></pre>
+GET /api/health/simulate       what if I had slept more, and what cannot be answered
+GET /api/health/regime-holds   steps held rather than adopted, open and released
+GET /api/health/trajectories   every metric: improving, worsening, stable, uncertain, not enough data</code></pre>
 
       <div class="why">
         <span class="tag">The status sentence</span>
@@ -2214,8 +2219,51 @@ GET /api/health/simulate       what if I had slept more, and what cannot be answ
     </section>
 
     <!-- 18 ───────────────────────────────────────────── -->
-    <section id="gaps">
+    <section id="longevity">
       <span class="sect-num">18</span>
+      <h2>Direction over months</h2>
+
+      <p>
+        The detectors answer "is anything off right now". This section answers the slower
+        question &mdash; is this person getting better or worse &mdash; without a score, and
+        with every refusal stated. Design: Vitara ADRs 0017&ndash;0024.
+      </p>
+
+      <h3>Trajectories: silence is not stable</h3>
+      <p>
+        Every catalogue metric reports exactly one state, with its reason
+        (<code>GET /api/health/trajectories</code>, and a <code>trajectory</code> field on
+        every row of <code>/api/health/metrics</code>):
+      </p>
+      <div class="tw">
+        <table>
+          <thead><tr><th>State</th><th>Rule</th></tr></thead>
+          <tbody>
+            <tr><td class="m">improving / worsening</td><td>Mann&ndash;Kendall significant at p &lt; 0.05 <b>and</b> the Theil&ndash;Sen slope moved the number at least 2% of its median across the span the readings cover. Direction from the metric's polarity.</td></tr>
+            <tr><td class="m">rising / falling</td><td>The same, for metrics with no better direction (steps, TSH, vitamin D).</td></tr>
+            <tr><td class="m">stable</td><td>Not significant <b>and</b> moved less than 2%.</td></tr>
+            <tr><td class="m">uncertain</td><td>Anything else: moved but noise cannot be ruled out, or significant and too small to matter.</td></tr>
+            <tr><td class="m">insufficient_data</td><td>Daily metrics: fewer than 30 readings or a span under 28 days in 90. Manual: fewer than 6 over 60 days in 365. Stale past 4&times; the metric's expected cadence. Labs: fewer than two draws, or the latest over 400 days old.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Labs are never fitted: the latest draw is compared with the previous one against the
+        same bar the patterns use (half the printed range's width or a quarter of the previous
+        value, whichever is smaller), and a move is always labelled low confidence. Illness and
+        injury periods, travel for circadian metrics and ring readings from before the latest
+        device are excluded, as for baselines. A <b>held</b> step is deliberately not excluded:
+        the hold freezes what counts as normal, and the trajectory is where the movement since
+        stays visible. Labels are not findings &mdash; the drift detector remains the only source
+        of trend findings, at p &lt; 0.01.
+      </p>
+
+      <!-- longevity-end -->
+    </section>
+
+    <!-- 19 ───────────────────────────────────────────── -->
+    <section id="gaps">
+      <span class="sect-num">19</span>
       <h2>What is not built</h2>
 
       <div class="tw">

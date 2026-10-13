@@ -211,21 +211,9 @@ public static class Correlations
         var clamped = Math.Clamp(rho, -0.999999, 0.999999);
         var z = Math.Atanh(clamped) * Math.Sqrt(n - 3.0);
 
-        return 2 * (1 - NormalCdf(Math.Abs(z)));
-    }
-
-    // Abramowitz & Stegun 7.1.26, accurate to about 1.5e-7 — far tighter than the
-    // uncertainty in the correlation itself.
-    private static double NormalCdf(double z)
-    {
-        var x = z / Math.Sqrt(2);
-        var t = 1 / (1 + 0.3275911 * Math.Abs(x));
-
-        var erf = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t
-                       + 0.254829592) * t * Math.Exp(-x * x);
-
-        if (x < 0) erf = -erf;
-        return 0.5 * (1 + erf);
+        // Abramowitz & Stegun 7.1.26 in Statistics, accurate to about 1.5e-7 — far
+        // tighter than the uncertainty in the correlation itself.
+        return 2 * (1 - Statistics.NormalCdf(Math.Abs(z)));
     }
 
     // Benjamini-Hochberg, then the effect-size floor.

@@ -199,6 +199,7 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         var derived = await repo.GetDerivedMetricsAsync(today.AddDays(-400), today);
         var baselineDay = await repo.GetLatestBaselineDayAsync();
         var baselines = baselineDay is null ? [] : await repo.GetBaselinesAsync(baselineDay.Value);
+        var trajectories = (await TrajectoriesAsync(today, observations, derived)).ToDictionary(t => t.Metric);
 
         var rows = MetricCatalogue.All.Select(info =>
         {
@@ -275,6 +276,9 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
                     regimeStart = baseline.RegimeStartLocal?.ToString("yyyy-MM-dd"),
                     exclusions = baseline.ExclusionsJson,
                 },
+                // Better, worse, holding, unclear or not enough data -- never silence.
+                trajectory = trajectories.TryGetValue(info.Key, out var t) ? TrajectoryView(t) : null,
+
                 // Said per row, because "we cannot fill this for you" is the answer to
                 // most empty cells here and the user is the only one who can act on it.
                 fillWith = info.Source switch
@@ -297,6 +301,59 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
             metrics = rows,
         });
     }
+
+    // Every metric's direction: improving, worsening, stable, uncertain or not enough
+    // data, each with its reason (Vitara ADR 0018). Labels, not findings: nothing here
+    // notifies anyone.
+    [HttpGet("trajectories")]
+    public async Task<IActionResult> Trajectories()
+    {
+        var today = LocalTime.Today;
+        var rows = await TrajectoriesAsync(today,
+            await repo.GetObservationsAsync(today.AddDays(-400), today),
+            await repo.GetDerivedMetricsAsync(today.AddDays(-400), today));
+
+        return Ok(new
+        {
+            today = today.ToString("yyyy-MM-dd"),
+            counts = TrajectoryStates.All.ToDictionary(s => s, s => rows.Count(r => r.State == s)),
+            trajectories = rows.Select(TrajectoryView),
+        });
+    }
+
+    private async Task<List<TrajectoryResult>> TrajectoriesAsync(
+        DateOnly today, IReadOnlyList<Observation> observations, IReadOnlyList<DerivedMetric> derived)
+    {
+        var profile = await repo.GetProfileAsync();
+        return Trajectory.ForCatalogue(
+            observations, derived, today,
+            await repo.GetExcludedPeriodsAsync(),
+            await repo.GetTravelPeriodsAsync(),
+            await repo.GetDevicesAsync(),
+            await repo.GetRegimeHoldsAsync(),
+            await repo.GetReferenceRangesAsync(),
+            profile?.BiologicalSex,
+            profile?.CurrentAge);
+    }
+
+    private static object TrajectoryView(TrajectoryResult t) => new
+    {
+        t.Metric,
+        t.Label,
+        t.Tier,
+        t.State,
+        t.Direction,
+        t.SlopePerMonth,
+        relativeChange = t.RelativeChange is { } r ? Math.Round(r, 4) : (double?)null,
+        t.PValue,
+        t.N,
+        t.WindowDays,
+        firstDay = t.FirstDay?.ToString("yyyy-MM-dd"),
+        lastDay = t.LastDay?.ToString("yyyy-MM-dd"),
+        t.LastMeasuredDaysAgo,
+        t.Grade,
+        t.Reason,
+    };
 
     // What does this system actually have to say about this body?
     //
