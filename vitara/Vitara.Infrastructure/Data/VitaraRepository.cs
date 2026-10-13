@@ -249,6 +249,15 @@ public class VitaraRepository(VitaraDbContext db) : IVitaraRepository
         var open = await db.Findings.Where(f => f.ResolvedLocal == null).ToListAsync();
         var byKey = open.ToDictionary(f => f.Key);
 
+        // Recently closed, so a condition that comes back within days continues its own
+        // episode -- keeping its first day -- instead of starting again at day 1.
+        var reopenFrom = asOf.AddDays(-HealthThresholds.FindingReopenDays);
+        var recent = (await db.Findings
+                .Where(f => f.ResolvedLocal != null && f.ResolvedLocal >= reopenFrom)
+                .ToListAsync())
+            .GroupBy(f => f.Key)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(f => f.ResolvedLocal).First());
+
         int opened = 0, continued = 0;
 
         foreach (var f in incoming)
@@ -267,6 +276,16 @@ public class VitaraRepository(VitaraDbContext db) : IVitaraRepository
                 existing.EvidenceJson = f.EvidenceJson;
                 continued++;
             }
+            else if (recent.TryGetValue(f.Key, out var closed))
+            {
+                closed.ResolvedLocal = null;
+                closed.LastDetectedLocal = asOf;
+                closed.Severity = f.Severity;
+                closed.Confidence = f.Confidence;
+                closed.Summary = f.Summary;
+                closed.EvidenceJson = f.EvidenceJson;
+                continued++;
+            }
             else
             {
                 db.Findings.Add(f);
@@ -277,8 +296,14 @@ public class VitaraRepository(VitaraDbContext db) : IVitaraRepository
         // Open, and not detected this pass: the condition has ended. Recorded rather
         // than removed -- "your resting heart rate is back to normal" is worth as much
         // as the original finding was, and a deleted row can never say it.
+        //
+        // But not on the first clear day: it stays open until it has been absent for
+        // FindingClearDays in a row, so one good morning does not end a bad week.
         var stillDetected = incoming.Select(f => f.Key).ToHashSet();
-        var resolved = open.Where(f => !stillDetected.Contains(f.Key)).ToList();
+        var resolved = open
+            .Where(f => !stillDetected.Contains(f.Key)
+                     && asOf.DayNumber - f.LastDetectedLocal.DayNumber >= HealthThresholds.FindingClearDays)
+            .ToList();
         foreach (var f in resolved) f.ResolvedLocal = asOf;
 
         await db.SaveChangesAsync();

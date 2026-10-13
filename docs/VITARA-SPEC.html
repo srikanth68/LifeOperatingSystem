@@ -1513,7 +1513,8 @@ UNIQUE (Driver, Outcome, LagDays, ComputedOnLocal)</code></pre>
           <tbody>
             <tr><td><b>Opened</b></td><td>Key matches nothing open</td><td>New row inserted</td></tr>
             <tr><td><b>Continued</b></td><td>Key matches an open finding</td><td>Severity, summary and evidence updated. <code>FirstDetectedLocal</code> is <b>left alone</b>.</td></tr>
-            <tr><td><b>Resolved</b></td><td>Open, but not detected this pass</td><td><code>ResolvedLocal</code> set. Never deleted.</td></tr>
+            <tr><td><b>Resolved</b></td><td>Open, and not detected for 2 days in a row (one normal morning does not end a bad week)</td><td><code>ResolvedLocal</code> set. Never deleted.</td></tr>
+            <tr><td><b>Reopened</b></td><td>Detected again within 7 days of resolving</td><td>The same row reopens and keeps its first day: one episode, not a new one at day 1.</td></tr>
           </tbody>
         </table>
       </div>
@@ -1597,6 +1598,9 @@ UNIQUE (Driver, Outcome, LagDays, ComputedOnLocal)</code></pre>
             <tr><td class="m">VITARA_SURFACED_MAX</td><td class="num">3</td><td>How many findings lead at once; severe ones ignore it</td></tr>
             <tr><td class="m">VITARA_REGIME_SHIFT_Z</td><td class="num">1.5</td><td>Step size to qualify</td></tr>
             <tr><td class="m">VITARA_REGIME_DWELL_DAYS</td><td class="num">14</td><td>How long the new level must hold</td></tr>
+            <tr><td class="m">VITARA_FINDING_CLEAR_DAYS</td><td class="num">2</td><td>Days in a row without a finding before it closes</td></tr>
+            <tr><td class="m">VITARA_FINDING_REOPEN_DAYS</td><td class="num">7</td><td>A finding back within this many days of closing continues its episode</td></tr>
+            <tr><td class="m">VITARA_STRAIN_DAYS</td><td class="num">2</td><td>Days the load ratio must sit outside its band, same side</td></tr>
             <tr><td class="m">VITARA_REGIME_REVERT_DAYS</td><td class="num">14</td><td>Recent days a held step is judged on for "came back on its own"</td></tr>
             <tr><td class="m">VITARA_REGIME_REVERT_FRACTION</td><td class="num">0.25</td><td>How much of the step may remain and still count as reverted</td></tr>
             <tr><td class="m">VITARA_DRIFT_MIN_DAYS</td><td class="num">14</td><td>Points before a trend is reportable</td></tr>

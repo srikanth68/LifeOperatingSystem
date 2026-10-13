@@ -182,10 +182,13 @@ public static class FindingRun
         }
 
         // ── Strain and sleep debt ─────────────────────────────────────────────────
+        //
+        // Strain needs the ratio outside its band, on the same side, for several days
+        // running: one huge session tips a 7-day mean for a day and then lets it go.
         var acwr = Latest(input.Derived, "acwr_active_calories", asOf);
         var strain = FindingDetectors.Strain(
             acwr?.Value, HealthThresholds.AcwrLow, HealthThresholds.AcwrHigh, asOf);
-        if (strain is not null) findings.Add(strain);
+        if (strain is not null && StrainHeld(input.Derived, asOf, acwr!.Value)) findings.Add(strain);
 
         if (Latest(input.Derived, "sleep_debt_minutes", asOf) is { } debt)
         {
@@ -353,6 +356,19 @@ public static class FindingRun
             .OrderBy(d => d.ObservedDateLocal)
             .Select(d => (d.ObservedDateLocal, d.Value))
             .ToList();
+
+    private static bool StrainHeld(IReadOnlyList<DerivedMetric> derived, DateOnly asOf, double today)
+    {
+        var high = today > HealthThresholds.AcwrHigh;
+        for (var i = 1; i < HealthThresholds.StrainSustainedDays; i++)
+        {
+            var earlier = Latest(derived, "acwr_active_calories", asOf.AddDays(-i));
+            if (earlier is null) return false;
+            var outside = high ? earlier.Value > HealthThresholds.AcwrHigh : earlier.Value < HealthThresholds.AcwrLow;
+            if (!outside) return false;
+        }
+        return true;
+    }
 
     private static DerivedMetric? Latest(IReadOnlyList<DerivedMetric> derived, string metric, DateOnly asOf) =>
         derived.FirstOrDefault(d => d.Metric == metric && d.ObservedDateLocal == asOf);

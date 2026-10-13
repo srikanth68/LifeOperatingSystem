@@ -163,6 +163,17 @@ public static class HealthThresholds
     // reporting that estimate's own uncertainty back as a finding.
     public static double SleepDebtThresholdMinutes => Env("VITARA_SLEEP_DEBT_MINUTES", 300);
 
+    // How a finding ends. One normal morning used to close it, and the next bad morning
+    // reopened it as "day 1" -- a five-day condition read as five new ones. So a finding
+    // closes only after this many days in a row without it, and one that comes back
+    // within the reopen window is the same episode continuing, not a new one.
+    public static int FindingClearDays => EnvInt("VITARA_FINDING_CLEAR_DAYS", 2);
+    public static int FindingReopenDays => EnvInt("VITARA_FINDING_REOPEN_DAYS", 7);
+
+    // The load ratio must sit outside its band this many days running. It is a 7-day
+    // mean already, but one enormous session still tips it for a day.
+    public static int StrainSustainedDays => EnvInt("VITARA_STRAIN_DAYS", 2);
+
     // Days without an expected reading before absence becomes a finding.
     public static int StalenessDays => EnvInt("VITARA_STALENESS_DAYS", 3);
 }
