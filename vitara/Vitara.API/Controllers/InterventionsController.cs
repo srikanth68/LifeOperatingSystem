@@ -124,16 +124,24 @@ public class InterventionsController(IVitaraRepository repo) : ControllerBase
             // most inclined to check tomorrow and conclude something.
             verdictFrom = target is null
                 ? null
-                : saved.StartedOnLocal.AddDays(InterventionEvalWindow.RunInDays + InterventionEvalWindow.WindowDays)
+                : saved.StartedOnLocal.AddDays(IsLab(target)
+                        ? LabIntervals.MinimumDays(target)
+                        : InterventionEvalWindow.RunInDays + InterventionEvalWindow.WindowDays)
                     .ToString("yyyy-MM-dd"),
             note = target is null
                 ? "Recorded as context. Without a target metric it will explain a step change in your data, " +
                   "but it will not get a verdict — choosing what it was meant to do after seeing what moved " +
                   "is not evidence."
-                : $"The first {InterventionEvalWindow.RunInDays} days are not counted, and " +
-                  $"{InterventionEvalWindow.WindowDays} are needed after that. Nothing conclusive before then.",
+                : IsLab(target)
+                    // A lab is judged draw to draw: one before the start, one after the interval.
+                    ? $"Judged from two blood draws: one in the 90 days before today, and one at least " +
+                      $"{LabIntervals.MinimumDays(target)} days from now. Two draws give a low-confidence answer at best."
+                    : $"The first {InterventionEvalWindow.RunInDays} days are not counted, and " +
+                      $"{InterventionEvalWindow.WindowDays} are needed after that. Nothing conclusive before then.",
         });
     }
+
+    private static bool IsLab(string metric) => MetricCatalogue.Find(metric)?.Tier == Tiers.Sparse;
 
     // Stopped, not deleted. A protocol that ran three months and ended is part of the
     // record of why a metric moved; removing it takes the explanation with it.

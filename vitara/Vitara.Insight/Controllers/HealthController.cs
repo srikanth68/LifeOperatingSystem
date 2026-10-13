@@ -614,7 +614,11 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         var excluded = await repo.GetExcludedPeriodsAsync();
         var travel = await repo.GetTravelPeriodsAsync();
 
-        var evaluations = InterventionEval.Run(interventions, observations, today, excluded, travel);
+        // Lab targets are judged draw to draw against the printed range, so the ranges
+        // and the person's sex and age come in too.
+        var profile = await repo.GetProfileAsync();
+        var evaluations = InterventionEval.Run(interventions, observations, today, excluded, travel,
+            await repo.GetReferenceRangesAsync(), profile?.BiologicalSex, profile?.CurrentAge);
         var note = Evidence.For(Evidence.InterventionEvaluation);
 
         return Ok(new

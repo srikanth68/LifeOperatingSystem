@@ -2314,6 +2314,21 @@ GET /api/health/projection     "if this continues": a range with its basis, or t
         plausible values, and is grade C.
       </p>
 
+      <h3>Changes aimed at a lab, judged draw to draw</h3>
+      <p>
+        An intervention whose declared target is a lab never has four weeks of readings, so it is
+        judged in lab mode instead: the latest draw in the 90 days before the start, against the
+        first draw at least the analyte's minimum interval after it (HbA1c 90 days, lipids 42,
+        fasting insulin and HOMA-IR 56, CRP and hs-CRP 28, otherwise 56). No draw before:
+        <b>not enough data</b>, naming the test. No draw after the interval yet: <b>too early</b>,
+        with the date. Another intervention started between the two draws: <b>cannot separate</b>.
+        Otherwise the change is judged by the lab detector's own rule &mdash; half the printed range's
+        width, or a quarter of the earlier value where the range has one end &mdash; as improved,
+        worsened or no change. Two draws carry no rebound estimate, so confidence is always low and
+        says why. Biological variation (reference change values) would be the better noise floor and
+        waits for a sourced table of coefficients.
+      </p>
+
       <h3>New inputs: strength, iron studies, habits, sleep timing</h3>
       <div class="tw">
         <table>

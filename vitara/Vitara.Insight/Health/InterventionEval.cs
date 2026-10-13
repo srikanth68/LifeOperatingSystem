@@ -74,11 +74,107 @@ public static class InterventionEval
         IReadOnlyList<Observation> observations,
         DateOnly asOf,
         IReadOnlyList<ExcludedPeriod>? excluded = null,
-        IReadOnlyList<TravelPeriod>? travel = null) =>
+        IReadOnlyList<TravelPeriod>? travel = null,
+        IReadOnlyList<ReferenceRange>? ranges = null,
+        string? sex = null,
+        int? age = null) =>
         interventions
             .OrderByDescending(i => i.StartedOnLocal)
-            .Select(i => Evaluate(i, interventions, observations, asOf, excluded ?? [], travel ?? []))
+            .Select(i => Evaluate(i, interventions, observations, asOf, excluded ?? [], travel ?? [], ranges ?? [], sex, age))
             .ToList();
+
+    // ── Lab targets (Vitara ADR 0022) ───────────────────────────────────────────
+    //
+    // A lab is drawn twice a year, so four-week windows of readings never exist and every
+    // lab target used to report "not enough data" forever. Labs are judged draw to draw
+    // instead: the latest draw in the 90 days before the start, against the first draw at
+    // least the analyte's minimum interval after it.
+    public const int LabBeforeWindowDays = 90;
+
+    public static int LabMinimumInterval(string metric) => LabIntervals.MinimumDays(metric);
+
+    private static Evaluation EvaluateLab(
+        Intervention intervention, IReadOnlyList<Intervention> all, IReadOnlyList<Observation> observations,
+        DateOnly asOf, string metric, string label, MetricInfo? info, int polarity,
+        IReadOnlyList<ReferenceRange> ranges, string? sex, int? age)
+    {
+        var start = intervention.StartedOnLocal;
+        var stopped = intervention.EndedOnLocal;
+        var daysIn = (stopped is { } e && e < asOf ? e : asOf).DayNumber - start.DayNumber;
+        var interval = LabMinimumInterval(metric);
+        var earliest = start.AddDays(interval);
+
+        // Two draws cannot carry a rebound estimate, so this is said on every lab verdict.
+        var caveats = new List<string>
+        {
+            "Judged from two blood draws. There is no way to estimate from two values how much would have " +
+            "changed anyway, so this is low confidence at best.",
+        };
+
+        Evaluation Result(string verdict, string statement, EvalWindow? before = null, EvalWindow? after = null,
+            double? change = null, DateOnly? when = null) => new(
+            intervention.Id, intervention.Name, intervention.Kind, intervention.Dose,
+            start, stopped, daysIn, metric, label, verdict, statement, before, after,
+            change is { } c ? Math.Round(c, 3) : null, null, null, [], caveats,
+            verdict is Verdicts.Improved or Verdicts.Worsened or Verdicts.NoChange ? "low" : "none",
+            when ?? earliest);
+
+        var draws = observations
+            .Where(o => o.Metric == metric && o.LabPanelId is not null)
+            .GroupBy(o => o.LabPanelId!.Value)
+            .Select(g => g.OrderByDescending(o => o.ObservedDateLocal).First())
+            .OrderBy(o => o.ObservedDateLocal)
+            .ToList();
+
+        var before = draws.LastOrDefault(d => d.ObservedDateLocal < start && d.ObservedDateLocal >= start.AddDays(-LabBeforeWindowDays));
+        if (before is null)
+            return Result(Verdicts.NotEnoughData,
+                $"No {label} was drawn in the {LabBeforeWindowDays} days before this started, so there is nothing to " +
+                $"compare against. A {label} test before the next change you make is what makes it answerable.");
+
+        var after = draws.FirstOrDefault(d => d.ObservedDateLocal >= earliest);
+        if (after is null)
+            return Result(Verdicts.TooEarly,
+                asOf < earliest
+                    ? $"A {label} draw shows a change after about {interval} days. A verdict is possible from a draw on " +
+                      $"or after {earliest:d MMM yyyy}."
+                    : $"Waiting on a {label} draw on or after {earliest:d MMM yyyy}; none is on record yet.");
+
+        var others = all
+            .Where(o => o.Id != intervention.Id
+                     && o.StartedOnLocal > before.ObservedDateLocal && o.StartedOnLocal <= after.ObservedDateLocal)
+            .Select(o => o.Name)
+            .ToList();
+        if (others.Count > 0)
+            return Result(Verdicts.CannotSeparate,
+                $"{Join(others)} also started between the two {label} draws, so there is no way to say which " +
+                "of them moved it.");
+
+        // The lab detector's own rule, so the two cannot disagree about one draw: half the
+        // printed range's width, or a quarter of the previous value where the range has
+        // only one end (LDL "below 100").
+        var range = ReferenceRanges.For(ranges, metric, sex, age);
+        var width = range is { Low: { } lo, High: { } hi } && hi > lo ? hi - lo : (double?)null;
+        var bar = width is { } w ? w / 2 : Math.Abs(before.Value) * 0.25;
+        var barBasis = width is null ? "a quarter of the earlier value" : "half the width of the printed range";
+        var change = after.Value - before.Value;
+        var better = polarity == MetricDirection.HigherIsBetter ? change : -change;
+
+        var beforeWindow = new EvalWindow(before.ObservedDateLocal, before.ObservedDateLocal, 1, before.Value, before.Value, before.Value);
+        var afterWindow = new EvalWindow(after.ObservedDateLocal, after.ObservedDateLocal, 1, after.Value, after.Value, after.Value);
+        var moved = $"{label} went from {Number(before.Value)} ({before.ObservedDateLocal:d MMM yyyy}) to " +
+                    $"{Number(after.Value)} ({after.ObservedDateLocal:d MMM yyyy}), {Signed(change)}{UnitOf(info)}.";
+
+        if (Math.Abs(change) < bar)
+            return Result(Verdicts.NoChange,
+                $"{moved} That is less than {barBasis} ({Number(bar)}), which is within ordinary draw-to-draw variation.", beforeWindow, afterWindow, change);
+
+        return better > 0
+            ? Result(Verdicts.Improved, $"{moved} The right direction, by more than {barBasis}.",
+                beforeWindow, afterWindow, change)
+            : Result(Verdicts.Worsened, $"{moved} The wrong direction for what this was meant to do.",
+                beforeWindow, afterWindow, change);
+    }
 
     private static Evaluation Evaluate(
         Intervention intervention,
@@ -86,7 +182,10 @@ public static class InterventionEval
         IReadOnlyList<Observation> observations,
         DateOnly asOf,
         IReadOnlyList<ExcludedPeriod> excluded,
-        IReadOnlyList<TravelPeriod> travel)
+        IReadOnlyList<TravelPeriod> travel,
+        IReadOnlyList<ReferenceRange> ranges,
+        string? sex,
+        int? age)
     {
         var start = intervention.StartedOnLocal;
         var stopped = intervention.EndedOnLocal;
@@ -122,6 +221,9 @@ public static class InterventionEval
             return Bail(Verdicts.NoDirection,
                 $"{label} has no better or worse direction — it is read against a range rather than as " +
                 "something to move, so \"did this improve it\" is not a question with an answer.");
+
+        if (info?.Tier == Tiers.Sparse)
+            return EvaluateLab(intervention, all, observations, asOf, metric, label, info, polarity, ranges, sex, age);
 
         var earliest = start.AddDays(RunInDays + WindowDays);
         if (through < earliest)
