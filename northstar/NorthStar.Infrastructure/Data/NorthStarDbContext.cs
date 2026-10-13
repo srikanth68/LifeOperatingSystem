@@ -17,6 +17,7 @@ public class NorthStarDbContext(DbContextOptions<NorthStarDbContext> options) : 
     public DbSet<FactRevision> FactRevisions => Set<FactRevision>();
     public DbSet<NamedEntity> Entities => Set<NamedEntity>();
     public DbSet<RecordLink> Links => Set<RecordLink>();
+    public DbSet<MemoryVector> MemoryVectors => Set<MemoryVector>();
 
     // SQLite has no timezone-aware column type — every DateTime loses its Kind on
     // round-trip and comes back Unspecified, which System.Text.Json then serializes
@@ -81,6 +82,8 @@ public class NorthStarDbContext(DbContextOptions<NorthStarDbContext> options) : 
             e.HasIndex(m => m.Status);
             e.HasIndex(m => m.ContentKey);
         });
+
+        b.Entity<MemoryVector>(e => e.HasKey(v => v.MemoryId));
 
         b.Entity<FactRevision>(e =>
         {

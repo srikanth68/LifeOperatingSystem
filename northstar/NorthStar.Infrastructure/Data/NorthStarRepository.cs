@@ -4,7 +4,9 @@ using NorthStar.Domain.Entities;
 
 namespace NorthStar.Infrastructure.Data;
 
-public partial class NorthStarRepository(NorthStarDbContext db) : INorthStarRepository
+// The embedder is optional: without one (tests, or no local model configured) recall is
+// keyword-and-entity search, exactly as before meaning-search existed.
+public partial class NorthStarRepository(NorthStarDbContext db, IEmbedder? embedder = null) : INorthStarRepository
 {
     // ── Knowledge ──
     public async Task<KnowledgeEntry> AddEntryAsync(KnowledgeEntry entry)

@@ -188,6 +188,7 @@ public partial class NorthStarRepository
         var key = IdOf(id);
         db.Links.RemoveRange(db.Links.Where(l =>
             (l.FromType == RecordTypes.Memory && l.FromId == key) || (l.ToType == RecordTypes.Memory && l.ToId == key)));
+        db.MemoryVectors.RemoveRange(db.MemoryVectors.Where(v => v.MemoryId == id));
         db.Memories.Remove(m);
         await db.SaveChangesAsync();
         return true;
@@ -271,6 +272,11 @@ public partial class NorthStarRepository
         foreach (var id in await MemoriesAboutEntitiesNamedInAsync(query))
             relevance[id] = Math.Max(relevance.GetValueOrDefault(id), MemorySearch.EntityRelevance);
 
+        // And memories close in meaning, when a local embedding model is configured:
+        // what the keyword index cannot see, with no alias needed.
+        foreach (var (id, similarity) in await SimilarByMeaningAsync(query))
+            relevance[id] = Math.Max(relevance.GetValueOrDefault(id), MemorySearch.SemanticRelevance(similarity, MemorySearch.SimilarityFloor));
+
         if (exclude is not null)
             foreach (var id in exclude) relevance.Remove(id);
 
@@ -339,6 +345,71 @@ public partial class NorthStarRepository
                 ToType = RecordTypes.Entity, ToId = entityId,
                 Basis = LinkBasis.Inferred, Source = to.Source, SourceRef = $"inherited from memory {fromId}",
             });
+    }
+
+    // ── Meaning ──────────────────────────────────────────────────────────────
+
+    // Embeds live memories that have no vector, or whose vector is stale (the text
+    // changed, or the model did). Returns how many were embedded. Run in the
+    // background; recall never waits for it.
+    public async Task<int> EmbedPendingAsync(int batch = 32, CancellationToken ct = default)
+    {
+        if (embedder is not { Enabled: true }) return 0;
+
+        var vectors = await db.MemoryVectors.AsNoTracking()
+            .Select(v => new { v.MemoryId, v.ContentKey, v.Model }).ToListAsync(ct);
+        var current = vectors.ToDictionary(v => v.MemoryId);
+        var pending = (await db.Memories.AsNoTracking()
+                .Where(m => m.Status == MemoryStatus.Active || m.Status == MemoryStatus.Proposed)
+                .Select(m => new { m.Id, m.Content, m.ContentKey }).ToListAsync(ct))
+            .Where(m => !current.TryGetValue(m.Id, out var v) || v.ContentKey != m.ContentKey || v.Model != embedder.Model)
+            .Take(batch)
+            .ToList();
+        if (pending.Count == 0) return 0;
+
+        var embedded = await embedder.EmbedAsync(pending.Select(p => p.Content).ToList(), isQuery: false, ct);
+        if (embedded is null) return 0;
+
+        for (var i = 0; i < pending.Count; i++)
+        {
+            var p = pending[i];
+            var row = await db.MemoryVectors.FirstOrDefaultAsync(v => v.MemoryId == p.Id, ct);
+            if (row is null) db.MemoryVectors.Add(row = new MemoryVector { MemoryId = p.Id });
+            row.Model = embedder.Model;
+            row.ContentKey = p.ContentKey;
+            row.Dimensions = embedded[i].Length;
+            row.Vector = MemoryVector.Pack(embedded[i]);
+            row.CreatedAt = DateTime.UtcNow;
+        }
+        await db.SaveChangesAsync(ct);
+        return pending.Count;
+    }
+
+    // The closest live memories by cosine similarity, above the configured floor. A
+    // brute-force scan: a personal memory store is hundreds to a few thousand rows,
+    // and a scan over that is quicker than the embedding call that precedes it.
+    private async Task<List<(Guid Id, double Similarity)>> SimilarByMeaningAsync(string query, int take = 20)
+    {
+        if (embedder is not { Enabled: true } || string.IsNullOrWhiteSpace(query)) return [];
+
+        // Bounded: a slow or stopped model server must not hold up San's reply.
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        // An email can be several thousand characters, past what small embedding models
+        // accept; its opening (subject first) carries what it is about.
+        var text = query.Length > 2000 ? query[..2000] : query;
+        var q = await embedder.EmbedAsync([text], isQuery: true, timeout.Token);
+        if (q is not [var qv]) return [];
+        var query1 = MemoryVector.Normalise(qv);
+
+        var model = embedder.Model;
+        var rows = await db.MemoryVectors.AsNoTracking().Where(v => v.Model == model)
+            .Select(v => new { v.MemoryId, v.Vector }).ToListAsync();
+        return rows
+            .Select(r => (r.MemoryId, Similarity: (double)MemoryVector.Cosine(query1, MemoryVector.Unpack(r.Vector))))
+            .Where(x => x.Similarity >= MemorySearch.SimilarityFloor)
+            .OrderByDescending(x => x.Similarity)
+            .Take(take)
+            .ToList();
     }
 
     private async Task<List<Guid>> MemoriesAboutEntitiesNamedInAsync(string query)

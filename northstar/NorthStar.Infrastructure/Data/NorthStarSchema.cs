@@ -52,6 +52,15 @@ public static class NorthStarSchema
         CREATE UNIQUE INDEX IF NOT EXISTS IX_Links_FromType_FromId_Relation_ToType_ToId
             ON Links(FromType, FromId, Relation, ToType, ToId);
         CREATE INDEX IF NOT EXISTS IX_Links_ToType_ToId ON Links(ToType, ToId);
+
+        CREATE TABLE IF NOT EXISTS MemoryVectors (
+            MemoryId TEXT PRIMARY KEY,
+            Model TEXT NOT NULL DEFAULT '',
+            ContentKey TEXT NOT NULL DEFAULT '',
+            Dimensions INTEGER NOT NULL DEFAULT 0,
+            Vector BLOB NOT NULL,
+            CreatedAt TEXT NOT NULL DEFAULT '0001-01-01'
+        );
         """;
 
     // Every memory that existed before the lifecycle did was in use as fact, so it starts

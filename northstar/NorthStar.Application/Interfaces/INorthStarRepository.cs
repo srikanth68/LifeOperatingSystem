@@ -63,6 +63,7 @@ public interface INorthStarRepository
     Task<List<MemoryEntry>> GetRecentMemoriesAsync(int limit = 20, string? kind = null, string? status = null);
     Task<bool> DeleteMemoryAsync(Guid id);
     Task<(int Total, Dictionary<string, int> ByKind, Dictionary<string, int> ByStatus)> GetMemoryStatsAsync();
+    Task<int> EmbedPendingAsync(int batch = 32, CancellationToken ct = default);   // meaning-search backfill
 
     // Entities and links between records
     Task<NamedEntity?> ResolveEntityAsync(string name);

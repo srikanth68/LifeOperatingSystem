@@ -23,6 +23,10 @@ builder.Services.AddDbContext<NorthStarDbContext>(o =>
     o.UseSqlite($"Data Source={Path.Combine(Directory.GetCurrentDirectory(), "..", "northstar.db")}"));
 builder.Services.AddScoped<INorthStarRepository, NorthStarRepository>();
 builder.Services.AddHttpClient();
+// Meaning-search: a local embedding model, when EMBEDDINGS_URL points at one. Off
+// otherwise, and recall works exactly as it did without it.
+builder.Services.AddHttpClient<IEmbedder, NorthStar.Infrastructure.Embeddings.LocalEmbedder>(c => c.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddHostedService<EmbeddingWorker>();
 builder.Services.AddScoped<ModuleSyncService>();
 builder.Services.AddHostedService<NorthStarSyncWorker>();
 

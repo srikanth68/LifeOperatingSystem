@@ -145,6 +145,18 @@ public static partial class MemorySearch
     // match, so naming the car brings its memories without drowning a direct hit.
     public const double EntityRelevance = 0.75;
 
+    // A memory reached by meaning (its embedding is close to the question's) rather
+    // than by shared words. Mapped from cosine similarity above the floor onto 0.5-0.9:
+    // a near-paraphrase competes with a strong keyword hit, a loose resemblance ranks
+    // below one. The floor is the model-dependent part, so it is configurable.
+    public static double SemanticRelevance(double similarity, double floor) =>
+        similarity < floor ? 0 : 0.5 + 0.4 * Math.Clamp((similarity - floor) / (1 - floor), 0, 1);
+
+    public static readonly double SimilarityFloor =
+        double.TryParse(Environment.GetEnvironmentVariable("EMBEDDINGS_MIN_SIMILARITY"),
+            System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var f)
+            ? f : 0.6;
+
     // An unconfirmed memory ranks a little below a confirmed one that matches as well.
     // It is still recalled -- San is better off knowing it, labelled -- but where the
     // two compete for the last slot, the confirmed one wins.
