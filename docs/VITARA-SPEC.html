@@ -1693,7 +1693,8 @@ GET /api/health/signature/export  the same, portable: statistics and weights, no
 GET /api/health/forecast       tomorrow for four targets, each with its own record
 GET /api/health/simulate       what if I had slept more, and what cannot be answered
 GET /api/health/regime-holds   steps held rather than adopted, open and released
-GET /api/health/trajectories   every metric: improving, worsening, stable, uncertain, not enough data</code></pre>
+GET /api/health/trajectories   every metric: improving, worsening, stable, uncertain, not enough data
+GET /api/health/domains        ten areas of health: directions, findings, gaps, one sentence, no score</code></pre>
 
       <div class="why">
         <span class="tag">The status sentence</span>
@@ -2256,6 +2257,25 @@ GET /api/health/trajectories   every metric: improving, worsening, stable, uncer
         the hold freezes what counts as normal, and the trajectory is where the movement since
         stays visible. Labels are not findings &mdash; the drift detector remains the only source
         of trend findings, at p &lt; 0.01.
+      </p>
+
+      <h3>Domains, without a score</h3>
+      <p>
+        <code>GET /api/health/domains</code> reads health in ten areas: heart and circulation,
+        metabolic health, body composition, fitness and strength, sleep and recovery, nutrition
+        timing, inflammation, nutritional status, kidney/liver/thyroid, and ageing well (strength
+        and function, read with five of the others and never re-counting their metrics). A metric
+        may sit in several; a finding is listed once per domain. Every catalogue metric belongs to
+        at least one domain, and a test fails otherwise.
+      </p>
+      <p>
+        Each domain returns its measures (latest value, age, baseline state, trajectory, evidence
+        grade), the count of each trajectory state, the active findings and firing patterns that
+        touch it, its <b>gaps</b> &mdash; unmeasured and stale measures, and the key tests missing,
+        such as metabolic without fasting insulin or fitness without any strength measure &mdash;
+        and one sentence built from the counts: "2 improving, 1 worsening (resting heart rate),
+        4 without enough data." No domain has a score, percentage, letter or colour, and a test
+        asserts the payload carries none.
       </p>
 
       <h3>New inputs: strength, iron studies, habits, sleep timing</h3>

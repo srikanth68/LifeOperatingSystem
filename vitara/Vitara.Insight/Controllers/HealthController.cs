@@ -321,6 +321,64 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         });
     }
 
+    // "How am I doing?", per area of health, with no score anywhere (Vitara ADR 0019):
+    // each domain's measures with their direction, the counts, the active findings and
+    // patterns that touch it, the gaps, and one sentence built from those.
+    [HttpGet("domains")]
+    public async Task<IActionResult> HealthDomains()
+    {
+        var today = LocalTime.Today;
+        var observations = await repo.GetObservationsAsync(today.AddDays(-800), today);
+        var derived = await repo.GetDerivedMetricsAsync(today.AddDays(-400), today);
+        var profile = await repo.GetProfileAsync();
+        var ranges = await repo.GetReferenceRangesAsync();
+
+        var trajectories = await TrajectoriesAsync(today, observations, derived);
+
+        var latest = new Dictionary<string, (DateOnly Day, double Value)>();
+        foreach (var g in observations.GroupBy(o => o.Metric))
+        {
+            var last = g.OrderBy(o => o.ObservedDateLocal).Last();
+            latest[g.Key] = (last.ObservedDateLocal, last.Value);
+        }
+        foreach (var g in derived.GroupBy(d => d.Metric))
+        {
+            var last = g.OrderBy(d => d.ObservedDateLocal).Last();
+            latest[g.Key] = (last.ObservedDateLocal, last.Value);
+        }
+
+        var baselineDay = await repo.GetLatestBaselineDayAsync();
+        var baselines = baselineDay is null ? [] : await repo.GetBaselinesAsync(baselineDay.Value);
+        var states = baselines
+            .GroupBy(b => b.Metric)
+            .ToDictionary(g => g.Key, g => g.Any(b => b.IsValid) ? "ready" : "learning");
+
+        var domains = DomainView.Build(
+            trajectories, latest, states,
+            await repo.GetFindingsAsync(activeOnly: true),
+            Patterns.Run(observations, today, ranges, profile?.BiologicalSex, profile?.CurrentAge),
+            today);
+
+        return Ok(new
+        {
+            today = today.ToString("yyyy-MM-dd"),
+            note = "No domain is scored. Each one says what moved, which way, and what is not measured.",
+            domains = domains.Select(d => new
+            {
+                d.Key,
+                d.Label,
+                d.Question,
+                d.Status,
+                d.Counts,
+                metrics = d.Metrics,
+                findings = d.Findings.Select(f => new { f.Key, f.Type, f.Metric, f.Severity, f.Summary }),
+                patterns = d.Patterns,
+                gaps = d.Gaps,
+                readWith = d.ReadWith,
+            }),
+        });
+    }
+
     private async Task<List<TrajectoryResult>> TrajectoriesAsync(
         DateOnly today, IReadOnlyList<Observation> observations, IReadOnlyList<DerivedMetric> derived)
     {
