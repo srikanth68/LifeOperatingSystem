@@ -168,6 +168,22 @@ public class PatternTests
     }
 
     [Fact]
+    public void TheGoodNewsIsWithheldWhileGripStrengthIsFalling()
+    {
+        // Weight, waist and lean mass all say "the good kind of loss". A measured fall
+        // in strength says otherwise, and the sentence has to be unqualified or unsaid.
+        var observations = Ramp(MetricKeys.WeightKg, 92, 85, days: 365, everyDays: 10, tier: Tiers.Medium)
+            .Concat(Ramp(MetricKeys.WaistCircumferenceCm, 104, 96, days: 365, everyDays: 20, tier: Tiers.Medium))
+            .Concat(Flat(MetricKeys.LeanMassKg, 62, days: 365, everyDays: 10, tier: Tiers.Medium))
+            .Concat(Ramp(MetricKeys.GripStrengthKg, 46, 38, days: 365, everyDays: 14, tier: Tiers.Medium));
+
+        var pattern = Find(observations, "favourable_body_change");
+
+        Assert.False(pattern.Fires);
+        Assert.Contains("grip strength", pattern.HeldBecause);
+    }
+
+    [Fact]
     public void WeightComingOffWithLeanMassIsTheOtherOutcome()
     {
         var observations = Ramp(MetricKeys.WeightKg, 92, 85, days: 365, everyDays: 10, tier: Tiers.Medium)

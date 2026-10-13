@@ -89,6 +89,16 @@ public static class ObservationProjector
         if (main.SkinTempDeviation is { } temp)
             observations.Add(Make(MetricKeys.SkinTempDeviation, temp, "C", day, at, id));
 
+        // Sleep timing, from the main session only, and only when it is a night. A nap
+        // that happens to be the longest sleep of a day is not a bedtime, and a 3pm one
+        // would drag the series into the afternoon. Two hours is a floor below which no
+        // night here has ever been real.
+        if (main.BedtimeStart != default && main.BedtimeEnd != default && main.TotalSleepMinutes >= 120)
+        {
+            observations.Add(Make(MetricKeys.BedtimeMinutes, AroundMidnight(main.BedtimeStart), "min", day, at, id));
+            observations.Add(Make(MetricKeys.WakeMinutes, AroundMidnight(main.BedtimeEnd), "min", day, at, id));
+        }
+
         return observations;
     }
 
@@ -200,6 +210,14 @@ public static class ObservationProjector
             // are different questions with the same metric key.
             LabPanelId = m.LabPanelId,
         };
+    }
+
+    // Minutes from midnight, either side of it: 23:10 is -50, 00:40 is 40. A clock time
+    // after noon belongs to the evening before the midnight it is measured from.
+    public static double AroundMidnight(DateTime t)
+    {
+        var minutes = t.TimeOfDay.TotalMinutes;
+        return Math.Round(minutes > 12 * 60 ? minutes - 24 * 60 : minutes, 1);
     }
 
     private static Observation Make(string metric, double value, string unit, DateOnly day, DateTime at, string? sourceId) => new()

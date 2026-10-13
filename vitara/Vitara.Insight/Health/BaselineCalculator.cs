@@ -44,6 +44,7 @@ public static class BaselineCalculator
         MetricKeys.TotalSleepMinutes, MetricKeys.DeepSleepMinutes, MetricKeys.RemSleepMinutes,
         MetricKeys.SleepScore, MetricKeys.SleepEfficiency, MetricKeys.HrvRmssd,
         MetricKeys.RestingHeartRate, MetricKeys.ReadinessScore,
+        MetricKeys.BedtimeMinutes, MetricKeys.WakeMinutes, MetricCatalogue.BedtimeVariabilityMinutes,
     ];
 
     public static Baseline Compute(

@@ -200,6 +200,7 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
         derived.AddRange(ComputeLoadAndSleep(observations, asOf));
         derived.AddRange(ComputeBody(observations, await repo.GetProfileAsync(), asOf));
         derived.AddRange(ComputeDrift(observations, asOf));
+        derived.AddRange(ComputeHabits(observations, travel, asOf));
 
         await repo.SaveBaselinesAsync(baselines);
         await repo.SaveDerivedMetricsAsync(derived);
@@ -221,7 +222,19 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
     private async Task CorrelateAsync(
         IVitaraRepository repo, IReadOnlyList<Observation> observations, DateOnly asOf)
     {
-        var found = Correlations.Run(observations, asOf);
+        // The habit drivers are computed, not observed: hours before bed needs that
+        // night's bedtime. Read back and offered to the correlation run as daily values.
+        var computedDrivers = (await repo.GetDerivedMetricsAsync(asOf.AddDays(-91), asOf))
+            .Where(d => d.Metric is MetricCatalogue.CaffeineHoursBeforeBed or MetricCatalogue.LastMealHoursBeforeBed)
+            .Select(d => new Observation
+            {
+                Metric = d.Metric,
+                Value = d.Value,
+                ObservedDateLocal = d.ObservedDateLocal,
+                ObservedAtLocal = d.ObservedDateLocal.ToDateTime(new TimeOnly(12, 0)),
+            });
+
+        var found = Correlations.Run(observations.Concat(computedDrivers).ToList(), asOf);
         await repo.SaveCorrelationsAsync(found.Select(c => new MetricCorrelation
         {
             Driver = c.Driver,
@@ -284,6 +297,58 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
                 findings.Count == 0 ? "none" : string.Join(", ", findings.Select(f => f.Key)));
         else
             logger.LogDebug("Findings: {Continued} continuing, nothing new.", sync.Continued);
+    }
+
+    // Hours before bed for caffeine and the last meal, and bedtime regularity.
+    //
+    // A week back rather than just today: hours before bed for day D needs the night that
+    // ended on D + 1, so yesterday's value only becomes computable this morning, and a
+    // late sync should not lose it.
+    private static List<DerivedMetric> ComputeHabits(
+        IReadOnlyList<Observation> observations, IReadOnlyList<TravelPeriod> travel, DateOnly asOf)
+    {
+        var derived = new List<DerivedMetric>();
+
+        var bedtimes = observations
+            .Where(o => o.Metric == MetricKeys.BedtimeMinutes)
+            .GroupBy(o => o.ObservedDateLocal)
+            .ToDictionary(g => g.Key, g => g.First().Value);
+
+        var trips = travel.Select(t => (t.StartLocal, t.EndLocal)).ToList();
+
+        foreach (var (logKey, metric) in new[]
+                 {
+                     (MetricKeys.CaffeineLastTime, MetricCatalogue.CaffeineHoursBeforeBed),
+                     (MetricKeys.LastMealTime, MetricCatalogue.LastMealHoursBeforeBed),
+                 })
+        {
+            // The latest log of the day is the last one, which is what was asked.
+            var logs = observations
+                .Where(o => o.Metric == logKey && o.ObservedDateLocal > asOf.AddDays(-8))
+                .GroupBy(o => o.ObservedDateLocal)
+                .Select(g => (g.Key, g.Max(o => o.Value)))
+                .ToList();
+
+            foreach (var (day, hours) in HabitTiming.HoursBeforeBed(logs, bedtimes, trips))
+                derived.Add(new DerivedMetric
+                {
+                    Metric = metric,
+                    ObservedDateLocal = day,
+                    Value = hours,
+                    InputsJson = $$"""{"bedtimeNight":"{{day.AddDays(1):yyyy-MM-dd}}"}""",
+                });
+        }
+
+        if (HabitTiming.Regularity(bedtimes, asOf) is { } spread)
+            derived.Add(new DerivedMetric
+            {
+                Metric = MetricCatalogue.BedtimeVariabilityMinutes,
+                ObservedDateLocal = asOf,
+                Value = spread,
+                InputsJson = $$"""{"windowNights":{{HabitTiming.RegularityWindowNights}},"method":"circular_sd"}""",
+            });
+
+        return derived;
     }
 
     // Body composition, from a height that lives on the profile and a weight that

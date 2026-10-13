@@ -2258,6 +2258,29 @@ GET /api/health/trajectories   every metric: improving, worsening, stable, uncer
         of trend findings, at p &lt; 0.01.
       </p>
 
+      <h3>New inputs: strength, iron studies, habits, sleep timing</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Group</th><th>Keys</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Strength</td><td class="m">grip_strength_kg, sit_to_stand_30s, pushups_max, strength_1rm_kg</td><td>Manual, medium tier, higher is better. Grip splits its baseline by hand, a one-rep max by exercise.</td></tr>
+            <tr><td>Body</td><td class="m">visceral_fat</td><td>The scale's own units; graded C because bioimpedance estimates are poorly validated.</td></tr>
+            <tr><td>Labs</td><td class="m">hs_crp, iron, tibc, transferrin_saturation</td><td>hs-CRP is its own key, not a unit of CRP. No reference ranges were added: none is entered without a cited source.</td></tr>
+            <tr><td>Habits</td><td class="m">alcohol_units, caffeine_last_time, last_meal_time</td><td>One value a day. Alcohol defaults to 0 in the form, because a day without a drink is the value worth having. Times are stored as minutes after local midnight.</td></tr>
+            <tr><td>Computed</td><td class="m">caffeine_hours_before_bed, last_meal_hours_before_bed</td><td>From the logged time on day D and the bedtime of the night filed on D + 1. A time before 05:00 is the small hours of the same evening. Refused on travel days, where the difference would be the time zone.</td></tr>
+            <tr><td>Sleep timing</td><td class="m">bedtime_minutes, wake_minutes, bedtime_variability_minutes</td><td>From the night's main session only (two hours or more), as minutes either side of midnight. Regularity is the circular standard deviation of the last 14 bedtimes (at least 7). All three are circadian: travel nights stay out of their baselines.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Every manual key has plausibility bounds; a reading outside them is refused as a probable
+        typo. Strength feeds <code>lean_mass_loss</code>, and a measured fall in grip, sit-to-stand
+        or push-ups withholds <code>favourable_body_change</code> (unmeasured passes). The habit
+        keys are correlation drivers against the existing outcomes at lags 0 and 1; a pair with
+        fewer than 30 paired days is skipped before Benjamini&ndash;Hochberg, so an unlogged habit
+        cannot raise the bar for the pairs that work.
+      </p>
+
       <!-- longevity-end -->
     </section>
 

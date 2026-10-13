@@ -43,6 +43,10 @@ public static class MetricDirection
         [MetricKeys.Ast]                 = HigherIsWorse,
         [MetricKeys.BodyFatPct]          = HigherIsWorse,
         [MetricKeys.DiastolicBp]         = HigherIsWorse,
+        [MetricKeys.VisceralFat]         = HigherIsWorse,
+        [MetricKeys.HsCrp]               = HigherIsWorse,
+        [MetricKeys.AlcoholUnits]        = HigherIsWorse,
+        [MetricCatalogue.BedtimeVariabilityMinutes] = HigherIsWorse,
 
         [MetricKeys.HrvRmssd]            = HigherIsBetter,
         [MetricKeys.TotalSleepMinutes]   = HigherIsBetter,
@@ -57,6 +61,12 @@ public static class MetricDirection
         [MetricKeys.Hdl]                 = HigherIsBetter,
         [MetricKeys.Egfr]                = HigherIsBetter,
         [MetricKeys.LeanMassKg]          = HigherIsBetter,
+        [MetricKeys.GripStrengthKg]      = HigherIsBetter,
+        [MetricKeys.SitToStand30s]       = HigherIsBetter,
+        [MetricKeys.PushupsMax]          = HigherIsBetter,
+        [MetricKeys.Strength1RmKg]       = HigherIsBetter,
+        [MetricCatalogue.CaffeineHoursBeforeBed] = HigherIsBetter,
+        [MetricCatalogue.LastMealHoursBeforeBed] = HigherIsBetter,
 
         // Deliberately neutral: more steps is not better without knowing why they rose,
         // and TSH and vitamin D are bad at both ends.
@@ -75,6 +85,17 @@ public static class MetricDirection
         [MetricKeys.VitaminB12]          = Neutral,
         [MetricKeys.Folate]              = Neutral,
         [MetricKeys.Lpa]                 = Neutral,
+
+        // Iron studies are read together and against a range; each is bad at both ends.
+        // Raw clock times and bedtime itself have no better value -- the hours before
+        // bed and the regularity are the forms with a direction.
+        [MetricKeys.Iron]                = Neutral,
+        [MetricKeys.Tibc]                = Neutral,
+        [MetricKeys.TransferrinSaturation] = Neutral,
+        [MetricKeys.CaffeineLastTime]    = Neutral,
+        [MetricKeys.LastMealTime]        = Neutral,
+        [MetricKeys.BedtimeMinutes]      = Neutral,
+        [MetricKeys.WakeMinutes]         = Neutral,
     };
 
     // Unknown metrics -- a lab analyte nobody enumerated -- are neutral. An unknown

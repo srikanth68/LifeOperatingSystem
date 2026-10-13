@@ -19,7 +19,9 @@ public record MeasurementRequest(
     bool? Fasting = null,
     string? TimeOfDay = null,
     string? Position = null,
-    string? Arm = null);
+    string? Arm = null,
+    string? Hand = null,
+    string? Exercise = null);
 
 // Readings a person entered by hand.
 //
@@ -55,7 +57,44 @@ public class MeasurementsController(IVitaraRepository repo, ILogger<Measurements
         [MetricKeys.Crp] = ("mg/L", Tiers.Sparse, "CRP"),
         [MetricKeys.Tsh] = ("mIU/L", Tiers.Sparse, "TSH"),
         [MetricKeys.VitaminD] = ("ng/mL", Tiers.Sparse, "Vitamin D"),
+        [MetricKeys.HsCrp] = ("mg/L", Tiers.Sparse, "hs-CRP"),
+        [MetricKeys.Iron] = ("µg/dL", Tiers.Sparse, "Serum iron"),
+        [MetricKeys.Tibc] = ("µg/dL", Tiers.Sparse, "TIBC"),
+        [MetricKeys.TransferrinSaturation] = ("%", Tiers.Sparse, "Transferrin saturation"),
+        [MetricKeys.VisceralFat] = ("level", Tiers.Medium, "Visceral fat"),
+        [MetricKeys.GripStrengthKg] = ("kg", Tiers.Medium, "Grip strength"),
+        [MetricKeys.SitToStand30s] = ("reps", Tiers.Medium, "Sit-to-stand (30 s)"),
+        [MetricKeys.PushupsMax] = ("reps", Tiers.Medium, "Push-ups"),
+        [MetricKeys.Strength1RmKg] = ("kg", Tiers.Medium, "One-rep max"),
+        [MetricKeys.AlcoholUnits] = ("drinks", Tiers.Medium, "Alcohol"),
+        [MetricKeys.CaffeineLastTime] = ("min after midnight", Tiers.Medium, "Last caffeine"),
+        [MetricKeys.LastMealTime] = ("min after midnight", Tiers.Medium, "Last meal"),
     };
+
+    // Values a person could actually have produced. Outside these is a typo -- a grip of
+    // 400 kg, a clock time past midnight twice -- and stored, it would sit in a baseline.
+    private static readonly Dictionary<string, (double Min, double Max)> Plausible = new()
+    {
+        [MetricKeys.GripStrengthKg] = (1, 120),
+        [MetricKeys.SitToStand30s] = (0, 60),
+        [MetricKeys.PushupsMax] = (0, 200),
+        [MetricKeys.Strength1RmKg] = (1, 500),
+        [MetricKeys.VisceralFat] = (0, 60),
+        [MetricKeys.AlcoholUnits] = (0, 40),
+        [MetricKeys.CaffeineLastTime] = (0, 1439),
+        [MetricKeys.LastMealTime] = (0, 1439),
+        [MetricKeys.HsCrp] = (0, 300),
+        [MetricKeys.Iron] = (1, 1000),
+        [MetricKeys.Tibc] = (50, 1000),
+        [MetricKeys.TransferrinSaturation] = (0, 100),
+    };
+
+    // How the form should ask. A clock time is entered as a time, not as minutes, and
+    // alcohol starts at zero because a day without a drink is the value worth logging.
+    private static string InputKind(string metric) =>
+        metric is MetricKeys.CaffeineLastTime or MetricKeys.LastMealTime ? "time" : "number";
+
+    private static double? DefaultValue(string metric) => metric == MetricKeys.AlcoholUnits ? 0 : null;
 
     // What the form should offer, and which context questions matter per metric.
     // Served rather than hardcoded in the UI so the two can never disagree about
@@ -68,6 +107,11 @@ public class MeasurementsController(IVitaraRepository repo, ILogger<Measurements
         kv.Value.Tier,
         kv.Value.Label,
         context = BaselineKeys.For(kv.Key),
+        group = MetricCatalogue.Find(kv.Key)?.Group,
+        input = InputKind(kv.Key),
+        defaultValue = DefaultValue(kv.Key),
+        min = Plausible.TryGetValue(kv.Key, out var b) ? b.Min : (double?)null,
+        max = Plausible.TryGetValue(kv.Key, out var b2) ? b2.Max : (double?)null,
     }));
 
     [HttpGet]
@@ -88,6 +132,9 @@ public class MeasurementsController(IVitaraRepository repo, ILogger<Measurements
         if (double.IsNaN(req.Value) || double.IsInfinity(req.Value))
             return BadRequest(new { error = "Value must be a number." });
 
+        if (Plausible.TryGetValue(req.Metric, out var bounds) && (req.Value < bounds.Min || req.Value > bounds.Max))
+            return BadRequest(new { error = $"{spec.Label} of {req.Value} is outside {bounds.Min}–{bounds.Max}; probably a typo." });
+
         // A reading dated in the future is a typo, and it would sit at the end of every
         // window pulling trends toward a day that has not happened.
         var at = req.ObservedAtLocal ?? LocalTime.Now;
@@ -98,7 +145,9 @@ public class MeasurementsController(IVitaraRepository repo, ILogger<Measurements
             Fasting: req.Fasting,
             TimeOfDay: Blank(req.TimeOfDay),
             Position: Blank(req.Position),
-            Arm: Blank(req.Arm));
+            Arm: Blank(req.Arm),
+            Hand: Blank(req.Hand),
+            Exercise: Blank(req.Exercise)?.ToLowerInvariant());
 
         var measurement = new Measurement
         {
@@ -131,7 +180,8 @@ public class MeasurementsController(IVitaraRepository repo, ILogger<Measurements
     private static string? Blank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
     private static bool HasAny(MeasurementContext c) =>
-        c.Fasting is not null || c.TimeOfDay is not null || c.Position is not null || c.Arm is not null;
+        c.Fasting is not null || c.TimeOfDay is not null || c.Position is not null || c.Arm is not null
+        || c.Hand is not null || c.Exercise is not null;
 
     private static object Describe(Measurement m) => new
     {

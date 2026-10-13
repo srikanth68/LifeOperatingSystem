@@ -203,7 +203,9 @@ public static class Patterns
             "different outcome wearing the same number on the scale, and it is the one that costs " +
             "strength, metabolic rate and, later, independence. Protein intake and resistance " +
             "training are the usual levers; this is worth raising before the next few kilos.",
-            [MetricKeys.LeanMassKg, MetricKeys.Vo2Max],
+            // Strength is what lean mass is for. A one-rep max is left out: it is split
+            // by exercise, and a day's average across lifts is not a number.
+            [MetricKeys.LeanMassKg, MetricKeys.Vo2Max, MetricKeys.GripStrengthKg, MetricKeys.SitToStand30s, MetricKeys.PushupsMax],
             MinMoving: 1,
             Gates: [new Gate(MetricKeys.WeightKg, [Movement.Favourable], "weight is not coming down")]),
 
@@ -225,6 +227,15 @@ public static class Patterns
                 new Gate(MetricKeys.LeanMassKg, [Movement.Steady, Movement.Favourable],
                     "lean mass is either falling too, or is not being measured — and without it, " +
                     "the scale cannot tell a good loss from a bad one"),
+
+                // Strength is optional here -- unmeasured passes -- but a measured fall
+                // contradicts the whole sentence: this was not the good kind of loss.
+                new Gate(MetricKeys.GripStrengthKg, [Movement.Unmeasured, Movement.Steady, Movement.Favourable],
+                    "grip strength is falling"),
+                new Gate(MetricKeys.SitToStand30s, [Movement.Unmeasured, Movement.Steady, Movement.Favourable],
+                    "sit-to-stand is falling"),
+                new Gate(MetricKeys.PushupsMax, [Movement.Unmeasured, Movement.Steady, Movement.Favourable],
+                    "push-ups are falling"),
             ]),
     ];
 

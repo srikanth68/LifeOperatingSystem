@@ -35,6 +35,8 @@ public static class MetricCatalogue
     public const string GroupBody = "Body";
     public const string GroupVitals = "Vitals";
     public const string GroupLabs = "Labs";
+    public const string GroupStrength = "Strength";
+    public const string GroupHabits = "Habits";
 
     // Derived values are metrics too -- they are computed rather than measured, and the
     // distinction belongs in the row, not in whether it appears at all.
@@ -42,6 +44,9 @@ public static class MetricCatalogue
     public const string AcwrActiveCalories = "acwr_active_calories";
     public const string Bmi = "bmi";
     public const string WaistToHeight = "waist_to_height";
+    public const string CaffeineHoursBeforeBed = "caffeine_hours_before_bed";
+    public const string LastMealHoursBeforeBed = "last_meal_hours_before_bed";
+    public const string BedtimeVariabilityMinutes = "bedtime_variability_minutes";
 
     public static readonly IReadOnlyList<MetricInfo> All =
     [
@@ -58,6 +63,12 @@ public static class MetricCatalogue
             "Your ring's own summary of the night. Kept because it is familiar, though the parts above say more."),
         new(SleepDebtMinutes, "Sleep debt", "min", GroupSleep, Tiers.Dense, "computed",
             "How far behind your own sleep need you are over the last two weeks. Built from your nights, not a general recommendation."),
+        new(MetricKeys.BedtimeMinutes, "Bedtime", "min from midnight", GroupSleep, Tiers.Dense, "ring",
+            "When the night's main sleep began, as minutes either side of midnight. Measured around midnight, so 23:30 and 00:30 average to midnight, not noon."),
+        new(MetricKeys.WakeMinutes, "Wake time", "min from midnight", GroupSleep, Tiers.Dense, "ring",
+            "When the night's main sleep ended."),
+        new(BedtimeVariabilityMinutes, "Bedtime regularity", "min", GroupSleep, Tiers.Dense, "computed",
+            "How much your bedtime moved over the last two weeks, as a spread in minutes. Lower is more regular."),
 
         // ── Recovery ────────────────────────────────────────────────────────────
         new(MetricKeys.RestingHeartRate, "Resting heart rate", "bpm", GroupRecovery, Tiers.Dense, "ring",
@@ -100,8 +111,32 @@ public static class MetricCatalogue
             "The share of you that is fat, from a scale that reports it or a measurement taken elsewhere. Read with lean mass: the two together are what tell a good month from a bad one.", 1, StaleAfterDays: 14),
         new(MetricKeys.LeanMassKg, "Lean mass", "kg", GroupBody, Tiers.Medium, "manual",
             "Everything that is not fat: muscle, bone, organs, water. The number that decides whether weight loss was the kind you wanted.", 1, StaleAfterDays: 14),
+        new(MetricKeys.VisceralFat, "Visceral fat", "level", GroupBody, Tiers.Medium, "manual",
+            "Your scale's estimate of fat around the organs, in the scale's own units. Only your own scale's series is comparable.", 1, StaleAfterDays: 14),
         new(MetricKeys.CardiovascularAge, "Cardiovascular age", "years", GroupBody, Tiers.Dense, "ring",
             "Your ring's estimate of circulatory age against your years. An estimate, not a diagnosis.", 1, StaleAfterDays: 14),
+
+        // ── Strength and function ───────────────────────────────────────────────
+        new(MetricKeys.GripStrengthKg, "Grip strength", "kg", GroupStrength, Tiers.Medium, "manual",
+            "Squeezed on a hand dynamometer, each hand its own series. A simple measure of overall strength that is hard to fake and easy to repeat.", 1, StaleAfterDays: 30),
+        new(MetricKeys.SitToStand30s, "Sit-to-stand", "reps", GroupStrength, Tiers.Medium, "manual",
+            "Full stands from a chair, arms crossed, in 30 seconds. Leg strength and function in one number.", 0, StaleAfterDays: 30),
+        new(MetricKeys.PushupsMax, "Push-ups", "reps", GroupStrength, Tiers.Medium, "manual",
+            "The most you can do in one go, with good form.", 0, StaleAfterDays: 30),
+        new(MetricKeys.Strength1RmKg, "One-rep max", "kg", GroupStrength, Tiers.Medium, "manual",
+            "Your heaviest single lift, or an estimate from a set. Each exercise is its own series.", 1, StaleAfterDays: 30),
+
+        // ── Habits ──────────────────────────────────────────────────────────────
+        new(MetricKeys.AlcoholUnits, "Alcohol", "drinks", GroupHabits, Tiers.Medium, "manual",
+            "Standard drinks that day. Zero is worth logging: a day with none is a real value, and without those days nothing can be compared.", 1, StaleAfterDays: 7),
+        new(MetricKeys.CaffeineLastTime, "Last caffeine", "min after midnight", GroupHabits, Tiers.Medium, "manual",
+            "The clock time of your last coffee, tea or energy drink.", 0, StaleAfterDays: 7),
+        new(MetricKeys.LastMealTime, "Last meal", "min after midnight", GroupHabits, Tiers.Medium, "manual",
+            "The clock time you finished eating for the day.", 0, StaleAfterDays: 7),
+        new(CaffeineHoursBeforeBed, "Caffeine before bed", "h", GroupHabits, Tiers.Medium, "computed",
+            "Hours between your last caffeine and that night's bedtime. The useful form of the clock time: 4pm means something different to someone who sleeps at ten and someone who sleeps at two.", 1, StaleAfterDays: 7),
+        new(LastMealHoursBeforeBed, "Last meal before bed", "h", GroupHabits, Tiers.Medium, "computed",
+            "Hours between finishing eating and that night's bedtime.", 1, StaleAfterDays: 7),
 
         // ── Vitals ──────────────────────────────────────────────────────────────
         new(MetricKeys.SystolicBp, "Blood pressure (systolic)", "mmHg", GroupVitals, Tiers.Medium, "manual",
@@ -144,6 +179,14 @@ public static class MetricCatalogue
             "A second liver enzyme, also found in muscle — so a hard session a day or two before the draw raises it without anything being wrong with the liver.", 0, StaleAfterDays: 240),
         new(MetricKeys.Ferritin, "Ferritin", "ng/mL", GroupLabs, Tiers.Sparse, "lab",
             "Stored iron. Low means stores are running out before anaemia shows; it also rises with any inflammation, so a normal value alongside a raised CRP proves little.", 0, StaleAfterDays: 240),
+        new(MetricKeys.HsCrp, "hs-CRP", "mg/L", GroupLabs, Tiers.Sparse, "lab",
+            "High-sensitivity CRP: the same protein as CRP measured at the low levels that matter for long-term inflammation. A cold or a hard session raises it for days.", 2, StaleAfterDays: 240),
+        new(MetricKeys.Iron, "Serum iron", "µg/dL", GroupLabs, Tiers.Sparse, "lab",
+            "Iron in the blood at the moment of the draw. Varies through the day, so it is read with ferritin and transferrin saturation rather than alone.", 0, StaleAfterDays: 240),
+        new(MetricKeys.Tibc, "TIBC", "µg/dL", GroupLabs, Tiers.Sparse, "lab",
+            "Total iron-binding capacity: how much iron the blood could carry. Rises as stores fall.", 0, StaleAfterDays: 240),
+        new(MetricKeys.TransferrinSaturation, "Transferrin saturation", "%", GroupLabs, Tiers.Sparse, "lab",
+            "Serum iron as a share of TIBC. Low with low ferritin points at depleted stores; high is how iron overload is first noticed.", 0, StaleAfterDays: 240),
         new(MetricKeys.VitaminB12, "Vitamin B12", "pg/mL", GroupLabs, Tiers.Sparse, "lab",
             "Low intake or low absorption both show here, and the consequences are neurological as well as haematological.", 0, StaleAfterDays: 240),
         new(MetricKeys.Folate, "Folate", "ng/mL", GroupLabs, Tiers.Sparse, "lab",
@@ -161,7 +204,7 @@ public static class MetricCatalogue
     ];
 
     public static readonly IReadOnlyList<string> Groups =
-        [GroupSleep, GroupRecovery, GroupActivity, GroupBody, GroupVitals, GroupLabs];
+        [GroupSleep, GroupRecovery, GroupActivity, GroupStrength, GroupBody, GroupVitals, GroupHabits, GroupLabs];
 
     public static MetricInfo? Find(string key) => All.FirstOrDefault(m => m.Key == key);
 }

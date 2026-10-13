@@ -60,6 +60,13 @@ public static class Correlations
         MetricKeys.Steps,
         MetricKeys.TotalSleepMinutes,
         MetricKeys.StressHighSeconds,
+
+        // Logged by hand. A driver with fewer than thirty paired days is skipped before
+        // it reaches the false-discovery correction, so an unlogged habit cannot raise
+        // the bar for the pairs that work.
+        MetricKeys.AlcoholUnits,
+        MetricCatalogue.CaffeineHoursBeforeBed,
+        MetricCatalogue.LastMealHoursBeforeBed,
     ];
 
     public static readonly string[] Outcomes =

@@ -310,6 +310,92 @@ public static class Evidence
             "Strong and consistent, particularly for strength and physical function in later life.",
             "Same measurement caveat as body fat, since most scales derive one from the other. Only the direction over months is worth reading."),
 
+        // -- Strength, function and habits (added with the longevity brief) ------
+        new(MetricKeys.GripStrengthKg, Grade.B,
+            "Grip strength tracks overall strength, and lower grip strength is associated with higher mortality and functional decline.",
+            "Large cohort studies across many countries; widely used as a simple marker of muscular strength.",
+            "An association, not a lever: squeezing harder does not add years. Dynamometers differ, so only one device's series is comparable, and the dominant hand reads higher."),
+
+        new(MetricKeys.SitToStand30s, Grade.B,
+            "Chair-stand performance reflects leg strength and physical function.",
+            "A standard functional test in geriatric and rehabilitation practice.",
+            "Chair height, arm position and counting rules change the number, so keep them the same every time."),
+
+        new(MetricKeys.PushupsMax, Grade.C,
+            "Upper-body muscular endurance, measured with nothing but the floor.",
+            "Some cohort evidence links push-up capacity to cardiovascular outcomes, from narrower populations than grip strength.",
+            "Form is the measurement. A change in depth or pace is a different test."),
+
+        new(MetricKeys.Strength1RmKg, Grade.C,
+            "Maximal strength in a specific lift.",
+            "Muscular strength in general is associated with lower mortality; a given lift's maximum is a training measure more than a health one.",
+            "Technique, warm-up and whether it was tested or estimated from a set all move it. Each exercise is its own series."),
+
+        new(MetricKeys.VisceralFat, Grade.C,
+            "Fat around the organs carries more metabolic risk than fat elsewhere.",
+            "The underlying relationship is well supported by imaging studies.",
+            "Bathroom scales estimate it by bioimpedance, which is poorly validated against imaging. Only the direction of one scale's own series is worth reading, and its units are the scale's."),
+
+        new(MetricKeys.HsCrp, Grade.B,
+            "Low-grade inflammation measured by hs-CRP is associated with cardiovascular risk.",
+            "Used in cardiovascular risk assessment by some guideline bodies.",
+            "Any infection, injury or hard training in the previous days raises it. A single high value is usually that, and repeating it when well is the standard advice."),
+
+        new(MetricKeys.Iron, Grade.B,
+            "Serum iron is part of the standard iron studies.",
+            "Established in clinical use, read together with ferritin, TIBC and transferrin saturation.",
+            "Varies through the day and with recent meals; on its own it says little about stores."),
+
+        new(MetricKeys.Tibc, Grade.B,
+            "TIBC rises as iron stores fall.",
+            "Established part of the iron studies.",
+            "Also changed by pregnancy, the contraceptive pill, liver disease and malnutrition."),
+
+        new(MetricKeys.TransferrinSaturation, Grade.B,
+            "Transferrin saturation is how both iron deficiency and iron overload are first noticed.",
+            "Established; the usual first screen for iron overload.",
+            "Inherits serum iron's variation through the day, so a fasting morning draw is the comparable one."),
+
+        new(MetricKeys.AlcoholUnits, Grade.B,
+            "Alcohol in the evening reduces sleep quality and raises overnight heart rate.",
+            "The acute effects on sleep and heart rate are consistent across studies and visible in wearable data.",
+            "Self-reported and counted in standard drinks, which people routinely underestimate. Longer-term health effects are a separate and more contested question."),
+
+        new(MetricKeys.CaffeineLastTime, Grade.C,
+            "The clock time of the last caffeine.",
+            "Recorded so the hours before bed can be worked out.",
+            "A raw clock time is a poor thing to correlate; the hours-before-bed form is the one analysed."),
+
+        new(MetricCatalogue.CaffeineHoursBeforeBed, Grade.B,
+            "Caffeine late in the day delays and lightens sleep.",
+            "Well established in controlled studies, including at doses taken several hours before bed.",
+            "Sensitivity varies a great deal between people, which is exactly why your own data is the useful part."),
+
+        new(MetricKeys.LastMealTime, Grade.C,
+            "The clock time the day's eating finished.",
+            "Recorded so the hours before bed can be worked out.",
+            "A raw clock time; the hours-before-bed form is the one analysed."),
+
+        new(MetricCatalogue.LastMealHoursBeforeBed, Grade.C,
+            "Eating close to bedtime may disturb sleep and raise overnight heart rate.",
+            "Studies are smaller and less consistent than for caffeine or alcohol.",
+            "Meal size and content matter as much as timing, and this records only the timing."),
+
+        new(MetricKeys.BedtimeMinutes, Grade.C,
+            "When sleep starts.",
+            "Timing relative to a person's own rhythm matters; the evidence on absolute bedtimes is emerging.",
+            "Shift work and travel change what a good bedtime is. Read as your own series, not against anyone else's."),
+
+        new(MetricKeys.WakeMinutes, Grade.C,
+            "When sleep ends.",
+            "As for bedtime.",
+            "An alarm sets it as often as the body does."),
+
+        new(MetricCatalogue.BedtimeVariabilityMinutes, Grade.C,
+            "Irregular sleep timing is associated with worse health outcomes, independently of sleep length.",
+            "A growing body of cohort evidence, much of it from wearables; no settled threshold.",
+            "An emerging measure. The spread over two weeks says how regular you have been, not what regular enough is."),
+
         // -- The method the sparse tier rests on ---------------------------------
         new(LabReferenceRange, Grade.A,
             "A measured value read against the interval a laboratory prints.",

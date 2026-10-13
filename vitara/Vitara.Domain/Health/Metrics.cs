@@ -45,6 +45,30 @@ public static class MetricKeys
     public const string BodyFatPct = "body_fat_pct";
     public const string LeanMassKg = "lean_mass_kg";
 
+    // In the units the scale reports. Scales disagree with each other, so only one
+    // scale's own series means anything.
+    public const string VisceralFat = "visceral_fat";
+
+    // Strength and physical function. Lean mass from a scale is an estimate of tissue;
+    // what keeps someone independent is what that tissue can do, and nothing measured it.
+    // Grip splits on hand and a one-rep max on the exercise: each is its own baseline.
+    public const string GripStrengthKg = "grip_strength_kg";
+    public const string SitToStand30s = "sit_to_stand_30s";
+    public const string PushupsMax = "pushups_max";
+    public const string Strength1RmKg = "strength_1rm_kg";
+
+    // Habits that move tomorrow's recovery more than any macro total, and need no food
+    // database. Alcohol is in standard drinks, and 0 is a real value, not missing. The
+    // two times are the local clock, stored as minutes after midnight.
+    public const string AlcoholUnits = "alcohol_units";
+    public const string CaffeineLastTime = "caffeine_last_time";
+    public const string LastMealTime = "last_meal_time";
+
+    // Sleep timing, from the night's main session. Minutes from local midnight, measured
+    // around it, so 23:10 is -50 and 00:40 is 40.
+    public const string BedtimeMinutes = "bedtime_minutes";
+    public const string WakeMinutes = "wake_minutes";
+
     // Sparse tier — labs.
     public const string Hba1c = "hba1c";
     public const string TotalCholesterol = "total_cholesterol";
@@ -69,6 +93,13 @@ public static class MetricKeys
     public const string Alt = "alt";
     public const string Ast = "ast";
     public const string Ferritin = "ferritin";
+
+    // Iron studies beyond ferritin. hs-CRP is a different assay from CRP, with a
+    // different range, so it is its own key rather than a unit of the other.
+    public const string HsCrp = "hs_crp";
+    public const string Iron = "iron";
+    public const string Tibc = "tibc";
+    public const string TransferrinSaturation = "transferrin_saturation";
     public const string VitaminB12 = "vitamin_b12";
     public const string Folate = "folate";
 
@@ -106,7 +137,9 @@ public record MeasurementContext(
     string? CuffSize = null,
     string? PrePostExercise = null,
     double? CaffeineWithinHours = null,
-    bool? AlcoholPreviousEvening = null);
+    bool? AlcoholPreviousEvening = null,
+    string? Hand = null,             // left | right, for grip
+    string? Exercise = null);        // squat | deadlift | bench | ..., for a one-rep max
 
 // Which parts of the context actually key a baseline, per metric.
 //
@@ -139,6 +172,11 @@ public static class BaselineKeys
         // Weight varies with time of day more than most people expect, but a single
         // habitual weighing time means one bucket in practice.
         [MetricKeys.WeightKg] = ["timeOfDay"],
+
+        // Dominant and non-dominant hands differ by more than a month of training, and
+        // a squat and a bench press are not the same number at all.
+        [MetricKeys.GripStrengthKg] = ["hand"],
+        [MetricKeys.Strength1RmKg] = ["exercise"],
     };
 
     // Oura metrics get no context split at all: they are machine-measured overnight
@@ -159,6 +197,8 @@ public static class BaselineKeys
             "timeOfDay" => $"timeOfDay={context.TimeOfDay ?? "?"}",
             "fasting" => $"fasting={(context.Fasting is { } b ? b.ToString().ToLowerInvariant() : "?")}",
             "arm" => $"arm={context.Arm ?? "?"}",
+            "hand" => $"hand={context.Hand ?? "?"}",
+            "exercise" => $"exercise={context.Exercise?.Trim().ToLowerInvariant() ?? "?"}",
             _ => $"{f}=?",
         });
 
@@ -181,6 +221,8 @@ public static class BaselineKeys
             "timeOfDay" => context.TimeOfDay is not null,
             "fasting" => context.Fasting is not null,
             "arm" => context.Arm is not null,
+            "hand" => context.Hand is not null,
+            "exercise" => !string.IsNullOrWhiteSpace(context.Exercise),
             _ => false,
         });
     }
