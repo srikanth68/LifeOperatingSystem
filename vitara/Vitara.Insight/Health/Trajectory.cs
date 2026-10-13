@@ -232,6 +232,29 @@ public static class Trajectory
         string? sex = null,
         int? age = null)
     {
+        var points = CataloguePoints(observations, derived, asOf, excluded, travel, devices);
+
+        return MetricCatalogue.All.Select(info =>
+        {
+            var hold = (holds ?? []).FirstOrDefault(h => h.IsOpen && h.Metric == info.Key);
+            var note = hold is null
+                ? null
+                : $"Includes a step since {hold.ChangePointLocal:d MMM} that is being held: your normal is still the earlier level.";
+
+            return Compute(info.Key, points.GetValueOrDefault(info.Key) ?? [], asOf, ranges, sex, age, note);
+        }).ToList();
+    }
+
+    // Each catalogue metric's daily points after the baseline exclusions. Exposed so the
+    // projection extends exactly the series the trajectory judged.
+    public static Dictionary<string, List<Point>> CataloguePoints(
+        IReadOnlyList<Observation> observations,
+        IReadOnlyList<DerivedMetric> derived,
+        DateOnly asOf,
+        IReadOnlyList<ExcludedPeriod>? excluded = null,
+        IReadOnlyList<TravelPeriod>? travel = null,
+        IReadOnlyList<Device>? devices = null)
+    {
         var latestDevice = (devices ?? [])
             .Where(d => d.ActiveFromLocal <= asOf)
             .Select(d => (DateOnly?)d.ActiveFromLocal)
@@ -256,19 +279,9 @@ public static class Trajectory
             .GroupBy(d => d.Metric)
             .ToDictionary(g => g.Key, g => g.Select(d => new Point(d.ObservedDateLocal, d.Value)).ToList());
 
-        return MetricCatalogue.All.Select(info =>
-        {
-            var points = info.Computed
-                ? computed.GetValueOrDefault(info.Key) ?? byMetric.GetValueOrDefault(info.Key) ?? []
-                : byMetric.GetValueOrDefault(info.Key) ?? [];
-
-            var hold = (holds ?? []).FirstOrDefault(h => h.IsOpen && h.Metric == info.Key);
-            var note = hold is null
-                ? null
-                : $"Includes a step since {hold.ChangePointLocal:d MMM} that is being held: your normal is still the earlier level.";
-
-            return Compute(info.Key, points, asOf, ranges, sex, age, note);
-        }).ToList();
+        return MetricCatalogue.All.ToDictionary(info => info.Key, info => info.Computed
+            ? computed.GetValueOrDefault(info.Key) ?? byMetric.GetValueOrDefault(info.Key) ?? []
+            : byMetric.GetValueOrDefault(info.Key) ?? []);
     }
 
     private static string Plural(int n, string word) => $"{n} {word}{(n == 1 ? "" : "s")}";

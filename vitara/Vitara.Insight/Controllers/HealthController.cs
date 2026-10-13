@@ -460,6 +460,41 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         interventions = w.Interventions,
     };
 
+    // "If this continues": a range or a refusal, never a single number (Vitara ADR 0021).
+    [HttpGet("projection")]
+    public async Task<IActionResult> MetricProjection([FromQuery] string metric, [FromQuery] int horizonDays = 90)
+    {
+        if (MetricCatalogue.Find(metric) is null)
+            return BadRequest(new { error = $"\"{metric}\" is not a metric this system knows about." });
+
+        var today = LocalTime.Today;
+        var observations = await repo.GetObservationsAsync(today.AddDays(-400), today);
+        var derived = await repo.GetDerivedMetricsAsync(today.AddDays(-400), today);
+
+        var trajectory = (await TrajectoriesAsync(today, observations, derived)).Single(t => t.Metric == metric);
+        var points = Trajectory.CataloguePoints(observations, derived, today,
+            await repo.GetExcludedPeriodsAsync(), await repo.GetTravelPeriodsAsync(), await repo.GetDevicesAsync());
+
+        var p = Projection.Compute(metric, points.GetValueOrDefault(metric) ?? [], trajectory, horizonDays);
+        return Ok(new
+        {
+            p.Metric,
+            p.Label,
+            p.Projected,
+            p.HorizonDays,
+            p.CurrentLevel,
+            p.ProjectedLow,
+            p.ProjectedHigh,
+            p.Direction,
+            p.Basis,
+            p.Grade,
+            p.Caveat,
+            p.Refusal,
+            p.HorizonNote,
+            trajectory = TrajectoryView(trajectory),
+        });
+    }
+
     private async Task<List<TrajectoryResult>> TrajectoriesAsync(
         DateOnly today, IReadOnlyList<Observation> observations, IReadOnlyList<DerivedMetric> derived)
     {

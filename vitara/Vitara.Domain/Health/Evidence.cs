@@ -74,6 +74,10 @@ public static class Evidence
     public const string InterventionEvaluation = "intervention_evaluation";
     public const string PersonalBaseline = "personal_baseline";
     public const string LabReferenceRange = "lab_reference_range";
+    public const string Trajectory = "trajectory";
+    public const string Projection = "projection";
+    public const string LabContextAnnotation = "lab_context";
+    public const string ScenarioArithmetic = "scenario_arithmetic";
 
     public static readonly IReadOnlyList<EvidenceNote> All =
     [
@@ -395,6 +399,27 @@ public static class Evidence
             "Irregular sleep timing is associated with worse health outcomes, independently of sleep length.",
             "A growing body of cohort evidence, much of it from wearables; no settled threshold.",
             "An emerging measure. The spread over two weeks says how regular you have been, not what regular enough is."),
+
+        // -- The longevity layer's own methods ------------------------------------
+        new(Trajectory, Grade.B,
+            "Whether a measure has moved over months, as one of five states.",
+            "Theil-Sen and Mann-Kendall are long-established, robust trend methods.",
+            "A state is about the recent window only, and p < 0.05 across many metrics means roughly one in twenty labels on a still metric will read as moving. Labels are never notifications for that reason."),
+
+        new(Projection, Grade.C,
+            "Where a moving measure would be if the recent pattern continued.",
+            "A straight line with Sen's rank-based interval; honest about its uncertainty, nothing more.",
+            "Bodies do not move in straight lines, and anything changed from today changes the answer. Read the range, never a single number."),
+
+        new(LabContextAnnotation, Grade.B,
+            "What the daily data looked like before a blood draw.",
+            "Descriptive: medians and coverage over the window each analyte is known to reflect.",
+            "Co-occurrence only. A lab that improved alongside more steps did not necessarily improve because of them."),
+
+        new(ScenarioArithmetic, Grade.B,
+            "What Vitara's own rules give for a hypothetical week.",
+            "Exact arithmetic on your own numbers with the same rules the app uses every day.",
+            "The answer is exactly as good as the rule behind it -- the sleep need is an estimate, the load ratio a sports-science convention -- and says nothing about how your body would respond."),
 
         // -- The method the sparse tier rests on ---------------------------------
         new(LabReferenceRange, Grade.A,

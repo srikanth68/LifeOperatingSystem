@@ -1696,7 +1696,8 @@ GET /api/health/regime-holds   steps held rather than adopted, open and released
 GET /api/health/trajectories   every metric: improving, worsening, stable, uncertain, not enough data
 GET /api/health/domains        ten areas of health: directions, findings, gaps, one sentence, no score
 GET /api/health/labs/{panelId}/context   the daily data before one draw, beside the previous draw
-GET /api/health/labs/{metric}/history    every draw of one analyte, each with its window</code></pre>
+GET /api/health/labs/{metric}/history    every draw of one analyte, each with its window
+GET /api/health/projection     "if this continues": a range with its basis, or the reason it cannot</code></pre>
 
       <div class="why">
         <span class="tag">The status sentence</span>
@@ -2295,6 +2296,22 @@ GET /api/health/labs/{metric}/history    every draw of one analyte, each with it
         words. Computed on request, nothing stored:
         <code>GET /api/health/labs/{panelId}/context</code> and
         <code>GET /api/health/labs/{metric}/history</code>.
+      </p>
+
+      <h3>If this continues: a range or a refusal</h3>
+      <p>
+        <code>GET /api/health/projection?metric=&amp;horizonDays=</code> extends a moving metric
+        as a range. Only daily and manual metrics whose trajectory is moving qualify; labs are
+        refused by name, and stable, uncertain and insufficient-data metrics are refused with
+        that state as the reason. The method is the Theil&ndash;Sen slope with Sen's rank-based
+        interval (bounds at ranks (N&prime; &minus; z&radic;Var S)/2 and (N&prime; + z&radic;Var S)/2 of
+        the sorted pairwise slopes, z = 1.96, from the same Mann&ndash;Kendall variance the trajectory
+        used). The two interval slopes pivot through the series' median point, so the range widens
+        with distance from the data; anchoring them at the last day had left out the level's own
+        uncertainty and produced a range narrower than the truth. If the interval includes zero, no
+        numbers are returned. The horizon is at most 180 days and at most half the history, and a
+        cap is stated. Every result reads "if the last N days' pattern continued", is clamped to
+        plausible values, and is grade C.
       </p>
 
       <h3>New inputs: strength, iron studies, habits, sleep timing</h3>
