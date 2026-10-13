@@ -233,4 +233,29 @@ public class CorrelationTests
 
         Assert.Empty(Correlations.Run(obs, Today));
     }
+
+    // ── The split: the same relationship as two numbers ─────────────────────────
+
+    [Fact]
+    public void TheSplitComparesTheOutcomeOnLowAndHighDriverDays()
+    {
+        // Late caffeine (hours before bed: fewer = later) against deep sleep.
+        var x = Enumerable.Range(0, 40).Select(i => (double)(i % 2 == 0 ? 2 : 9)).ToList();
+        var y = x.Select(h => h < 5 ? 68.0 : 92.0).ToList();
+
+        var split = Correlations.Split(x, y)!;
+
+        Assert.Equal(68, split.LowOutcome);
+        Assert.Equal(92, split.HighOutcome);
+        Assert.Equal(20, split.LowN);
+        Assert.Equal(20, split.HighN);
+    }
+
+    [Fact]
+    public void TooFewDaysOnOneSideIsNoSplit()
+    {
+        // Almost every day the same: the high side has five days, not a median.
+        var x = Enumerable.Range(0, 40).Select(i => i < 35 ? 0.0 : 3.0).ToList();
+        Assert.Null(Correlations.Split(x, x));
+    }
 }

@@ -296,7 +296,11 @@ public static class Prediction
         Score Mean,
         double? Skill,          // 1 - model MAE / persistence MAE. Above zero is a win.
         bool ModelWins,
-        string Verdict);
+        string Verdict,
+        // Days the forecast landed closer than "tomorrow = today", out of the days scored.
+        // The same backtest read as a count, because "61 of 100 days" is what a person can
+        // picture and an MAE ratio is not. Null without a model to score.
+        int? CloserDays = null);
 
     // Rolling origin: fit on everything before the day, predict it, move on. Never on
     // data the fit has seen, because a model scored on its own training days will
@@ -307,6 +311,7 @@ public static class Prediction
         var modelErrors = new List<double>();
         var persistenceErrors = new List<double>();
         var meanErrors = new List<double>();
+        var closer = 0;
 
         var start = Math.Max(MinTrainingDays, ordered.Count - evalDays);
 
@@ -325,7 +330,11 @@ public static class Prediction
             var model = Fit(ordered, target, i);
             var features = Features(ordered, i, target, ordered[i + 1].Day);
             if (model is not null && features is not null)
-                modelErrors.Add(Math.Abs(actual.Value - model.Predict(features)));
+            {
+                var error = Math.Abs(actual.Value - model.Predict(features));
+                modelErrors.Add(error);
+                if (error < persistenceErrors[^1]) closer++;
+            }
         }
 
         if (persistenceErrors.Count == 0)
@@ -346,7 +355,8 @@ public static class Prediction
         var wins = skill is > 0.02 && model_ is not null && model_.Mae < mean.Mae;
 
         return new Backtest(model_, persistence, mean, skill, wins,
-            Verdict(model_, persistence, mean, skill, wins, target));
+            Verdict(model_, persistence, mean, skill, wins, target),
+            model_ is null ? null : closer);
     }
 
     private static readonly Score Empty = new(0, 0, 0);

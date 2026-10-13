@@ -177,6 +177,14 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
                 c.N,
                 pValue = Math.Round(c.PValue, 5),
                 c.WindowDays,
+                split = c.LowOutcome is null || c.HighOutcome is null ? null : new
+                {
+                    cut = c.SplitCut,
+                    low = Math.Round(c.LowOutcome.Value, 1),
+                    lowN = c.LowN,
+                    high = Math.Round(c.HighOutcome.Value, 1),
+                    highN = c.HighN,
+                },
             }),
         });
     }
@@ -463,7 +471,7 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
 
     // "If this continues": a range or a refusal, never a single number (Vitara ADR 0021).
     [HttpGet("projection")]
-    public async Task<IActionResult> MetricProjection([FromQuery] string metric, [FromQuery] int horizonDays = 90)
+    public async Task<IActionResult> MetricProjection([FromQuery] string metric, [FromQuery] int horizonDays = 90, [FromQuery] DateOnly? historyFrom = null)
     {
         if (MetricCatalogue.Find(metric) is null)
             return BadRequest(new { error = $"\"{metric}\" is not a metric this system knows about." });
@@ -493,8 +501,28 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
             p.Refusal,
             p.HorizonNote,
             trajectory = TrajectoryView(trajectory),
+
+            // What the line is drawn from: the last ninety days as weekly medians. Weekly,
+            // because a phone-width chart of daily wearable values is mostly noise, and the
+            // projection itself is a statement about weeks rather than mornings. A held
+            // normal asks from before its step instead, which is often more than ninety
+            // days back; the points behind this cover 400.
+            history = WeeklyMedians(points.GetValueOrDefault(metric) ?? [],
+                historyFrom is { } f && f < today ? (f < today.AddDays(-400) ? today.AddDays(-400) : f) : today.AddDays(-90)),
         });
     }
+
+    private static object[] WeeklyMedians(IEnumerable<Trajectory.Point> points, DateOnly from) =>
+        points.Where(pt => pt.Day >= from)
+            .GroupBy(pt => pt.Day.DayNumber / 7)
+            .OrderBy(g => g.Key)
+            .Select(g => (object)new
+            {
+                day = g.Max(pt => pt.Day).ToString("yyyy-MM-dd"),
+                value = Math.Round(Statistics.Median(g.Select(pt => pt.Value).ToList()), 2),
+                n = g.Count(),
+            })
+            .ToArray();
 
     // "What if I...?" (Vitara ADR 0024). Every answer is labelled arithmetic, learned or
     // experiment, and a medication is never given an expected effect.
@@ -1147,6 +1175,7 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
                 testedOnDays = f.Evidence.Model?.Predictions ?? f.Evidence.Persistence.Predictions,
                 f.Evidence.ModelWins,
                 f.Evidence.Verdict,
+                closerDays = f.Evidence.CloserDays,
             },
         };
 

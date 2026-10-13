@@ -97,6 +97,19 @@ public class PredictionTests
         Assert.True(backtest.ModelWins, backtest.Verdict);
         Assert.True(backtest.Skill > 0.02);
         Assert.Contains("so it is what gets used", backtest.Verdict);
+
+        // And the reason the phone draws average error rather than "closer on N days": this
+        // model wins by a wide margin and is still closer on a minority of days. "Today" is
+        // near-exact Monday to Thursday; the model wins by twenty points on the weekend turns.
+        // A days-closer meter would call the better forecast worse than a coin toss.
+        Assert.NotNull(backtest.CloserDays);
+        Assert.True(backtest.CloserDays < backtest.Model!.Predictions / 2, $"{backtest.CloserDays} of {backtest.Model.Predictions}");
+    }
+
+    [Fact]
+    public void Without_a_model_there_is_no_track_record_to_count()
+    {
+        Assert.Null(Prediction.Run(Series(40, i => 70 + Math.Sin(i / 5.0) * 8), Prediction.Target.Readiness).CloserDays);
     }
 
     [Fact]

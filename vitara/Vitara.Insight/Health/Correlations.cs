@@ -10,10 +10,16 @@ public record CorrelationResult(
     int LagDays,
     double Rho,
     int N,
-    double PValue)
+    double PValue,
+    CorrelationSplit? Split = null)
 {
     public string Direction => Rho > 0 ? "positive" : "negative";
 }
+
+// The same relationship as two numbers a person can compare: the outcome's median on the
+// driver's low days and on its high days, cut at the driver's own median. A rho of -0.42
+// means nothing to most people; "1 h 32 of deep sleep against 1 h 08" does.
+public record CorrelationSplit(double Cut, double LowOutcome, int LowN, double HighOutcome, int HighN);
 
 // Looking for relationships between what the user does and how they recover.
 //
@@ -124,12 +130,31 @@ public static class Correlations
                     var rho = Spearman(x, y);
                     if (double.IsNaN(rho)) continue;
 
-                    tested.Add(new CorrelationResult(driver, outcome, lag, rho, x.Count, PValue(rho, x.Count)));
+                    tested.Add(new CorrelationResult(driver, outcome, lag, rho, x.Count, PValue(rho, x.Count), Split(x, y)));
                 }
             }
         }
 
         return Significant(tested);
+    }
+
+    // Low days are at or below the driver's median, high days above it. Null when either
+    // side has fewer than ten days: a median of four nights is an anecdote. A driver that
+    // is mostly one value (no caffeine on most days) puts all of those on the low side,
+    // which is the comparison wanted: the usual days against the others.
+    public static CorrelationSplit? Split(IReadOnlyList<double> x, IReadOnlyList<double> y)
+    {
+        if (x.Count != y.Count || x.Count == 0) return null;
+
+        var cut = Statistics.Median(x);
+        var low = new List<double>();
+        var high = new List<double>();
+        for (var i = 0; i < x.Count; i++) (x[i] <= cut ? low : high).Add(y[i]);
+
+        const int minSide = 10;
+        if (low.Count < minSide || high.Count < minSide) return null;
+
+        return new CorrelationSplit(cut, Statistics.Median(low), low.Count, Statistics.Median(high), high.Count);
     }
 
     // Pairs a driver day with the outcome `lag` days later.

@@ -7,7 +7,6 @@ import {
   MeasurePanel, XmlImportPanel, ImportPanel,
 } from '../pages/VitaraModule';
 import type { OuraStatus } from '../pages/VitaraModule';
-import { InsightContent } from '../pages/InsightModule';
 import { VitaraLabs } from '../components/VitaraLabs';
 import { VitaraMetricsCatalogue } from '../components/VitaraMetricsCatalogue';
 import { ProfileMenu } from '../components/health/ProfileMenu';
@@ -18,8 +17,8 @@ import { MobileSleep } from './MobileSleep';
 import { MobileRecovery } from './MobileRecovery';
 import { MobileActivity } from './MobileActivity';
 import { MobileLabs } from './MobileLabs';
+import { MobileInsight } from './MobileInsight';
 import { RingDefs } from './Rings';
-import { dateLine } from './Parts';
 import { useVmTheme } from './motion';
 import { useInstall } from './useMobile';
 import '../styles/mobile.css';
@@ -143,11 +142,11 @@ function Inner({ onSignOut }: { onSignOut: () => void }) {
             {more === null && tab === 'sleep' && <MobileSleep tick={tick} header={(h, e) => header(h, e)} detail={() => goMore('sleep-detail')} />}
             {more === null && tab === 'recovery' && <MobileRecovery tick={tick} header={(h, e) => header(h, e)} detail={() => goMore('recovery-detail')} />}
             {more === null && tab === 'move' && <MobileActivity tick={tick} header={(h, e) => header(h, e)} detail={() => goMore('activity-detail')} />}
-            {(more !== null || tab === 'insight') && header(String(title), more ? 'Vitara' : dateLine())}
+            {more === null && tab === 'insight' && <MobileInsight header={(h, e) => header(h, e)} addChange={() => goMore('protocols')} />}
+            {more !== null && header(String(title), 'Vitara')}
             {more === 'sleep-detail' && <SleepPage />}
             {more === 'recovery-detail' && <ReadinessPage />}
             {more === 'activity-detail' && <ActivityPage />}
-            {more === null && tab === 'insight' && <InsightContent />}
             {more === 'labs' && <MobileLabs enter={() => goMore('labs-entry')} />}
             {more === 'labs-entry' && <VitaraLabs />}
             {more === 'body' && <BodyPage />}

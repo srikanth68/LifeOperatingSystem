@@ -349,9 +349,9 @@ const UNITS: Record<string, string> = {
   weight_kg: 'kg', systolic_bp: 'mmHg', diastolic_bp: 'mmHg', glucose: 'mg/dL', sleep_efficiency: '%',
 };
 
-const label = (metric: string) => METRIC_LABELS[metric] ?? metric.replace(/_/g, ' ');
+export const label = (metric: string) => METRIC_LABELS[metric] ?? metric.replace(/_/g, ' ');
 
-function fmtValue(metric: string, v: number): string {
+export function fmtValue(metric: string, v: number): string {
   if (metric.endsWith('_minutes')) {
     const h = Math.floor(v / 60);
     const m = Math.round(v % 60);
@@ -1788,7 +1788,7 @@ function BaselineTable() {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-type TabId = 'overview' | 'direction' | 'patterns' | 'you' | 'check';
+export type TabId = 'overview' | 'direction' | 'patterns' | 'you' | 'check';
 
 const ICON = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.75, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
 
@@ -1873,6 +1873,14 @@ export function InsightContent() {
         </div>
       </div>
   );
+}
+
+// The three tabs the phone has not been given its own design for yet. The phone draws
+// Overview and Direction natively and borrows these as they are.
+export function InsightTabBody({ tab }: { tab: 'patterns' | 'you' | 'check' }) {
+  if (tab === 'patterns') return <><PatternsSection /><Correlations /><InterventionsSection /><WhatIf /></>;
+  if (tab === 'you') return <><BioSignatureSection /><VisitBriefSection /><IllnessRecord /><BaselineTable /></>;
+  return <SelfCheckSection />;
 }
 
 function InsightPage() {

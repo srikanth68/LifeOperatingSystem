@@ -243,6 +243,11 @@ public class DerivedMetricsWorker(IServiceProvider services, ILogger<DerivedMetr
             Rho = Math.Round(c.Rho, 3),
             N = c.N,
             PValue = c.PValue,
+            SplitCut = c.Split?.Cut,
+            LowOutcome = c.Split?.LowOutcome,
+            LowN = c.Split?.LowN,
+            HighOutcome = c.Split?.HighOutcome,
+            HighN = c.Split?.HighN,
             WindowDays = 90,
             ComputedOnLocal = asOf,
         }), asOf);

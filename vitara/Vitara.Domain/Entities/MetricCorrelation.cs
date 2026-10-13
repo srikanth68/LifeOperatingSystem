@@ -30,6 +30,15 @@ public class MetricCorrelation
 
     public double PValue { get; set; }
 
+    // The outcome's median on the driver's low days and on its high days, split at the
+    // driver's median (Correlations.Split). Null on rows stored before this existed, and
+    // where either side had too few days to have a median worth showing.
+    public double? SplitCut { get; set; }
+    public double? LowOutcome { get; set; }
+    public int? LowN { get; set; }
+    public double? HighOutcome { get; set; }
+    public int? HighN { get; set; }
+
     public int WindowDays { get; set; }
     public DateOnly ComputedOnLocal { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

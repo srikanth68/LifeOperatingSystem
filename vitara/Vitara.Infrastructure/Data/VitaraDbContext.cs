@@ -292,6 +292,12 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
         await AddColumnIfMissingAsync(db, "Meals", "Source", "TEXT NOT NULL DEFAULT 'manual'");
         // Which source a day's activity row came from, so the phone stops overwriting the ring.
         await AddColumnIfMissingAsync(db, "Activity", "Source", "TEXT");
+        // A correlation's two medians, low driver days against high, for the phone's card.
+        await AddColumnIfMissingAsync(db, "Correlations", "SplitCut", "REAL");
+        await AddColumnIfMissingAsync(db, "Correlations", "LowOutcome", "REAL");
+        await AddColumnIfMissingAsync(db, "Correlations", "LowN", "INTEGER");
+        await AddColumnIfMissingAsync(db, "Correlations", "HighOutcome", "REAL");
+        await AddColumnIfMissingAsync(db, "Correlations", "HighN", "INTEGER");
         await AddColumnIfMissingAsync(db, "Measurements", "LabPanelId", "TEXT");
 
         // Nullable on purpose: every panel already stored was entered before anyone
