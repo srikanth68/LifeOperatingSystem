@@ -244,7 +244,7 @@ public class BaselineCalculatorTests
         var baseline = Compute(Inputs(observations), minN: 5);
 
         Assert.Null(baseline.RegimeStartLocal);
-        Assert.Contains("unadopted_regime_shift", baseline.ExclusionsJson);
+        Assert.Contains("held_regime_shift", baseline.ExclusionsJson);
         // Still describing the person before the shift, so 57 keeps reading as high.
         Assert.InRange(baseline.Median, 51.5, 54.5);
     }
