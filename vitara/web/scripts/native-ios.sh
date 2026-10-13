@@ -17,6 +17,7 @@
 #   2. builds the web app with the server address in it;
 #   3. creates the Xcode project the first time (ios/, not tracked in git), then copies the
 #      build into it;
+#      adds the Apple Health permission text and entitlement;
 #   4. for an http:// address, lets this one app talk plain http (Apple blocks it by default);
 #   5. opens Xcode. There: pick your iPhone at the top, set your Team once under
 #      Signing & Capabilities, press Run.
@@ -65,8 +66,35 @@ say "3/5  Preparing the Xcode project"
 [ -d ios ] || npx cap add ios
 npx cap sync ios
 
-# ── 4. Plain http, for this app only ────────────────────────────────────────
+# Apple Health (native/vitara-health). Two things Apple requires before an app may even ask:
+# the sentence shown in the permission sheet, and the HealthKit entitlement. Both are written
+# every run, so a project created before this existed picks them up too.
 PLIST="ios/App/App/Info.plist"
+/usr/libexec/PlistBuddy -c "Delete :NSHealthShareUsageDescription" "$PLIST" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Add :NSHealthShareUsageDescription string Vitara reads your steps, workouts, sleep, heart rate and weight to compare each day with your own normal. It never writes to Health." "$PLIST"
+cat > ios/App/App/App.entitlements <<'ENT'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>com.apple.developer.healthkit</key>
+  <true/>
+  <key>com.apple.developer.healthkit.access</key>
+  <array/>
+</dict>
+</plist>
+ENT
+PBX="ios/App/App.xcodeproj/project.pbxproj"
+if ! grep -q "CODE_SIGN_ENTITLEMENTS" "$PBX"; then
+  # Beside the bundle id in each build configuration (Debug and Release) of the app target;
+  # Xcode reflows the line the next time it saves the project.
+  sed -i '' 's|PRODUCT_BUNDLE_IDENTIFIER = app.vitara.mobile;|CODE_SIGN_ENTITLEMENTS = App/App.entitlements; PRODUCT_BUNDLE_IDENTIFIER = app.vitara.mobile;|' "$PBX"
+fi
+grep -q "CODE_SIGN_ENTITLEMENTS" "$PBX" || fail "Could not add the HealthKit entitlement to the Xcode project.
+In Xcode: App > Signing & Capabilities > + Capability > HealthKit, then run this again."
+echo "  Apple Health: permission text and entitlement in place"
+
+# ── 4. Plain http, for this app only ────────────────────────────────────────
 if [[ "$SERVER" == http://* ]]; then
   say "4/5  Allowing plain http (the server address is not https)"
   /usr/libexec/PlistBuddy -c "Delete :NSAppTransportSecurity" "$PLIST" 2>/dev/null || true

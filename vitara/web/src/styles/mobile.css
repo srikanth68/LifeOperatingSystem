@@ -578,6 +578,11 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
 .vmi-grade { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--s2); font-size: 13px; color: var(--t2); }
 .vmi-grade b { font-size: 12px; color: var(--on-accent); background: var(--teal); border-radius: 6px; padding: 3px 8px; }
 
+.vmi-ah { display: flex; flex-direction: column; gap: 10px; }
+.vmi-ah .vmi-eyebrow { margin: 0; }
+.vmi-ah-big { font-size: 22px; font-weight: 700; }
+.vm-shape.s-apple::after { background: var(--coral); border-radius: 50%; }
+
 /* Tap targets of at least 44px for the controls the existing pages use. */
 .vm .hx-btn, .vm .hx-btn-ghost, .vm select, .vm input:not([type="checkbox"]):not([type="radio"]) { min-height: 44px; }
 .vm input, .vm select, .vm textarea { font-size: 16px; }   /* anything smaller makes iOS zoom the page on focus */

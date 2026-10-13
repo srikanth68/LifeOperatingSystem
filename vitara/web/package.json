@@ -18,7 +18,8 @@
     "date-fns-tz": "^3.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "recharts": "^2.10.3"
+    "recharts": "^2.10.3",
+    "vitara-health": "file:native/vitara-health"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.3",

@@ -24,6 +24,18 @@ public class HealthKitController(IVitaraRepository repo) : ControllerBase
         if (string.IsNullOrEmpty(deviceKey) || deviceKey != expectedKey)
             return Unauthorized(new { error = "Invalid or missing X-Device-Key header." });
 
+        return Ok(await ApplyAsync(req));
+    }
+
+    // The same payload from Vitara's own iOS app, which reads HealthKit itself. Signed in
+    // like every other call it makes (no [AllowAnonymous], so the user's token and the
+    // chosen person apply), which is why it needs no device key: the key was only ever
+    // standing in for "this is my phone", and a signed-in app already says that.
+    [HttpPost("sync")]
+    public async Task<IActionResult> Sync([FromBody] HealthKitPayload req) => Ok(await ApplyAsync(req));
+
+    private async Task<object> ApplyAsync(HealthKitPayload req)
+    {
         var today = LocalTime.Today;
         var applied = new List<string>();
 
@@ -156,7 +168,7 @@ public class HealthKitController(IVitaraRepository repo) : ControllerBase
             applied.Add("dailyActivity");
         }
 
-        return Ok(new { received = true, applied });
+        return new { received = true, applied };
     }
 }
 

@@ -1,0 +1,19 @@
+{
+  "name": "vitara-health",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vitara's own Apple Health reader for the native iOS app. Local plugin, not published.",
+  "files": [
+    "ios/Sources",
+    "Package.swift",
+    "VitaraHealth.podspec"
+  ],
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": ">=8.0.0"
+  }
+}

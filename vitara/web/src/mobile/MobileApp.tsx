@@ -18,6 +18,9 @@ import { MobileRecovery } from './MobileRecovery';
 import { MobileActivity } from './MobileActivity';
 import { MobileLabs } from './MobileLabs';
 import { MobileInsight } from './MobileInsight';
+import { MobileAppleHealth } from './MobileAppleHealth';
+import { startAutoSync } from './appleHealth';
+import { isNative } from './native';
 import { RingDefs } from './Rings';
 import { useVmTheme } from './motion';
 import { useInstall } from './useMobile';
@@ -30,7 +33,7 @@ import '../styles/mobile.css';
 // the phone gets a shell and a new home screen, not a second copy of the product.
 
 type Tab = 'today' | 'sleep' | 'recovery' | 'move' | 'insight';
-type MoreKey = 'body' | 'food' | 'labs' | 'protocols' | 'record' | 'import' | 'all';
+type MoreKey = 'apple' | 'body' | 'food' | 'labs' | 'protocols' | 'record' | 'import' | 'all';
 // The deep pages behind the three designed screens: reached from a row at the bottom of each.
 type DetailKey = 'sleep-detail' | 'recovery-detail' | 'activity-detail' | 'labs-entry';
 
@@ -57,7 +60,9 @@ const TABS: { id: Tab; label: string; title: string; icon: ReactNode }[] = [
   },
 ];
 
+// Apple Health leads the list in the iPhone app, the one place it can be read.
 const MORE: { id: MoreKey; label: string; note: string }[] = [
+  ...(isNative() ? [{ id: 'apple' as const, label: 'Apple Health', note: 'Steps, workouts, sleep and weight from your iPhone' }] : []),
   { id: 'labs', label: 'Labs', note: 'Blood work against reference ranges' },
   { id: 'body', label: 'Body', note: 'Weight, composition, biological age' },
   { id: 'food', label: 'Food', note: 'Meals and macros' },
@@ -90,6 +95,9 @@ function Inner({ onSignOut }: { onSignOut: () => void }) {
     navigator.vibrate?.(6);                       // a light tick where the device has one
   };
   const goMore = (m: MoreKey | DetailKey) => { setMore(m); setSheet(false); window.scrollTo?.({ top: 0 }); };
+
+  // Apple Health syncs itself on open and on return to the front, once connected.
+  useEffect(() => startAutoSync(() => { void qc.invalidateQueries(); }), [qc]);
 
   const { pull, busy } = usePullToRefresh(async () => {
     await qc.invalidateQueries();
@@ -153,6 +161,7 @@ function Inner({ onSignOut }: { onSignOut: () => void }) {
             {more === 'food' && <NutritionPage />}
             {more === 'protocols' && <ProtocolsPage />}
             {more === 'record' && <MeasurePanel />}
+            {more === 'apple' && <MobileAppleHealth />}
             {more === 'import' && <><XmlImportPanel /><ImportPanel /></>}
             {more === 'all' && <VitaraMetricsCatalogue />}
           </PanelBoundary>

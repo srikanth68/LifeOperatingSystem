@@ -6,6 +6,8 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY package*.json ./
+# The Apple Health plugin is a local package (file:native/vitara-health); npm ci needs it present.
+COPY native ./native
 RUN npm ci
 COPY . .
 RUN npm run build
