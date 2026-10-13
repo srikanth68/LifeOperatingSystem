@@ -1694,7 +1694,9 @@ GET /api/health/forecast       tomorrow for four targets, each with its own reco
 GET /api/health/simulate       what if I had slept more, and what cannot be answered
 GET /api/health/regime-holds   steps held rather than adopted, open and released
 GET /api/health/trajectories   every metric: improving, worsening, stable, uncertain, not enough data
-GET /api/health/domains        ten areas of health: directions, findings, gaps, one sentence, no score</code></pre>
+GET /api/health/domains        ten areas of health: directions, findings, gaps, one sentence, no score
+GET /api/health/labs/{panelId}/context   the daily data before one draw, beside the previous draw
+GET /api/health/labs/{metric}/history    every draw of one analyte, each with its window</code></pre>
 
       <div class="why">
         <span class="tag">The status sentence</span>
@@ -2276,6 +2278,23 @@ GET /api/health/domains        ten areas of health: directions, findings, gaps, 
         and one sentence built from the counts: "2 improving, 1 worsening (resting heart rate),
         4 without enough data." No domain has a score, percentage, letter or colour, and a test
         asserts the payload carries none.
+      </p>
+
+      <h3>Labs annotated, never correlated</h3>
+      <p>
+        Four draws are a sequence, not a sample, so a lab is never correlated with daily data.
+        Instead each draw is shown beside the window of daily life that analyte reflects:
+        HbA1c 90 days, lipids (total, LDL, HDL, triglycerides, non-HDL, ApoB) 30, CRP and hs-CRP 14,
+        anything else 30, ending the day before the draw. For each window: the median and mean
+        personal z of steps, active calories, time asleep, resting HR, HRV and alcohol; sleep debt
+        at the draw; the mean load ratio; and the findings and interventions active during it
+        &mdash; side by side with the previous draw's window. A metric with data on fewer than half
+        the window's days reads "not enough data before this draw" and is not summarised. Wording is
+        co-occurrence only ("in the 30 days before this draw your median steps were 9,100, up from
+        6,300 before the previous one"), and a test checks every sentence against a list of causal
+        words. Computed on request, nothing stored:
+        <code>GET /api/health/labs/{panelId}/context</code> and
+        <code>GET /api/health/labs/{metric}/history</code>.
       </p>
 
       <h3>New inputs: strength, iron studies, habits, sleep timing</h3>

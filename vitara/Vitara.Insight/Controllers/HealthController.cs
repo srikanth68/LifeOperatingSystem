@@ -379,6 +379,87 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         });
     }
 
+    // What the daily data looked like before one blood draw, beside the previous draw's
+    // window (Vitara ADR 0020). Co-occurrence only; nothing here says why a value moved.
+    [HttpGet("labs/{panelId:guid}/context")]
+    public async Task<IActionResult> LabDrawContext(Guid panelId)
+    {
+        var (panels, observations, derived, findings, interventions) = await LabInputsAsync();
+        var context = LabContext.ForPanel(panelId, panels, observations, derived, findings, interventions);
+        if (context is null) return NotFound(new { error = "No such blood draw." });
+
+        return Ok(new
+        {
+            panelId = context.PanelId,
+            drawnOn = context.DrawnOn.ToString("yyyy-MM-dd"),
+            windows = context.Windows.Select(LabWindowView),
+            previous = context.PreviousPanelId is null ? null : new
+            {
+                panelId = context.PreviousPanelId,
+                drawnOn = context.PreviousDrawnOn?.ToString("yyyy-MM-dd"),
+                windows = context.PreviousWindows.Select(LabWindowView),
+            },
+            sentences = context.Sentences,
+            note = "What your daily data looked like before the draw. It shows what happened alongside a result, not what caused it.",
+        });
+    }
+
+    // Every draw of one analyte, each with its window and the change from the draw before.
+    [HttpGet("labs/{metric}/history")]
+    public async Task<IActionResult> LabHistory(string metric)
+    {
+        var (panels, observations, derived, findings, interventions) = await LabInputsAsync();
+
+        var draws = observations
+            .Where(o => o.Metric == metric && o.LabPanelId is not null)
+            .GroupBy(o => o.LabPanelId!.Value)
+            .Select(g => g.OrderByDescending(o => o.ObservedDateLocal).First())
+            .OrderBy(o => o.ObservedDateLocal)
+            .ToList();
+
+        var info = MetricCatalogue.Find(metric);
+        return Ok(new
+        {
+            metric,
+            label = info?.Label ?? metric,
+            unit = info?.Unit,
+            windowDays = LabContext.WindowFor(metric),
+            draws = draws.Select((d, i) => new
+            {
+                panelId = d.LabPanelId,
+                drawnOn = d.ObservedDateLocal.ToString("yyyy-MM-dd"),
+                d.Value,
+                change = i == 0 ? (double?)null : Math.Round(d.Value - draws[i - 1].Value, 3),
+                window = LabContext.Windows(d.ObservedDateLocal, [metric], observations, derived, findings, interventions)
+                    .Select(LabWindowView).FirstOrDefault(),
+            }),
+        });
+    }
+
+    private async Task<(List<LabPanel>, List<Observation>, List<DerivedMetric>, List<Finding>, List<Intervention>)> LabInputsAsync()
+    {
+        var today = LocalTime.Today;
+        return (
+            await repo.GetLabPanelsAsync(200),
+            await repo.GetObservationsAsync(today.AddDays(-1500), today),
+            await repo.GetDerivedMetricsAsync(today.AddDays(-1500), today),
+            await repo.GetFindingsAsync(activeOnly: false, limit: 1000),
+            await repo.GetInterventionsAsync());
+    }
+
+    private static object LabWindowView(LabWindow w) => new
+    {
+        days = w.Days,
+        from = w.From.ToString("yyyy-MM-dd"),
+        to = w.To.ToString("yyyy-MM-dd"),
+        analytes = w.Analytes,
+        metrics = w.Metrics,
+        sleepDebtAtDraw = w.SleepDebtAtDraw,
+        meanLoadRatio = w.MeanLoadRatio,
+        findings = w.Findings,
+        interventions = w.Interventions,
+    };
+
     private async Task<List<TrajectoryResult>> TrajectoriesAsync(
         DateOnly today, IReadOnlyList<Observation> observations, IReadOnlyList<DerivedMetric> derived)
     {
