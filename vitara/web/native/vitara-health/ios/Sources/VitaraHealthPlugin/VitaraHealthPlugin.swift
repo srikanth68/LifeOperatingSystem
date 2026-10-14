@@ -115,10 +115,16 @@ public class VitaraHealthPlugin: CAPPlugin, CAPBridgedPlugin {
         let yesterday = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: Date()))!
         let from = cal.date(bySettingHour: 18, minute: 0, second: 0, of: yesterday)!
         let predicate = HKQuery.predicateForSamples(withStart: from, end: Date(), options: .strictStartDate)
-        let asleep: Set<Int> = [
-            HKCategoryValueSleepAnalysis.asleepCore.rawValue, HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
-            HKCategoryValueSleepAnalysis.asleepREM.rawValue, HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue
-        ]
+        // The stages (core, deep, REM) arrived in iOS 16. Before that, one "asleep" value.
+        let asleep: Set<Int>
+        if #available(iOS 16.0, *) {
+            asleep = [
+                HKCategoryValueSleepAnalysis.asleepCore.rawValue, HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
+                HKCategoryValueSleepAnalysis.asleepREM.rawValue, HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue
+            ]
+        } else {
+            asleep = [HKCategoryValueSleepAnalysis.asleep.rawValue]
+        }
         return await withCheckedContinuation { c in
             let q = HKSampleQuery(sampleType: HKCategoryType(.sleepAnalysis), predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
                 let s = (samples as? [HKCategorySample] ?? []).filter { asleep.contains($0.value) }
@@ -142,12 +148,9 @@ public class VitaraHealthPlugin: CAPPlugin, CAPBridgedPlugin {
                         "start": Self.iso(w.startDate),
                         "end": Self.iso(w.endDate)
                     ]
-                    if let kcal = w.statistics(for: HKQuantityType(.activeEnergyBurned))?.sumQuantity()?.doubleValue(for: .kilocalorie()) {
-                        row["calories"] = Int(kcal.rounded())
-                    }
-                    if let m = w.statistics(for: HKQuantityType(.distanceWalkingRunning))?.sumQuantity()?.doubleValue(for: .meter()) {
-                        row["distanceMeters"] = Int(m.rounded())
-                    }
+                    let (kcal, metres) = Self.energyAndDistance(w)
+                    if let kcal = kcal { row["calories"] = Int(kcal.rounded()) }
+                    if let metres = metres { row["distanceMeters"] = Int(metres.rounded()) }
                     return row
                 }
                 c.resume(returning: list)
@@ -191,6 +194,17 @@ public class VitaraHealthPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     // MARK: - Helpers
+
+    // Per-workout statistics are iOS 16; before that the workout's own totals.
+    private static func energyAndDistance(_ w: HKWorkout) -> (Double?, Double?) {
+        if #available(iOS 16.0, *) {
+            return (
+                w.statistics(for: HKQuantityType(.activeEnergyBurned))?.sumQuantity()?.doubleValue(for: .kilocalorie()),
+                w.statistics(for: HKQuantityType(.distanceWalkingRunning))?.sumQuantity()?.doubleValue(for: .meter())
+            )
+        }
+        return (w.totalEnergyBurned?.doubleValue(for: .kilocalorie()), w.totalDistance?.doubleValue(for: .meter()))
+    }
 
     private static let isoFormatter = ISO8601DateFormatter()
     private static func iso(_ d: Date) -> String { isoFormatter.string(from: d) }
