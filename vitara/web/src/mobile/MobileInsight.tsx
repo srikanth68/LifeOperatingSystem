@@ -11,6 +11,8 @@ import { ScenarioSection } from '../components/health/Direction';
 import type { Readiness } from '../pages/VitaraModule';
 import { dateLine } from './Parts';
 import { PatternsView } from './MobileInsightPatterns';
+import { StriveCard, StriveWhy, striveText, useStrive } from './MobileStrive';
+import type { StriveRange } from './MobileStrive';
 
 // Insight, drawn for the phone (design canvas: Main, Direction, Explain).
 //
@@ -36,7 +38,7 @@ interface Hold {
   metric: string; label: string; unit: string | null; signature: string; changePoint: string; direction: string;
   before: number; after: number; open: boolean; heldForDays: number;
 }
-interface DomainMetric { metric: string; label: string; unit: string | null; latest: number | null; trajectory: string; trajectoryReason: string }
+interface DomainMetric { metric: string; label: string; unit: string | null; latest: number | null; trajectory: string; trajectoryReason: string; grade: string | null }
 interface Domain { key: string; label: string; metrics: DomainMetric[]; gaps: { missingKeyTests: string[] } }
 interface Projection {
   label: string; projected: boolean; horizonDays: number; currentLevel: number | null;
@@ -375,13 +377,41 @@ function TodayStrips() {
 
 // ── Direction ───────────────────────────────────────────────────────────────
 
+// The "strive for" range behind a chart (ADR 0028): a faint band, labelled, so a steady
+// normal that sits outside it is visible as something worth moving.
+function StriveBand({ r, Y, x0, x1, top, bottom }: { r: StriveRange | undefined; Y: (v: number) => number; x0: number; x1: number; top: number; bottom: number }) {
+  if (!r) return null;
+  // Only the edges that fall inside the chart are drawn. A band covering the whole chart
+  // would be a coloured background, not information: every value is inside it, and the
+  // "strive for" line under the card already says so.
+  const edge = (v: number | null) => (v != null && Y(v) > top && Y(v) < bottom ? Y(v) : null);
+  const eHi = edge(r.high), eLo = edge(r.low);
+  if (eHi == null && eLo == null) return null;
+  const yHi = eHi ?? top, yLo = eLo ?? bottom;
+  return (
+    <>
+      <rect x={f1(x0)} y={f1(yHi)} width={f1(x1 - x0)} height={f1(Math.max(0, yLo - yHi))} className="vmi-strive-band" />
+      {eHi != null && <line x1={f1(x0)} x2={f1(x1)} y1={f1(eHi)} y2={f1(eHi)} className="vmi-strive-edge" />}
+      {eLo != null && <line x1={f1(x0)} x2={f1(x1)} y1={f1(eLo)} y2={f1(eLo)} className="vmi-strive-edge" />}
+      <text x={f1(x1 - 4)} y={f1((eHi ?? eLo!) + (eHi != null ? 12 : -4))} textAnchor="end" className="vmi-t vmi-t-strive">strive</text>
+    </>
+  );
+}
+
+// Grades from the evidence notes behind each measure (A strongest, D weakest).
+const GRADE_WORDS: Record<string, string> = {
+  A: 'strong, consistent across studies', B: 'strong, depends on context', C: 'suggestive', D: 'weak, read loosely',
+};
+
 const useProjection = (metric: string, historyFrom?: string) => useQuery({
   queryKey: ['projection', metric, 'history', historyFrom ?? ''],
   queryFn: () => get<Projection>(`${API}/api/health/projection?metric=${encodeURIComponent(metric)}&horizonDays=90${historyFrom ? `&historyFrom=${historyFrom}` : ''}`),
 });
 
-function HoldCard({ h, why, addChange }: { h: Hold; why: (w: Why) => void; addChange: () => void }) {
+function HoldCard({ h, grade, why, addChange }: { h: Hold; grade: string | null; why: (w: Why) => void; addChange: () => void }) {
   const qc = useQueryClient();
+  const strive = useStrive().data?.ranges.find(r => r.metric === h.metric);
+  const { fmt } = useNamer();
   // Six weeks before the step, so the picture shows the level it stepped from.
   const p = useProjection(h.metric, addDays(h.changePoint, -42));
   const accept = useMutation({
@@ -403,6 +433,8 @@ function HoldCard({ h, why, addChange }: { h: Hold; why: (w: Why) => void; addCh
   const vals = hist.map(x => x.value).concat([h.before, h.after]);
   const lo = Math.min(...vals), hi = Math.max(...vals), pad = (hi - lo || 1) * 0.25;
   const Y = (v: number) => 84 - ((v - (lo - pad)) / (hi - lo + 2 * pad)) * 64;
+  // The strive band is clipped to the chart rather than widening its scale: a band ten times
+  // the height of the step would flatten the very thing the card is about.
   const X = (i: number) => 4 + (i / Math.max(1, hist.length - 1)) * (W - 8);
   const stepI = hist.findIndex(x => x.day >= h.changePoint);
   const sx = stepI >= 0 ? X(stepI) : W / 2;
@@ -417,6 +449,7 @@ function HoldCard({ h, why, addChange }: { h: Hold; why: (w: Why) => void; addCh
       {hist.length >= 3 && (
         <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="img"
              aria-label={`${h.label} stepped from ${n(h.before)} to ${n(h.after)} around ${stepDay}; your normal is still held at ${n(h.before)}`}>
+          <StriveBand r={strive} Y={Y} x0={0} x1={W} top={8} bottom={92} />
           <line x1={f1(sx)} y1={f1(Y(h.before))} x2={W} y2={f1(Y(h.before))} className="vmi-held" />
           <polyline points={hist.map((x, i) => `${f1(X(i))},${f1(Y(x.value))}`).join(' ')} className="vmi-line" />
           <line x1={f1(sx)} y1="10" x2={f1(sx)} y2="92" className="vmi-step" />
@@ -425,18 +458,23 @@ function HoldCard({ h, why, addChange }: { h: Hold; why: (w: Why) => void; addCh
           <text x={W - 2} y="18" textAnchor="end" className="vmi-t vmi-t-b">now {n(h.after)}</text>
         </svg>
       )}
+      {strive && (
+        <button type="button" className="vmi-strive-line" onClick={() => why({ title: h.label, body: <StriveWhy r={strive} fmt={fmt} /> })}>
+          <i className="k-band" />Strive for {striveText(strive, fmt)}<b>{strive.grade}</b><em>›</em>
+        </button>
+      )}
       <div className="vmi-buttons">
         <button type="button" className="vmi-btn is-primary" disabled={accept.isPending || accept.isSuccess} onClick={() => accept.mutate()}>It's my new normal</button>
         <button type="button" className="vmi-btn" onClick={addChange}>Add what changed</button>
       </div>
       {accept.data && <p className="vmi-muted vmi-small">{accept.data.note}</p>}
       {accept.error && <p className="vmi-small vmi-coral">{(accept.error as Error).message}</p>}
-      <WhyLink onClick={() => why({ title: 'Why your normal is held', body: <HoldWhy h={h} n={n} stepDay={stepDay} /> })}>Why is it held? ›</WhyLink>
+      <WhyLink onClick={() => why({ title: 'Why your normal is held', body: <HoldWhy h={h} n={n} stepDay={stepDay} grade={grade} /> })}>Why is it held? ›</WhyLink>
     </section>
   );
 }
 
-function HoldWhy({ h, n, stepDay }: { h: Hold; n: (v: number) => string; stepDay: string }) {
+function HoldWhy({ h, n, stepDay, grade }: { h: Hold; n: (v: number) => string; stepDay: string; grade: string | null }) {
   return (
     <>
       <div className="vmi-three">
@@ -452,7 +490,7 @@ function HoldWhy({ h, n, stepDay }: { h: Hold; n: (v: number) => string; stepDay
         <li>you say it's your new normal</li>
         <li>it comes back on its own</li>
       </ol>
-      <p className="vmi-grade"><b>B</b><span>Evidence: strong, depends on context. Not a diagnosis.</span></p>
+      {grade && <p className="vmi-grade"><b>{grade}</b><span>Evidence for {h.label.toLowerCase()}: {GRADE_WORDS[grade] ?? grade}. Not a diagnosis.</span></p>}
     </>
   );
 }
@@ -499,6 +537,7 @@ function Areas({ domains }: { domains: Domain[] }) {
 
 function MovingChart({ m, why }: { m: DomainMetric; why: (w: Why) => void }) {
   const p = useProjection(m.metric);
+  const strive = useStrive().data?.ranges.find(r => r.metric === m.metric);
   const hist = p.data?.history ?? [];
   if (hist.length < 3) return null;
   const pr = p.data!;
@@ -516,6 +555,7 @@ function MovingChart({ m, why }: { m: DomainMetric; why: (w: Why) => void }) {
       <div className="vmi-row"><b className="vmi-finding-name">{m.label}</b><span className={`vmi-tag t-${tone}`}>{m.trajectory}</span></div>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="img"
            aria-label={pr.projected ? `If it continued for ${pr.horizonDays} days it would be between ${n(pr.projectedLow!)} and ${n(pr.projectedHigh!)}` : `${m.label}, last 90 days`}>
+        <StriveBand r={strive} Y={Y} x0={0} x1={W} top={4} bottom={84} />
         <polyline points={hist.map((x, i) => `${f1(X(i))},${f1(Y(x.value))}`).join(' ')} className="vmi-line" />
         <text x="4" y={f1(Y(hist[0].value) + 14)} className="vmi-t">{n(hist[0].value)}</text>
         <text x={split - 6} y={f1(Y(last) - 8)} textAnchor="end" className="vmi-t vmi-t-b">{n(last)} now</text>
@@ -575,8 +615,10 @@ function DirectionView({ why, addChange }: { why: (w: Why) => void; addChange: (
 
   return (
     <>
-      {holds.map(h => <HoldCard key={`${h.metric}-${h.changePoint}`} h={h} why={why} addChange={addChange} />)}
+      {holds.map(h => <HoldCard key={`${h.metric}-${h.changePoint}`} h={h} why={why} addChange={addChange}
+                                grade={domains.flatMap(d => d.metrics).find(m => m.metric === h.metric)?.grade ?? null} />)}
       {domains.length > 0 && <Areas domains={domains} />}
+      <StriveCard why={why} />
       <section className="vm-tile" aria-label="Moving now">
         <h2 className="vmi-h2"><span>Moving now</span><em>last 90 days</em></h2>
         {moving.length === 0 && <p className="vmi-muted">Nothing is moving: every measure with enough data is steady.</p>}

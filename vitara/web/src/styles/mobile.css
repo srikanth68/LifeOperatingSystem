@@ -671,6 +671,34 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
 .vmi-chips button { min-height: 40px; padding: 0 14px; border-radius: 20px; border: 1px solid var(--line2); background: transparent; color: var(--t2); font: 600 14px var(--font-ui); cursor: pointer; }
 .vmi-chips button.is-on { background: var(--t1); color: var(--bg); border-color: var(--t1); }
 
+/* Where to aim (strive-for ranges, ADR 0028) */
+.vmi-strive { display: flex; flex-direction: column; }
+.vmi-strive-row { display: grid; grid-template-columns: minmax(0, 1fr) 96px 54px; align-items: center; gap: 10px; min-height: 54px; padding: 6px 0; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--t1); font: inherit; text-align: left; cursor: pointer; }
+.vmi-strive-row:first-child { border-top: 0; }
+.vmi-strive-name { font-size: 14px; font-weight: 600; line-height: 1.25; }
+.vmi-strive-name small { display: block; font-size: 12px; font-weight: 400; color: var(--t2); }
+.vmi-strive-val { text-align: right; font-size: 15px; font-weight: 700; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; }
+.vmi-strive-val small { font-size: 10px; font-weight: 700; color: var(--t3); }
+.vmi-strive-val.is-off { color: var(--gold); } .vmi-strive-val.is-risk { color: var(--gold); text-decoration: underline; text-underline-offset: 3px; }
+.vmi-strive-more { margin-top: 8px; }
+.vmi-gauge { position: relative; height: 14px; }
+.vmi-gauge.is-big { height: 34px; margin: 6px 0 4px; }
+.vmi-gauge-track { position: absolute; left: 0; right: 0; top: 4px; height: 6px; border-radius: 3px; background: var(--track); }
+.vmi-gauge-risk { position: absolute; top: 4px; height: 6px; background: var(--gold); opacity: .4; border-radius: 3px; }
+.vmi-gauge-band { position: absolute; top: 2px; height: 10px; border-radius: 5px; background: var(--tint-t); box-shadow: inset 0 0 0 1.5px var(--teal); }
+.vmi-gauge-dot { position: absolute; top: 1px; width: 12px; height: 12px; border-radius: 50%; background: var(--t1); box-shadow: 0 0 0 2px var(--s1); }
+.vmi-gauge-dot.is-off { background: var(--gold); } .vmi-gauge-dot.is-risk { background: var(--gold); box-shadow: 0 0 0 2px var(--s1), 0 0 0 4px var(--gold); }
+.vmi-gauge-tick { position: absolute; top: 18px; transform: translateX(-50%); font-size: 11px; color: var(--teal); white-space: nowrap; }
+.vmi-strive-band { fill: var(--teal); opacity: .07; }
+.vmi-strive-edge { stroke: var(--teal); stroke-opacity: .55; stroke-dasharray: 2 3; }
+.vmi-t-strive { fill: var(--teal); opacity: .8; }
+.vmi-strive-line { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0; border: 0; background: transparent; color: var(--t2); font: 400 13px var(--font-ui, 'Instrument Sans'), system-ui, sans-serif; cursor: pointer; text-align: left; }
+.vmi-strive-line b { font-size: 11px; color: var(--t3); border: 1px solid var(--line2); border-radius: 5px; padding: 0 5px; }
+.vmi-strive-line em { font-style: normal; margin-left: auto; }
+.k-band { width: 14px !important; height: 8px !important; border-radius: 4px !important; background: var(--tint-t); box-shadow: inset 0 0 0 1.5px var(--teal); display: inline-block; }
+.k-risk { width: 14px !important; height: 6px !important; border-radius: 3px !important; background: var(--gold); opacity: .55; display: inline-block; }
+.k-grade { font-size: 10px; color: var(--t3); border: 1px solid var(--line2); border-radius: 5px; padding: 0 4px; margin-right: 2px; }
+
 /* Tap targets of at least 44px for the controls the existing pages use. */
 .vm .hx-btn, .vm .hx-btn-ghost, .vm select, .vm input:not([type="checkbox"]):not([type="radio"]) { min-height: 44px; }
 .vm input, .vm select, .vm textarea { font-size: 16px; }   /* anything smaller makes iOS zoom the page on focus */

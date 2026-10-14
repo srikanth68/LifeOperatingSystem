@@ -310,6 +310,56 @@ public class HealthIntelligenceController(IVitaraRepository repo) : ControllerBa
         });
     }
 
+    // What to strive for (Vitara ADR 0028): a healthy range per measure from longevity
+    // research, with its grade and source, and where the latest reading sits against it.
+    // Shown beside the person's own normal, never instead of it.
+    [HttpGet("healthy-ranges")]
+    public async Task<IActionResult> HealthyRangesFor()
+    {
+        var today = LocalTime.Today;
+        var profile = await repo.GetProfileAsync();
+        var (ranges, missing) = HealthyRanges.For(profile?.CurrentAge, profile?.BiologicalSex);
+        var observations = await repo.GetObservationsAsync(today.AddDays(-400), today);
+        var derived = await repo.GetDerivedMetricsAsync(today.AddDays(-400), today);
+
+        (DateOnly Day, double Value)? Latest(string metric) => MetricCatalogue.Find(metric)?.Computed == true
+            ? derived.Where(d => d.Metric == metric).OrderBy(d => d.ObservedDateLocal)
+                .Select(d => ((DateOnly, double)?)(d.ObservedDateLocal, d.Value)).LastOrDefault()
+            : observations.Where(o => o.Metric == metric).OrderBy(o => o.ObservedDateLocal)
+                .Select(o => ((DateOnly, double)?)(o.ObservedDateLocal, o.Value)).LastOrDefault();
+
+        return Ok(new
+        {
+            note = "What people who live longer and healthier tend to sit at, from the research named on each. " +
+                   "A direction to aim, not a diagnosis; your own normal is still what every finding is measured against.",
+            ranges = ranges.Select(r =>
+            {
+                var info = MetricCatalogue.Find(r.Metric);
+                var latest = Latest(r.Metric);
+                return new
+                {
+                    r.Metric,
+                    label = info?.Label ?? r.Metric,
+                    unit = info?.Unit,
+                    r.Low, r.High, r.RiskBelow, r.RiskAbove,
+                    r.Grade, r.Source, r.Basis,
+                    gradeLabel = r.Grade switch
+                    {
+                        "A" => "strong: trials or large meta-analyses agree",
+                        "B" => "good: consistent large observational studies",
+                        _ => "suggestive: weaker evidence, read loosely",
+                    },
+                    latest = latest is { } l ? new { day = l.Day.ToString("yyyy-MM-dd"), value = Math.Round(l.Value, 2) } : null,
+                    position = latest is { } p ? HealthyRanges.Position(r, p.Value) : null,
+                    atRisk = latest is { } q && HealthyRanges.AtRisk(r, q.Value),
+                };
+            }),
+            missing = missing.Select(m => new { m.Metric, label = MetricCatalogue.Find(m.Metric)?.Label ?? m.Metric, m.Reason }),
+            personalOnly = HealthyRanges.PersonalOnly,
+            personalOnlyNote = HealthyRanges.PersonalOnlyNote,
+        });
+    }
+
     // Every metric's direction: improving, worsening, stable, uncertain or not enough
     // data, each with its reason (Vitara ADR 0018). Labels, not findings: nothing here
     // notifies anyone.
