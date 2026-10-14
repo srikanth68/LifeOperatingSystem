@@ -25,6 +25,32 @@ public class VitaraRepository(VitaraDbContext db) : IVitaraRepository
         await db.SaveChangesAsync();
     }
 
+    public Task<WhoopToken?> GetWhoopTokenAsync() =>
+        db.WhoopTokens.OrderByDescending(t => t.LinkedAt).FirstOrDefaultAsync();
+
+    public async Task SaveWhoopTokenAsync(WhoopToken token)
+    {
+        var existing = await db.WhoopTokens.FirstOrDefaultAsync();
+        if (existing is null) db.WhoopTokens.Add(token);
+        else if (!ReferenceEquals(existing, token))
+        {
+            existing.AccessToken = token.AccessToken;
+            existing.RefreshToken = token.RefreshToken;
+            existing.ExpiresAt = token.ExpiresAt;
+            existing.LinkedAt = token.LinkedAt;
+            existing.LastSyncedAt = token.LastSyncedAt;
+            existing.LastSyncAttemptAt = token.LastSyncAttemptAt;
+            existing.LastSyncError = token.LastSyncError;
+        }
+        await db.SaveChangesAsync();
+    }
+
+    public async Task DeleteWhoopTokenAsync()
+    {
+        db.WhoopTokens.RemoveRange(db.WhoopTokens);
+        await db.SaveChangesAsync();
+    }
+
     // ── Profile ──
     public async Task<UserProfile?> GetProfileAsync() =>
         await db.Profiles.FirstOrDefaultAsync();

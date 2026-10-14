@@ -41,14 +41,22 @@ public static class ProfileResolver
     public static Result Resolve(string? header, string? query, string? state, string path)
     {
         var isOuraCallback = path.EndsWith("/api/oura/callback", StringComparison.OrdinalIgnoreCase);
+        var isWhoopCallback = path.EndsWith("/api/whoop/callback", StringComparison.OrdinalIgnoreCase);
 
-        var raw = FirstNonEmpty(header, query, isOuraCallback ? state : null);
+        var raw = FirstNonEmpty(header, query, isOuraCallback ? state : isWhoopCallback ? FromWhoopState(state) : null);
         if (raw is null) return new Result(ProfileIds.Default, null);
 
         return ProfileIds.IsValid(raw)
             ? new Result(raw, null)
             : new Result(ProfileIds.Default, "That is not a valid profile id.");
     }
+
+    // WHOOP insists on a `state` of at least eight characters, which "default" is not, so
+    // the person rides behind a fixed prefix: "vitara.<profile>".
+    private const string WhoopStatePrefix = "vitara.";
+    public static string ToWhoopState(string profileId) => WhoopStatePrefix + profileId;
+    public static string? FromWhoopState(string? state) =>
+        state is not null && state.StartsWith(WhoopStatePrefix, StringComparison.Ordinal) ? state[WhoopStatePrefix.Length..] : null;
 
     private static string? FirstNonEmpty(params string?[] values) =>
         values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim();

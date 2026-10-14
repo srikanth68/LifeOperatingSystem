@@ -57,6 +57,11 @@ For any MCP-capable agent (Claude, custom) that should drive Maaya's tools:
 - **Oura OAuth**: `OURA_REDIRECT_URI` is now `http://<your-mesh-ip>:5100/api/oura/callback`
   — add that exact URI to the Oura developer-app settings or re-linking will fail.
   (Synced Oura data keeps flowing regardless; the token lives in vitara.db.)
+- **WHOOP OAuth** (optional, ADR 0029): create an app at developer-dashboard.whoop.com with scopes
+  `read:recovery read:sleep read:workout read:cycles` and redirect URI
+  `http://<your-mesh-ip>:5100/api/whoop/callback`, then add to `deploy/env/vitara.env`:
+  `WHOOP_CLIENT_ID=…`, `WHOOP_CLIENT_SECRET=…`, `WHOOP_REDIRECT_URI=http://<your-mesh-ip>:5100/api/whoop/callback`.
+  Until it has app approval, WHOOP allows 10 members per app. The worker syncs every 4 hours.
 - **Vault split-db**: there were historically two `vault.db` files (API/Worker).
   The migration takes the API one; in Docker both processes share `/data/vault/vault.db`.
 - **Frontend build** runs `npm run build` (`tsc -b && vite build`), so a type

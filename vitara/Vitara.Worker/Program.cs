@@ -3,6 +3,7 @@ using Vitara.Application.Interfaces;
 using Vitara.Infrastructure.Nutrition;
 using Vitara.Infrastructure.Data;
 using Vitara.Infrastructure.Oura;
+using Vitara.Infrastructure.Whoop;
 using Vitara.Worker;
 using Vitara.Infrastructure.Profiles;
 
@@ -20,6 +21,9 @@ if (File.Exists(envFile))
 
 var builder = Host.CreateApplicationBuilder(args);
 
+builder.Configuration["Whoop:ClientId"]     = Environment.GetEnvironmentVariable("WHOOP_CLIENT_ID") ?? "";
+builder.Configuration["Whoop:ClientSecret"] = Environment.GetEnvironmentVariable("WHOOP_CLIENT_SECRET") ?? "";
+builder.Configuration["Whoop:RedirectUri"]  = Environment.GetEnvironmentVariable("WHOOP_REDIRECT_URI") ?? "http://localhost:5100/api/whoop/callback";
 builder.Configuration["Oura:ClientId"]     = Environment.GetEnvironmentVariable("OURA_CLIENT_ID") ?? "";
 builder.Configuration["Oura:ClientSecret"] = Environment.GetEnvironmentVariable("OURA_CLIENT_SECRET") ?? "";
 builder.Configuration["Oura:RedirectUri"]  = Environment.GetEnvironmentVariable("OURA_REDIRECT_URI")
@@ -30,6 +34,8 @@ builder.Services.AddHttpClient();
 builder.Services.AddVitaraProfiles();
 builder.Services.AddScoped<IVitaraRepository, VitaraRepository>();
 builder.Services.AddScoped<IOuraClient, OuraClient>();
+builder.Services.AddScoped<IWhoopClient, WhoopClient>();
+builder.Services.AddHostedService<WhoopSyncWorker>();
 builder.Services.AddScoped<INutritionSource, MfpNutritionClient>();
 builder.Services.AddHttpClient("mfp");
 builder.Services.AddHostedService<OuraSyncWorker>();

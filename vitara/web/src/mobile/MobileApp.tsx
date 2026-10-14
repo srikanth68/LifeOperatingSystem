@@ -18,7 +18,7 @@ import { MobileRecovery } from './MobileRecovery';
 import { MobileActivity } from './MobileActivity';
 import { MobileLabs } from './MobileLabs';
 import { MobileInsight } from './MobileInsight';
-import { MobileAppleHealth } from './MobileAppleHealth';
+import { MobileDevices } from './MobileDevices';
 import { startAutoSync } from './appleHealth';
 import { isNative } from './native';
 import { RingDefs } from './Rings';
@@ -33,7 +33,7 @@ import '../styles/mobile.css';
 // the phone gets a shell and a new home screen, not a second copy of the product.
 
 type Tab = 'today' | 'sleep' | 'recovery' | 'move' | 'insight';
-type MoreKey = 'apple' | 'body' | 'food' | 'labs' | 'protocols' | 'record' | 'import' | 'all';
+type MoreKey = 'devices' | 'body' | 'food' | 'labs' | 'protocols' | 'record' | 'import' | 'all';
 // The deep pages behind the three designed screens: reached from a row at the bottom of each.
 type DetailKey = 'sleep-detail' | 'recovery-detail' | 'activity-detail' | 'labs-entry';
 
@@ -60,9 +60,9 @@ const TABS: { id: Tab; label: string; title: string; icon: ReactNode }[] = [
   },
 ];
 
-// Apple Health leads the list in the iPhone app, the one place it can be read.
+// Devices leads the list: where the data comes from (Apple Health only in the iPhone app).
 const MORE: { id: MoreKey; label: string; note: string }[] = [
-  ...(isNative() ? [{ id: 'apple' as const, label: 'Apple Health', note: 'Steps, workouts, sleep and weight from your iPhone' }] : []),
+  { id: 'devices', label: 'Devices', note: isNative() ? 'Oura, WHOOP and Apple Health' : 'Link an Oura Ring or WHOOP' },
   { id: 'labs', label: 'Labs', note: 'Blood work against reference ranges' },
   { id: 'body', label: 'Body', note: 'Weight, composition, biological age' },
   { id: 'food', label: 'Food', note: 'Meals and macros' },
@@ -161,7 +161,7 @@ function Inner({ onSignOut }: { onSignOut: () => void }) {
             {more === 'food' && <NutritionPage />}
             {more === 'protocols' && <ProtocolsPage />}
             {more === 'record' && <MeasurePanel />}
-            {more === 'apple' && <MobileAppleHealth />}
+            {more === 'devices' && <MobileDevices />}
             {more === 'import' && <><XmlImportPanel /><ImportPanel /></>}
             {more === 'all' && <VitaraMetricsCatalogue />}
           </PanelBoundary>

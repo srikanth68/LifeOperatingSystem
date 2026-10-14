@@ -7,6 +7,10 @@ public interface IVitaraRepository
     // Token
     Task<OuraToken?> GetTokenAsync();
     Task SaveTokenAsync(OuraToken token);
+    Task<WhoopToken?> GetWhoopTokenAsync();
+    // Writes every field, the sync bookkeeping included.
+    Task SaveWhoopTokenAsync(WhoopToken token);
+    Task DeleteWhoopTokenAsync();
     Task DeleteTokenAsync();
 
     // The newest day held by EACH collection, keyed by the names the sync worker uses.

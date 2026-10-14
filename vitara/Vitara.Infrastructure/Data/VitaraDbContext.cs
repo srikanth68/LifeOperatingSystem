@@ -42,6 +42,7 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
     }
 
     public DbSet<OuraToken>              Tokens          => Set<OuraToken>();
+    public DbSet<WhoopToken>             WhoopTokens     => Set<WhoopToken>();
     public DbSet<UserProfile>            Profiles        => Set<UserProfile>();
     public DbSet<SleepSession>           Sleep           => Set<SleepSession>();
     public DbSet<DailyReadiness>         Readiness       => Set<DailyReadiness>();
@@ -78,6 +79,7 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
     protected override void OnModelCreating(ModelBuilder b)
     {
         b.Entity<OuraToken>().HasKey(t => t.Id);
+        b.Entity<WhoopToken>().HasKey(t => t.Id);
         b.Entity<UserProfile>().HasKey(u => u.Id);
 
         ConfigureDayEntity<SleepSession>(b, s => s.Id, s => s.Day);
@@ -453,6 +455,17 @@ public class VitaraDbContext(DbContextOptions<VitaraDbContext> options) : DbCont
 
             -- A step seen and not adopted, remembered after the window moves past it.
             -- Written by vitara-insight only.
+            -- A linked WHOOP account (ADR 0029). One row, like Tokens for Oura.
+            CREATE TABLE IF NOT EXISTS WhoopTokens (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                AccessToken TEXT NOT NULL DEFAULT '',
+                RefreshToken TEXT NOT NULL DEFAULT '',
+                ExpiresAt TEXT NOT NULL,
+                LinkedAt TEXT NOT NULL,
+                LastSyncedAt TEXT,
+                LastSyncAttemptAt TEXT,
+                LastSyncError TEXT
+            );
             CREATE TABLE IF NOT EXISTS RegimeHolds (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 Metric TEXT NOT NULL DEFAULT '',

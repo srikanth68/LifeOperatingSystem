@@ -228,7 +228,11 @@ public static class ObservationProjector
         ObservedAtLocal = at,
         ObservedDateLocal = day,
         Tier = Tiers.Dense,
-        Source = Oura,
+        // A WHOOP row is written into the same tables as Oura's (ADR 0029) and says so here.
+        // Only the WHOOP prefix is read: every other row keeps the source it was stored
+        // under, because the source is part of the unique index and changing it would
+        // duplicate history on the next projection.
+        Source = sourceId is not null && sourceId.StartsWith("whoop-", StringComparison.Ordinal) ? "whoop" : Oura,
         SourceRecordId = sourceId,
         // Anything a ring measured overnight has no context the user varied, so it does
         // not split a baseline and is always eligible for one.

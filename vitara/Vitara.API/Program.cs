@@ -6,6 +6,7 @@ using Vitara.Application.Interfaces;
 using Vitara.Infrastructure.Data;
 using Vitara.Domain.Health;
 using Vitara.Infrastructure.Oura;
+using Vitara.Infrastructure.Whoop;
 using Vitara.Infrastructure.Profiles;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -22,6 +23,9 @@ if (File.Exists(envFile))
     }
 }
 
+builder.Configuration["Whoop:ClientId"]     = Environment.GetEnvironmentVariable("WHOOP_CLIENT_ID") ?? "";
+builder.Configuration["Whoop:ClientSecret"] = Environment.GetEnvironmentVariable("WHOOP_CLIENT_SECRET") ?? "";
+builder.Configuration["Whoop:RedirectUri"]  = Environment.GetEnvironmentVariable("WHOOP_REDIRECT_URI") ?? "http://localhost:5100/api/whoop/callback";
 builder.Configuration["Oura:ClientId"]     = Environment.GetEnvironmentVariable("OURA_CLIENT_ID") ?? "";
 builder.Configuration["Oura:ClientSecret"] = Environment.GetEnvironmentVariable("OURA_CLIENT_SECRET") ?? "";
 builder.Configuration["Oura:RedirectUri"]  = Environment.GetEnvironmentVariable("OURA_REDIRECT_URI")
@@ -34,6 +38,7 @@ builder.Services.AddMaayaAuth();
 builder.Services.AddVitaraProfiles();
 builder.Services.AddScoped<IVitaraRepository, VitaraRepository>();
 builder.Services.AddScoped<IOuraClient, OuraClient>();
+builder.Services.AddScoped<IWhoopClient, WhoopClient>();
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
     p.WithOrigins(MaayaCors.Origins("http://localhost:3000", "http://localhost:5173"))
      .AllowAnyHeader()

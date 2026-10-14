@@ -270,6 +270,10 @@ public class FakeRepo : IVitaraRepository
     public Task<List<TravelPeriod>> GetTravelPeriodsAsync() => Task.FromResult(TravelData);
     public Task<List<Device>> GetDevicesAsync() => Task.FromResult(DeviceData);
     public Task<List<DailyActivity>> GetActivityRowsAsync(DateOnly from, DateOnly to) => GetActivityAsync(from, to);
+    public WhoopToken? WhoopTokenData { get; set; }
+    public Task<WhoopToken?> GetWhoopTokenAsync() => Task.FromResult(WhoopTokenData);
+    public Task SaveWhoopTokenAsync(WhoopToken token) { WhoopTokenData = token; return Task.CompletedTask; }
+    public Task DeleteWhoopTokenAsync() { WhoopTokenData = null; return Task.CompletedTask; }
     public List<Intervention> InterventionData { get; } = [];
     public Task<List<Intervention>> GetInterventionsAsync() => Task.FromResult(InterventionData);
 
