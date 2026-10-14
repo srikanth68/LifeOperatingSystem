@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { vitaraHeaders } from '../services/profile';
 import { addDays, todayInTz } from '../services/timezone';
-import { InsightTabBody } from '../pages/InsightModule';
 import { API, VITARA, get, num, useNamer, WhySheet, WhyLink, f1, lc } from './insightKit';
 import type { Why, Correlation } from './insightKit';
 import type { TabId } from '../pages/InsightModule';
@@ -11,6 +10,7 @@ import { ScenarioSection } from '../components/health/Direction';
 import type { Readiness } from '../pages/VitaraModule';
 import { dateLine } from './Parts';
 import { PatternsView } from './MobileInsightPatterns';
+import { YouView, CheckView } from './MobileInsightYou';
 import { StriveCard, StriveWhy, striveText, useStrive } from './MobileStrive';
 import type { StriveRange } from './MobileStrive';
 
@@ -673,9 +673,8 @@ export function MobileInsight({ header, addChange }: { header: (h: string, e: st
         )}
         {tab === 'direction' && <DirectionView why={setWhy} addChange={addChange} />}
         {tab === 'patterns' && <PatternsView why={setWhy} />}
-        {(tab === 'you' || tab === 'check') && (
-          <div className="vmi-borrowed insight-page"><InsightTabBody tab={tab} /></div>
-        )}
+        {tab === 'you' && <YouView why={setWhy} />}
+        {tab === 'check' && <CheckView why={setWhy} />}
       </div>
       <WhySheet why={why} close={() => setWhy(null)} />
     </div>
