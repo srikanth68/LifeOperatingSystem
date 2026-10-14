@@ -78,7 +78,7 @@ function Inner({ onSignOut }: { onSignOut: () => void }) {
   const [more, setMore] = useState<MoreKey | DetailKey | null>(null);
   const [sheet, setSheet] = useState(false);
   const [tick, setTick] = useState(0);                 // bumped on refresh: the home screen redraws
-  const [theme, setTheme] = useVmTheme();
+  const [theme, themePref, setThemePref] = useVmTheme();
   const install = useInstall();
 
   const { data: status, isPending } = useQuery<OuraStatus>({
@@ -203,8 +203,12 @@ function Inner({ onSignOut }: { onSignOut: () => void }) {
           <li className="vm-appearance">
             <span>Appearance</span>
             <div role="group" aria-label="Appearance">
-              <button className={theme === 'dark' ? 'is-on' : ''} onClick={() => setTheme('dark')} tabIndex={sheet ? 0 : -1}>Dark</button>
-              <button className={theme === 'light' ? 'is-on' : ''} onClick={() => setTheme('light')} tabIndex={sheet ? 0 : -1}>Light</button>
+              {(['system', 'dark', 'light'] as const).map(p => (
+                <button key={p} className={themePref === p ? 'is-on' : ''} aria-pressed={themePref === p}
+                        onClick={() => setThemePref(p)} tabIndex={sheet ? 0 : -1}>
+                  {p === 'system' ? 'System' : p === 'dark' ? 'Dark' : 'Light'}
+                </button>
+              ))}
             </div>
           </li>
         </ul>

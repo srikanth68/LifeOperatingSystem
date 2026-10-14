@@ -37,23 +37,43 @@ export function useReveal(replayKey: unknown = 0, ms = 1150): number {
 
 // ── Appearance ────────────────────────────────────────────────────────────────
 
+// Two looks (Dusk for dark, Mist for light) and three choices: follow the phone, or pin one.
 export type VmTheme = 'dark' | 'light';
+export type VmThemePref = 'system' | VmTheme;
 const THEME_KEY = 'vitara.mobile.theme';
-const CHROME: Record<VmTheme, string> = { dark: '#060e1c', light: '#f4f7fc' };
+const CHROME: Record<VmTheme, string> = { dark: '#121a36', light: '#f4f1ea' };   // top of each background
 
-const readTheme = (): VmTheme => {
+const readPref = (): VmThemePref => {
   try {
     const saved = localStorage.getItem(THEME_KEY);
-    if (saved === 'dark' || saved === 'light') return saved;
+    if (saved === 'system' || saved === 'dark' || saved === 'light') return saved;
   } catch { /* private mode: fall through to the default */ }
-  return 'dark';
+  return 'system';
 };
 
-// Dark is the default; the choice is remembered on this phone. The browser's own chrome (the
-// status bar, the overscroll area behind the page) is painted to match, otherwise a light page
-// shows a dark strip at the top.
-export function useVmTheme(): [VmTheme, (t: VmTheme) => void] {
-  const [theme, setThemeState] = useState<VmTheme>(readTheme);
+const darkQuery = () =>
+  typeof window !== 'undefined' ? window.matchMedia?.('(prefers-color-scheme: dark)') : undefined;
+
+// What the phone itself is set to, kept current: iOS can switch at sunset on its own.
+function useSystemTheme(): VmTheme {
+  const [dark, setDark] = useState(() => darkQuery()?.matches ?? true);
+  useEffect(() => {
+    const q = darkQuery();
+    if (!q) return;
+    const on = (e: MediaQueryListEvent) => setDark(e.matches);
+    q.addEventListener('change', on);
+    return () => q.removeEventListener('change', on);
+  }, []);
+  return dark ? 'dark' : 'light';
+}
+
+// Following the phone is the default; a pinned choice is remembered on this phone. The browser's
+// own chrome (the status bar, the overscroll area behind the page) is painted to match, otherwise
+// a light page shows a dark strip at the top. Returns the look in use, the choice, and its setter.
+export function useVmTheme(): [VmTheme, VmThemePref, (p: VmThemePref) => void] {
+  const [pref, setPrefState] = useState<VmThemePref>(readPref);
+  const system = useSystemTheme();
+  const theme: VmTheme = pref === 'system' ? system : pref;
 
   useEffect(() => {
     const meta = document.querySelector('meta[name="theme-color"]');
@@ -68,10 +88,10 @@ export function useVmTheme(): [VmTheme, (t: VmTheme) => void] {
     };
   }, [theme]);
 
-  const setTheme = useCallback((t: VmTheme) => {
-    setThemeState(t);
-    try { localStorage.setItem(THEME_KEY, t); } catch { /* it just will not be remembered */ }
+  const setPref = useCallback((p: VmThemePref) => {
+    setPrefState(p);
+    try { localStorage.setItem(THEME_KEY, p); } catch { /* it just will not be remembered */ }
   }, []);
 
-  return [theme, setTheme];
+  return [theme, pref, setPref];
 }
