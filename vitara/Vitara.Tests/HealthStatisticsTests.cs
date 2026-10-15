@@ -5,6 +5,10 @@ namespace Vitara.Tests;
 // Every number here eventually becomes a sentence about someone's health, so the
 // cases that matter are the ones where a plausible-looking method gives a confidently
 // wrong answer.
+// One test here sets VITARA_SLEEP_NEED_MINUTES for a moment. Environment variables are shared
+// by the whole test run, so a sleep-scenario test running at the same instant read 465 instead
+// of the inferred 450 and failed now and then. This collection runs on its own.
+[Collection(ProcessEnvironment.Name)]
 public class HealthStatisticsTests
 {
     [Fact]
@@ -253,4 +257,11 @@ public class SleepDebtTests
         var nights = Enumerable.Range(0, 10).Select(i => (new DateOnly(2026, 9, 1).AddDays(i), 10.0 * 60)).ToList();
         Assert.Equal(0, SleepDebt.Accumulate(nights, 7 * 60));
     }
+}
+
+// Tests that change process-wide state (environment variables) run alone, never in parallel.
+[CollectionDefinition(Name, DisableParallelization = true)]
+public class ProcessEnvironment
+{
+    public const string Name = "Changes the process environment";
 }
