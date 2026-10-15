@@ -19,7 +19,7 @@ public class WhoopSyncTests
 
     private static WhoopBundle OneNight() => new(
         [new SleepSession { Id = "whoop-s1", Day = new DateOnly(2026, 10, 12), TotalSleepMinutes = 420 }],
-        [new DailyReadiness { Id = "whoop-2026-10-12", Day = new DateOnly(2026, 10, 12), Score = 72 }], []);
+        []);
 
     [Fact]
     public async Task AnExpiredTokenIsRefreshedAndRotated_ThenTheDataIsWritten()
@@ -35,7 +35,7 @@ public class WhoopSyncTests
         Assert.Equal("a2", repo.WhoopTokenData!.AccessToken);
         Assert.Equal("r2", repo.WhoopTokenData.RefreshToken);
         Assert.Single(repo.SleepData);
-        Assert.Single(repo.ReadinessData);
+        Assert.Empty(repo.ReadinessData);                       // WHOOP's own score is not Vitara's readiness (ADR 0003)
         Assert.NotNull(repo.WhoopTokenData.LastSyncedAt);
         Assert.Null(repo.WhoopTokenData.LastSyncError);
     }

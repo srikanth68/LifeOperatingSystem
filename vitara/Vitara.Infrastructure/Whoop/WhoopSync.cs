@@ -7,7 +7,7 @@ namespace Vitara.Infrastructure.Whoop;
 // two can never disagree about what a sync does or what it records when it fails.
 public static class WhoopSync
 {
-    public record Result(bool Ok, int Sleep, int Readiness, int Workouts, string? Error);
+    public record Result(bool Ok, int Sleep, int Workouts, string? Error);
 
     public static async Task<Result> RunAsync(IVitaraRepository repo, IWhoopClient client, WhoopToken token, int days)
     {
@@ -28,21 +28,20 @@ public static class WhoopSync
             var bundle = await client.FetchAsync(token.AccessToken, to.AddDays(-days), to);
 
             await repo.UpsertSleepAsync(bundle.Sleep);
-            await repo.UpsertReadinessAsync(bundle.Readiness);
             await repo.UpsertWorkoutsAsync(bundle.Workouts);
 
             // Moves only on a real write, like Oura's: "synced" must mean data arrived.
-            if (bundle.Sleep.Count + bundle.Readiness.Count + bundle.Workouts.Count > 0)
+            if (bundle.Sleep.Count + bundle.Workouts.Count > 0)
                 token.LastSyncedAt = DateTime.UtcNow;
             token.LastSyncError = null;
             await repo.SaveWhoopTokenAsync(token);
-            return new Result(true, bundle.Sleep.Count, bundle.Readiness.Count, bundle.Workouts.Count, null);
+            return new Result(true, bundle.Sleep.Count, bundle.Workouts.Count, null);
         }
         catch (Exception ex)
         {
             token.LastSyncError = ex.Message;
             await repo.SaveWhoopTokenAsync(token);
-            return new Result(false, 0, 0, 0, ex.Message);
+            return new Result(false, 0, 0, ex.Message);
         }
     }
 }

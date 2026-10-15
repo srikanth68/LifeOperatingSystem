@@ -29,8 +29,8 @@ public class WhoopSyncWorker(IServiceProvider services, ILogger<WhoopSyncWorker>
                 if (token is null) return;            // no strap linked for this person: nothing to say
 
                 var r = await WhoopSync.RunAsync(repo, scope.ServiceProvider.GetRequiredService<IWhoopClient>(), token, Days);
-                if (r.Ok) logger.LogInformation("WHOOP sync for {Profile}: {Sleep} sleeps, {Ready} recoveries, {Workouts} workouts.",
-                                                id, r.Sleep, r.Readiness, r.Workouts);
+                if (r.Ok) logger.LogInformation("WHOOP sync for {Profile}: {Sleep} sleeps, {Workouts} workouts.",
+                                                id, r.Sleep, r.Workouts);
                 else logger.LogWarning("WHOOP sync for {Profile} failed: {Error}", id, r.Error);
             }, logger);
 

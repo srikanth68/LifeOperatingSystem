@@ -17,10 +17,14 @@ namespace Vitara.Infrastructure.Whoop;
 //                        night/nap/Apple logic treats it exactly as it treats Oura's night
 //   nap               -> SleepSession labelled "sleep", Oura's label for a nap
 //   recovery          -> the night's HRV, resting heart rate, SpO2 and skin temperature on
-//                        that SleepSession, and the recovery score as the day's readiness
+//                        that SleepSession
 //   workout           -> Workout, source "whoop" (a phone copy of the same session wins, ADR 0025)
 //
 // Not mapped, on purpose:
+//   WHOOP's own scores (recovery, sleep performance): vendor scores are kept as sent, under
+//     their own names, and never relabelled or used in Vitara's calculations (ADR 0003). Writing
+//     recovery as "readiness" would put WHOOP's number in Oura's place in forecasts and baselines.
+//     They belong in a "From your devices" area, which the local-first app adds (ADR 0030).
 //   cycles (strain, kilojoules): strain is WHOOP's own 0-21 scale with no Vitara equivalent,
 //     and its kilojoules are total energy, not active calories. Storing either as an Oura-like
 //     field would be a number that looks comparable and is not.
@@ -48,7 +52,6 @@ public static class WhoopMapper
         double? usualTemp = temps.Count >= MinNightsForTempBaseline ? temps[temps.Count / 2] : null;
 
         var sessions = new List<SleepSession>();
-        var readiness = new List<DailyReadiness>();
 
         foreach (var s in sleeps)
         {
@@ -76,7 +79,6 @@ public static class WhoopMapper
                 DeepMinutes = deep,
                 RemMinutes = rem,
                 AwakeMinutes = Min("total_awake_time_milli"),
-                Score = Num(score, "sleep_performance_percentage") is { } perf ? (int)Math.Round(perf) : null,
                 AvgBreathingRate = Num(score, "respiratory_rate"),
                 Type = nap ? "sleep" : SleepNights.OuraNight,
             };
@@ -89,19 +91,6 @@ public static class WhoopMapper
                 session.AvgSpo2 = Num(rs, "spo2_percentage");
                 if (Num(rs, "skin_temp_celsius") is { } t && usualTemp is { } u)
                     session.SkinTempDeviation = Math.Round(t - u, 2);
-
-                // A recovery score while WHOOP is still calibrating is WHOOP saying it does
-                // not know yet; it is left out rather than shown as a reading.
-                var calibrating = rs.TryGetProperty("user_calibrating", out var c) && c.ValueKind == JsonValueKind.True;
-                if (!calibrating && Num(rs, "recovery_score") is { } rscore)
-                    readiness.Add(new DailyReadiness
-                    {
-                        Id = IdPrefix + session.Day.ToString("yyyy-MM-dd"),
-                        Day = session.Day,
-                        Score = (int)Math.Round(rscore),
-                        // WHOOP's own bands: green 67-100, yellow 34-66, red 0-33.
-                        Level = rscore >= 67 ? "optimal" : rscore >= 34 ? "good" : "pay_attention",
-                    });
             }
 
             sessions.Add(session);
@@ -130,9 +119,7 @@ public static class WhoopMapper
             });
         }
 
-        // Readiness can only appear once per day even if WHOOP scored two sleeps that day.
-        var oneReadinessPerDay = readiness.GroupBy(r => r.Day).Select(g => g.Last()).ToList();
-        return new WhoopBundle(sessions, oneReadinessPerDay, mappedWorkouts);
+        return new WhoopBundle(sessions, mappedWorkouts);
     }
 
     // The person's own wall clock at that moment, which is what every "bedtime" and "day"

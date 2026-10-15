@@ -16,7 +16,7 @@ public interface IWhoopClient
 
 public record WhoopTokens(string AccessToken, string RefreshToken, int ExpiresIn);
 
+// Raw signals only: WHOOP's own scores are not relabelled into Vitara's fields (ADR 0003).
 public record WhoopBundle(
     List<SleepSession> Sleep,
-    List<DailyReadiness> Readiness,
     List<Workout> Workouts);

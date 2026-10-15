@@ -61,13 +61,13 @@ public class WhoopMapperTests
         Assert.Equal(120, s.RemMinutes);
         Assert.Equal(420, s.TotalSleepMinutes);                         // light + deep + REM, awake excluded
         Assert.Equal(30, s.AwakeMinutes);
-        Assert.Equal(88, s.Score);
+        Assert.Null(s.Score);                                           // WHOOP's own score is not relabelled (ADR 0003)
         Assert.Equal(15.2, s.AvgBreathingRate);
         Assert.Equal(SleepNights.OuraNight, s.Type);                    // read as the night, like Oura's
     }
 
     [Fact]
-    public void TheNightsRecoveryCarriesHrvRestingHeartRateAndOxygen_AndTheScoreIsReadiness()
+    public void TheNightsRecoveryCarriesHrvRestingHeartRateAndOxygen_NotWhoopsScore()
     {
         var b = WhoopMapper.Map([Sleep("s1", "2026-10-11T17:40:00Z", "2026-10-12T01:10:00Z")], [Recovery("s1", 33.4)], []);
 
@@ -75,10 +75,9 @@ public class WhoopMapperTests
         Assert.Equal(48.3, s.AvgHrv);
         Assert.Equal(54, s.LowestHr);
         Assert.Equal(96.5, s.AvgSpo2);
-        var r = Assert.Single(b.Readiness);
-        Assert.Equal(72, r.Score);
-        Assert.Equal("optimal", r.Level);                               // WHOOP green: 67 and over
-        Assert.Equal(s.Day, r.Day);
+        // The recovery score is WHOOP's own number on WHOOP's own scale: kept out of Vitara's
+        // readiness, forecasts and baselines (ADR 0003).
+        Assert.Null(s.Score);
     }
 
     [Fact]
@@ -96,7 +95,7 @@ public class WhoopMapperTests
     }
 
     [Fact]
-    public void NapsAreNotTheNight_UnscoredAndCalibratingAreLeftOut()
+    public void NapsAreNotTheNight_AndUnscoredAreLeftOut()
     {
         var b = WhoopMapper.Map(
             [Sleep("nap", "2026-10-12T09:00:00Z", "2026-10-12T09:40:00Z", nap: true),
@@ -106,8 +105,7 @@ public class WhoopMapperTests
 
         Assert.Equal("sleep", b.Sleep.Single(s => s.Id == "whoop-nap").Type);
         Assert.DoesNotContain(b.Sleep, s => s.Id == "whoop-pending");
-        Assert.Empty(b.Readiness);                                      // WHOOP still calibrating
-        Assert.Equal(48.3, b.Sleep.Single(s => s.Id == "whoop-s1").AvgHrv);   // the readings themselves still count
+        Assert.Equal(48.3, b.Sleep.Single(s => s.Id == "whoop-s1").AvgHrv);   // measured readings count even while calibrating
     }
 
     [Fact]
