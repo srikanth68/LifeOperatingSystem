@@ -293,18 +293,64 @@ public partial class LlamaCppAgentChatProvider(HttpClient http, IConfiguration c
         if (!resp.IsSuccessStatusCode)
             throw new LlmHttpException($"⚠️ San's local model returned an error ({(int)resp.StatusCode}). Nothing left your machine — try again in a moment.");
 
+        JsonElement root;
+        JsonElement message;
         try
         {
-            return JsonDocument.Parse(replyBody).RootElement
-                .GetProperty("choices")[0]
-                .GetProperty("message")
-                .Clone();
+            root = JsonDocument.Parse(replyBody).RootElement.Clone();
+            message = root.GetProperty("choices")[0].GetProperty("message");
         }
         catch
         {
             throw new LlmHttpException("⚠️ San got an unexpected response from the local model. Nothing left your machine.");
         }
+
+        LogCacheUse(root, messages, body, toolsJson, SlotFor(cacheLane));
+        return message;
     }
+
+    // One line per model call answering "did the prompt cache work, and if not, why?"
+    //
+    // Typed turns were measured re-reading nearly the whole prompt (6989 of 7004
+    // tokens) even though an identical replayed request cached perfectly, and reading
+    // the code could not say why: everything volatile already rides the last message.
+    // This puts the evidence in the log instead of in a guess:
+    //   - llama.cpp's own count of tokens reused from the slot's cache vs re-read;
+    //   - a fingerprint of the system prompt and of the tool block. If either changes
+    //     between two typed turns, that is the cache break, and the prefix that moved
+    //     is named. If both hold steady and the reuse is still near zero, the cause is
+    //     on the server side (its chat template, or something else using the slot).
+    // Fingerprints only: no prompt text reaches the log.
+    private void LogCacheUse(JsonElement root, List<object> messages, string body, object[]? toolsJson, int slot)
+    {
+        try
+        {
+            int? reused = null, reread = null;
+            double? promptMs = null;
+            if (root.TryGetProperty("timings", out var t))
+            {
+                if (t.TryGetProperty("cache_n", out var c) && c.TryGetInt32(out var cn)) reused = cn;
+                if (t.TryGetProperty("prompt_n", out var p) && p.TryGetInt32(out var pn)) reread = pn;
+                if (t.TryGetProperty("prompt_ms", out var pm) && pm.TryGetDouble(out var pms)) promptMs = pms;
+            }
+
+            var system = messages.Count > 0 ? JsonSerializer.Serialize(messages[0]) : "";
+            var tools = toolsJson is null ? "" : JsonSerializer.Serialize(toolsJson);
+            logger.LogInformation(
+                "Prompt cache (slot {Slot}): reused {Reused} tokens, re-read {Reread} in {PromptMs}ms · system #{SystemFp} · tools #{ToolsFp} ({ToolCount}) · {Messages} messages, {Bytes} bytes",
+                slot, reused?.ToString() ?? "?", reread?.ToString() ?? "?", promptMs is { } ms ? Math.Round(ms) : "?",
+                Fingerprint(system), Fingerprint(tools), toolsJson?.Length ?? 0, messages.Count, body.Length);
+        }
+        catch (Exception ex)
+        {
+            // Diagnostics must never cost the user their reply.
+            logger.LogDebug(ex, "Could not log prompt-cache use");
+        }
+    }
+
+    private static string Fingerprint(string text) =>
+        text.Length == 0 ? "none"
+            : Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..8].ToLowerInvariant();
 
     // Deliberately opt-in and deliberately not Debug: a log level nobody has set is a
     // log nobody finds, and this is only ever wanted while actively looking at it.
