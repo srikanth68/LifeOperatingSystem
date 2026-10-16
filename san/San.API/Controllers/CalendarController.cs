@@ -43,6 +43,14 @@ public class CalendarController(ISanRepository repo, IGoogleCalendarService goog
     {
         if (string.IsNullOrWhiteSpace(req.Title)) return BadRequest("Title is required.");
 
+        // At the point of creation, where every caller passes: chat, email triage, and
+        // any agent on the MCP gateway. See DuplicateGuard.IsSameEvent.
+        var nearby = await repo.GetCalendarEventsAsync(
+            req.StartTime - DuplicateGuard.SameEventWindow, req.StartTime + DuplicateGuard.SameEventWindow);
+        var existing = nearby.FirstOrDefault(e => DuplicateGuard.IsSameEvent(req.Title, req.StartTime, e.Title, e.StartTime));
+        if (existing is not null)
+            return Ok(ToResult(existing, await moduleContext.ResolveTimeZoneAsync()));
+
         var ev = new CalendarEvent
         {
             Title = req.Title,

@@ -101,4 +101,15 @@ public static class DuplicateGuard
     public static bool IsDuplicate(string? newText, DateTime newDue, string? existingText, DateTime existingDue)
         => (newDue - existingDue).Duration() <= SameWindow
            && NamesTheSameThing(newText, existingText);
+
+    // Calendar events need a much tighter window than reminders. An appointment is
+    // mentioned several times -- the booking, the confirmation, the "see you tomorrow"
+    // -- and each email used to become its own event. But two meetings with similar
+    // names on the same day can genuinely be two meetings, so "the same event" means
+    // the same thing starting within the hour, not within days.
+    public static readonly TimeSpan SameEventWindow = TimeSpan.FromHours(1);
+
+    public static bool IsSameEvent(string? newTitle, DateTime newStart, string? existingTitle, DateTime existingStart)
+        => (newStart - existingStart).Duration() <= SameEventWindow
+           && NamesTheSameThing(newTitle, existingTitle);
 }

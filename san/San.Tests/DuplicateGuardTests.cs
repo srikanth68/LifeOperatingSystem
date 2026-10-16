@@ -52,6 +52,24 @@ public class DuplicateGuardTests
         Assert.False(DuplicateGuard.IsDuplicate("anything", Base, "   ", Base));
     }
 
+    // The booking, the confirmation and the "see you tomorrow" email for one
+    // appointment are one calendar event.
+    [Fact]
+    public void TheSameAppointmentMentionedTwiceIsOneEvent()
+        => Assert.True(DuplicateGuard.IsSameEvent(
+            "Dentist appointment with Dr. Rao", Base, "Dr. Rao dentist visit", Base.AddMinutes(30)));
+
+    // Unlike reminders, two similar events on the same day can genuinely be two.
+    [Fact]
+    public void SimilarEventsHoursApartAreTwoEvents()
+        => Assert.False(DuplicateGuard.IsSameEvent(
+            "Physio session", Base, "Physio session", Base.AddHours(5)));
+
+    [Fact]
+    public void DifferentEventsAtTheSameTimeAreTwoEvents()
+        => Assert.False(DuplicateGuard.IsSameEvent(
+            "Flat viewing in Gachibowli", Base, "Dentist appointment", Base));
+
     [Fact]
     public void FingerprintDropsNumbersAndFiller()
     {
