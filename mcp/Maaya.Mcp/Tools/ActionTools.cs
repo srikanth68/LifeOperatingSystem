@@ -306,10 +306,6 @@ public sealed class ActionTools(ModuleGateway gw)
         gw.SendAsync("karma", HttpMethod.Post, "/api/habits",
             new { name, description, emoji, category, notifyTime, notifyMessage, notifyChannel = "telegram" });
 
-    [McpServerTool(Name = "goals_list")]
-    [Description("Karma goals with progress and ids. For \"what are my goals\", \"how far along am I\".")]
-    public Task<string> GoalsList() => gw.GetAsync("karma", "/api/goals");
-
     [McpServerTool(Name = "goal_create")]
     [Description("Karma goal - an outcome over time (\"run a half marathon\"). Repeating daily action -> habit_create. title* · description · category (personal) · targetDate · progress (0)")]
     public Task<string> GoalCreate(
@@ -322,35 +318,50 @@ public sealed class ActionTools(ModuleGateway gw)
             new { title, description, category, status = "active", progress, targetDate });
 
     [McpServerTool(Name = "goal_progress_set")]
-    [Description("Set goal progress 0-100; 100 auto-completes. Use to sync goals with real data (e.g. Vitara weight -> weight goal). goalId* · progress*")]
-    public Task<string> GoalProgressSet(
+    [Description("Set goal progress 0-100; 100 auto-completes. Use to sync goals with real data (e.g. Vitara weight -> weight goal). goalId* the goal's title or id · progress*")]
+    public async Task<string> GoalProgressSet(
         string goalId,
-        int progress) =>
-        gw.SendAsync("karma", HttpMethod.Patch, $"/api/goals/{goalId}/progress", progress);
+        int progress)
+    {
+        var goals = await gw.GetAsync("karma", "/api/goals");
+        if (goals.TrimStart().StartsWith("{\"error\"", StringComparison.Ordinal)) return goals;
+        var (id, error) = NameResolver.Resolve(goalId, goals, "goal");
+        if (error is not null) return error;
+        return await gw.SendAsync("karma", HttpMethod.Patch, $"/api/goals/{id}/progress", progress);
+    }
 
     // ── Aasthi: property financials ──
 
     [McpServerTool(Name = "property_financial_add")]
-    [Description("Add income/expense against a property. Call aasthi_properties first for the id. propertyId* · type* income|expense · category* rent|repairs|tax|insurance|... · amount* positive · date* · notes")]
-    public Task<string> PropertyFinancialAdd(
+    [Description("Add income/expense against a property. propertyId* its address or part of it (\"Scoter\"), or id · type* income|expense · category* rent|repairs|tax|insurance|... · amount* positive · date* · notes")]
+    public async Task<string> PropertyFinancialAdd(
         string propertyId,
         string type,
         string category,
         decimal amount,
         string date,
-        string? notes = null) =>
-        gw.SendAsync("aasthi", HttpMethod.Post, $"/api/properties/{propertyId}/financials",
+        string? notes = null)
+    {
+        var (id, error) = await ModuleReadTools.ResolvePropertyAsync(gw, propertyId);
+        if (error is not null) return error;
+        return await gw.SendAsync("aasthi", HttpMethod.Post, $"/api/properties/{id}/financials",
             new { type, category, amount, date, notes });
+    }
 
     [McpServerTool(Name = "property_task_create")]
-    [Description("Create a maintenance task against a property. Call aasthi_properties first for the id. propertyId* · title* · dueDate · priority low|medium|high|urgent (medium)")]
-    public Task<string> PropertyTaskCreate(
+    [Description("Create a maintenance task against a property. propertyId* its address or part of it (\"Scoter\"), or id · title* · dueDate · priority low|medium|high|urgent (medium)")]
+    public async Task<string> PropertyTaskCreate(
         string propertyId,
         string title,
         string? dueDate = null,
-        string priority = "medium") =>
-        gw.SendAsync("aasthi", HttpMethod.Post, "/api/tasks",
-            new { propertyId, title, dueDate, priority });
+        string priority = "medium")
+    {
+        // Named, not looked up: the same chain NameResolver exists to take off the model.
+        var (id, error) = await ModuleReadTools.ResolvePropertyAsync(gw, propertyId);
+        if (error is not null) return error;
+        return await gw.SendAsync("aasthi", HttpMethod.Post, "/api/tasks",
+            new { propertyId = id, title, dueDate, priority });
+    }
 
     // ── NorthStar: keep the brain current ──
 

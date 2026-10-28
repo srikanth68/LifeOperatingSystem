@@ -446,11 +446,6 @@
     ]
   },
   {
-    "name": "goals_list",
-    "description": "Karma goals with progress and ids. For \"what are my goals\", \"how far along am I\".",
-    "parameters": []
-  },
-  {
     "name": "goal_create",
     "description": "Karma goal - an outcome over time (\"run a half marathon\"). Repeating daily action -> habit_create. title* · description · category (personal) · targetDate · progress (0)",
     "parameters": [
@@ -483,7 +478,7 @@
   },
   {
     "name": "goal_progress_set",
-    "description": "Set goal progress 0-100; 100 auto-completes. Use to sync goals with real data (e.g. Vitara weight -> weight goal). goalId* · progress*",
+    "description": "Set goal progress 0-100; 100 auto-completes. Use to sync goals with real data (e.g. Vitara weight -> weight goal). goalId* the goal's title or id · progress*",
     "parameters": [
       {
         "name": "goalId",
@@ -499,7 +494,7 @@
   },
   {
     "name": "property_financial_add",
-    "description": "Add income/expense against a property. Call aasthi_properties first for the id. propertyId* · type* income|expense · category* rent|repairs|tax|insurance|... · amount* positive · date* · notes",
+    "description": "Add income/expense against a property. propertyId* its address or part of it (\"Scoter\"), or id · type* income|expense · category* rent|repairs|tax|insurance|... · amount* positive · date* · notes",
     "parameters": [
       {
         "name": "propertyId",
@@ -535,7 +530,7 @@
   },
   {
     "name": "property_task_create",
-    "description": "Create a maintenance task against a property. Call aasthi_properties first for the id. propertyId* · title* · dueDate · priority low|medium|high|urgent (medium)",
+    "description": "Create a maintenance task against a property. propertyId* its address or part of it (\"Scoter\"), or id · title* · dueDate · priority low|medium|high|urgent (medium)",
     "parameters": [
       {
         "name": "propertyId",
@@ -566,7 +561,7 @@
   },
   {
     "name": "memory_save",
-    "description": "Persist durable memory to NorthStar - use this, not internal memory, for preferences, decisions, notable events, learned procedures. One fact per call. Write ABSOLUTE dates, never \"today\"/\"tomorrow\". Save only what you have confirmed. content* · kind observation|preference|event|decision|skill · tags csv · importance 1-5",
+    "description": "Persist durable memory to NorthStar - use this, not internal memory, for preferences, facts, decisions, notable events, learned procedures. One fact per call. Write ABSOLUTE dates, never \"today\"/\"tomorrow\". content* · kind observation|preference|fact|event|decision|skill · confirmed true ONLY if the user told you this directly (else it is saved as unconfirmed) · evidence: the user's own words it rests on · entities: names it is about, ; separated (\"Honda Civic; vehicle:Honda Civic\") · supersedes: id of a memory this corrects · tags csv · importance 1-5",
     "parameters": [
       {
         "name": "content",
@@ -619,7 +614,7 @@
   },
   {
     "name": "fact_set",
-    "description": "Set a stable single-valued profile fact (overwrites). Free-form knowledge -> memory_save. key* snake_case · value*",
+    "description": "Set a stable single-valued profile fact (the previous value is kept in its history - memory_why fact:<key>). Free-form knowledge -> memory_save. key* snake_case · value*",
     "parameters": [
       {
         "name": "key",
@@ -746,29 +741,86 @@
     ]
   },
   {
-    "name": "vault_finances",
-    "description": "Net worth, cash, debt, 30-day spending by category. For \"how much do I have\", \"what's my net worth\", \"what am I spending on\". Specific merchant/transaction -> maaya_search.",
-    "parameters": []
-  },
-  {
-    "name": "vitara_health",
-    "description": "Readiness, sleep, activity, heart metrics, recent workouts. For \"how did I sleep\", \"what's my readiness\", \"am I recovered\".",
-    "parameters": []
-  },
-  {
-    "name": "aasthi_properties",
-    "description": "Real-estate portfolio: properties, values, profit. For \"my properties\", \"how are rentals doing\". Specific repair/cost/vendor -> maaya_search.",
-    "parameters": []
-  },
-  {
-    "name": "property_rent_status",
-    "description": "Rent and recurring bills per property this month: expected vs received, and what is late. For \"did rent come in\", \"is the mortgage paid\", \"what is overdue on the rentals\".",
-    "parameters": []
-  },
-  {
-    "name": "property_unreceipted",
-    "description": "Confirmed one-off property spending this year with no receipt attached. For \"what am I missing receipts for\", \"tax paperwork\". Recurring bills are excluded - the bank record covers those. year",
+    "name": "vault_read",
+    "description": "Money, read-only. view: summary (default; net worth, cash, debt, 30-day spend by category - \"how much do I have\") · accounts (each account's balance) · transactions (from/to YYYY-MM-DD, query merchant/text, category, account name, limit 50 - \"what did I spend at X last month\") · recurring (subscriptions and bills found in the history) · monthly (spend per month; from = how far back) · sync (when bank data last refreshed). Not sure which module -> maaya_search.",
     "parameters": [
+      {
+        "name": "view",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "from",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "to",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "query",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "category",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "account",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "vitara_read",
+    "description": "Health records, read-only. view: today (default; readiness, sleep, activity, heart, recent workouts - \"how did I sleep\", \"am I recovered\") · sleep · readiness · activity (days 7; over 14 days returns averages) · workouts (days 30) · weight (days 90) · labs (recent blood tests) · measurements (days, metric) · vo2max · stress · spo2 · interventions (what the user is trying and since when). What the numbers MEAN against their own baseline -> health_findings.",
+    "parameters": [
+      {
+        "name": "view",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "days",
+        "type": "number",
+        "required": false
+      },
+      {
+        "name": "metric",
+        "type": "string",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "aasthi_read",
+    "description": "Rental properties, read-only. view: properties (default; each property, value, profit - \"my properties\") · property (one property in full, with its contacts) · tasks (status open|done) · rent (this month's rent and bills, expected vs received, what is late - \"did rent come in\") · financials · maintenance (one property, or the whole portfolio if none named) · documents (one property's files) · unreceipted (this year's spending with no receipt - \"tax paperwork\"; year). property = its address or part of it, e.g. \"Scoter\".",
+    "parameters": [
+      {
+        "name": "view",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "property",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "status",
+        "type": "string",
+        "required": false
+      },
       {
         "name": "year",
         "type": "number",
@@ -777,30 +829,71 @@
     ]
   },
   {
-    "name": "sutra_documents",
-    "description": "Document vault. No query -> stats (counts by category, expiring soon). With query -> matching docs. query",
+    "name": "sutra_read",
+    "description": "Document vault, read-only. view: stats (default without a query; counts by category, what is expiring) · search (default with a query; matching documents - query, category) · expiring (documents expiring within days 60 - \"is my passport expiring\").",
     "parameters": [
       {
+        "name": "view",
+        "type": "string",
+        "required": false
+      },
+      {
         "name": "query",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "category",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "days",
+        "type": "number",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "karma_read",
+    "description": "Habits and goals, read-only. view: today (default; today's check-ins and active goals - \"did I do my habits\") · habits (every active habit) · history (one habit's check-ins; habit, days 30) · stats (streaks and completion rate; one habit, or all if none named - \"how are my streaks\") · goals (with progress; status active|completed - \"what are my goals\", \"how far along am I\").",
+    "parameters": [
+      {
+        "name": "view",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "habit",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "days",
+        "type": "number",
+        "required": false
+      },
+      {
+        "name": "status",
         "type": "string",
         "required": false
       }
     ]
   },
   {
-    "name": "karma_habits",
-    "description": "Today's check-ins + active goals. For \"did I do my habits\", \"how are my streaks\".",
-    "parameters": []
-  },
-  {
-    "name": "nexus_market",
-    "description": "Monitor status: tracked symbols, alert COUNT, market open/closed. Actual alerts -> nexus_alerts.",
-    "parameters": []
-  },
-  {
-    "name": "nexus_alerts",
-    "description": "Alerts Sentinel raised (symbol, kind, message, timestamp), newest first. days (7) · limit (50)",
+    "name": "nexus_read",
+    "description": "Market monitor, read-only. view: status (default; tracked symbols, alert count, market open/closed) · alerts (alerts raised, newest first; days 7, limit 50) · board (every tracked symbol's latest read) · positions (holdings) · watchlist · premarket · ticker (one symbol in detail; symbol) · history (one symbol's past readings; symbol, limit 30).",
     "parameters": [
+      {
+        "name": "view",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "symbol",
+        "type": "string",
+        "required": false
+      },
       {
         "name": "days",
         "type": "number",
@@ -831,7 +924,7 @@
   },
   {
     "name": "health_findings",
-    "description": "What Vitara has CONCLUDED about the user's health: what is off their personal baseline, early illness signs, sustained changes, drift, sleep debt, and missing data. Computed in code, not guessed. For \"is anything off\", \"how am I really doing\", \"anything I should know\". READ THE status FIELD FIRST - an empty findings list can mean the analysis has never run, which is NOT the same as the user being fine. Raw last-night numbers -> vitara_health.",
+    "description": "What Vitara has CONCLUDED about the user's health: what is off their personal baseline, early illness signs, sustained changes, drift, sleep debt, and missing data. Computed in code, not guessed. For \"is anything off\", \"how am I really doing\", \"anything I should know\". READ THE status FIELD FIRST - an empty findings list can mean the analysis has never run, which is NOT the same as the user being fine. Raw last-night numbers -> vitara_read.",
     "parameters": []
   },
   {
@@ -841,12 +934,12 @@
   },
   {
     "name": "health_forecast",
-    "description": "Tomorrow's predicted readiness, resting heart rate, HRV and time asleep, each with the range it usually lands in. For \"how will I feel tomorrow\", \"should I train tomorrow\", \"is it worth setting an early alarm\". READ THE method FIELD PER METRIC: \"model\" is a fitted forecast that beat the alternatives on this user's own history; \"today\" means nothing beat assuming tomorrow is like today, so say it is expected to be much like today and do NOT present it as a prediction. The verdict field says how wrong each method has actually been. Last night's numbers -> vitara_health.",
+    "description": "Tomorrow's predicted readiness, resting heart rate, HRV and time asleep, each with the range it usually lands in. For \"how will I feel tomorrow\", \"should I train tomorrow\", \"is it worth setting an early alarm\". READ THE method FIELD PER METRIC: \"model\" is a fitted forecast that beat the alternatives on this user's own history; \"today\" means nothing beat assuming tomorrow is like today, so say it is expected to be much like today and do NOT present it as a prediction. The verdict field says how wrong each method has actually been. Last night's numbers -> vitara_read.",
     "parameters": []
   },
   {
     "name": "health_signature",
-    "description": "How this user's body runs, from months of their own data: when they sleep and how far free nights drift, which weekday is weakest, how long they take to come back from a hard day, and what their numbers move with. For \"what kind of sleeper am I\", \"which day is my worst\", \"how long do I take to recover\", \"what affects my sleep\". Relationships here moved TOGETHER in their data - say so rather than implying cause. Each part is absent until there is enough history, and absent means not enough data, not zero. Today's readings -> vitara_health; what is off baseline -> health_findings.",
+    "description": "How this user's body runs, from months of their own data: when they sleep and how far free nights drift, which weekday is weakest, how long they take to come back from a hard day, and what their numbers move with. For \"what kind of sleeper am I\", \"which day is my worst\", \"how long do I take to recover\", \"what affects my sleep\". Relationships here moved TOGETHER in their data - say so rather than implying cause. Each part is absent until there is enough history, and absent means not enough data, not zero. Today's readings -> vitara_read; what is off baseline -> health_findings.",
     "parameters": []
   },
   {

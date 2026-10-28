@@ -118,7 +118,7 @@ public class NameResolverTests
     [Fact]
     public void AWrappedArrayIsFoundToo()
     {
-        // karma_habits returns {"habitsToday":[...],"goals":[...]} rather than a bare
+        // karma_read's today view returns {"habitsToday":[...],"goals":[...]} rather than a bare
         // array, and every caller should not have to know which shape it gets.
         const string wrapped = """
         {"habitsToday":[{"id":"aaaaaaaa-0000-0000-0000-000000000001","name":"Reading"}]}
@@ -153,4 +153,48 @@ public class NameResolverTests
         Assert.Null(id);
         Assert.NotNull(error);
     }
+
+    // Properties have only an address. "Scoter" is how the user names the house.
+    [Fact]
+    public void APropertyResolvesByItsAddress()
+    {
+        const string properties = """
+        [
+          {"id":"bbbbbbbb-0000-0000-0000-000000000001","address":"15128 Scoter Street","city":"Austin"},
+          {"id":"bbbbbbbb-0000-0000-0000-000000000002","address":"402 Heron Lane","city":"Austin"}
+        ]
+        """;
+
+        Assert.Equal("bbbbbbbb-0000-0000-0000-000000000001", NameResolver.Resolve("Scoter", properties, "property").Id);
+        Assert.Equal("bbbbbbbb-0000-0000-0000-000000000002", NameResolver.Resolve("heron lane", properties, "property").Id);
+    }
+
+    // Plaid account ids are not GUIDs, so an id handed back from an earlier read has to
+    // be recognised by matching it rather than by its shape.
+    [Fact]
+    public void ANonGuidIdPassedBackResolvesToItself()
+    {
+        const string accounts = """[{"id":"vk3Q9xPlaid","name":"Chase Total Checking"}]""";
+        Assert.Equal("vk3Q9xPlaid", NameResolver.Resolve("vk3Q9xPlaid", accounts, "account").Id);
+    }
+
+    // "The Chase account" names the bank, not the account Plaid calls "Total Checking".
+    [Fact]
+    public void AnAccountResolvesByItsBank()
+    {
+        const string raw = """
+        [
+          {"id":"a1","institutionName":"Chase","name":"Total Checking"},
+          {"id":"a2","institutionName":"Amex","name":"Gold Card"}
+        ]
+        """;
+        var named = ModuleReadTools.AccountNames(raw);
+
+        Assert.Equal("a1", NameResolver.Resolve("chase", named, "account").Id);
+        Assert.Equal("a2", NameResolver.Resolve("gold card", named, "account").Id);
+    }
+
+    [Fact]
+    public void AnAccountListThatIsNotAListPassesThrough()
+        => Assert.Equal("{\"error\":\"vault is unreachable\"}", ModuleReadTools.AccountNames("{\"error\":\"vault is unreachable\"}"));
 }

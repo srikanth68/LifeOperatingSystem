@@ -3,7 +3,9 @@ using ModelContextProtocol.Server;
 
 namespace Maaya.Mcp.Tools;
 
-// Read tools over the live Maaya modules. All calls are JWT-authenticated
+// Cross-module and derived read tools: the agenda, the one search, Vitara's
+// conclusions, contacts, and module health. Each module's own records are read through
+// its single *_read tool in ModuleReadTools. All calls are JWT-authenticated
 // server-side; responses are size-capped JSON straight from each module's API.
 [McpServerToolType]
 public sealed class ModuleTools(ModuleGateway gw)
@@ -86,19 +88,11 @@ public sealed class ModuleTools(ModuleGateway gw)
         return t.Contains("\"total\":0", StringComparison.Ordinal);
     }
 
-    [McpServerTool(Name = "vault_finances")]
-    [Description("Net worth, cash, debt, 30-day spending by category. For \"how much do I have\", \"what's my net worth\", \"what am I spending on\". Specific merchant/transaction -> maaya_search.")]
-    public Task<string> VaultFinances() => gw.GetAsync("vault", "/api/summary");
-
-    [McpServerTool(Name = "vitara_health")]
-    [Description("Readiness, sleep, activity, heart metrics, recent workouts. For \"how did I sleep\", \"what's my readiness\", \"am I recovered\".")]
-    public Task<string> VitaraHealth() => gw.GetAsync("vitara", "/api/dashboard");
-
-    // The derived layer, not the raw one. vitara_health reports last night's numbers;
+    // The derived layer, not the raw one. vitara_read reports last night's numbers;
     // this reports what they mean against sixty days of the user's own history -- what
     // is off baseline, what has stepped to a new level, what is drifting.
     [McpServerTool(Name = "health_findings")]
-    [Description("What Vitara has CONCLUDED about the user's health: what is off their personal baseline, early illness signs, sustained changes, drift, sleep debt, and missing data. Computed in code, not guessed. For \"is anything off\", \"how am I really doing\", \"anything I should know\". READ THE status FIELD FIRST - an empty findings list can mean the analysis has never run, which is NOT the same as the user being fine. Raw last-night numbers -> vitara_health.")]
+    [Description("What Vitara has CONCLUDED about the user's health: what is off their personal baseline, early illness signs, sustained changes, drift, sleep debt, and missing data. Computed in code, not guessed. For \"is anything off\", \"how am I really doing\", \"anything I should know\". READ THE status FIELD FIRST - an empty findings list can mean the analysis has never run, which is NOT the same as the user being fine. Raw last-night numbers -> vitara_read.")]
     public Task<string> HealthFindings() => gw.GetAsync("insight", "/api/health/summary");
 
     [McpServerTool(Name = "health_baselines")]
@@ -111,7 +105,7 @@ public sealed class ModuleTools(ModuleGateway gw)
     // caller that reports that as a prediction is inventing a forecast the system
     // explicitly declined to make.
     [McpServerTool(Name = "health_forecast")]
-    [Description("Tomorrow's predicted readiness, resting heart rate, HRV and time asleep, each with the range it usually lands in. For \"how will I feel tomorrow\", \"should I train tomorrow\", \"is it worth setting an early alarm\". READ THE method FIELD PER METRIC: \"model\" is a fitted forecast that beat the alternatives on this user's own history; \"today\" means nothing beat assuming tomorrow is like today, so say it is expected to be much like today and do NOT present it as a prediction. The verdict field says how wrong each method has actually been. Last night's numbers -> vitara_health.")]
+    [Description("Tomorrow's predicted readiness, resting heart rate, HRV and time asleep, each with the range it usually lands in. For \"how will I feel tomorrow\", \"should I train tomorrow\", \"is it worth setting an early alarm\". READ THE method FIELD PER METRIC: \"model\" is a fitted forecast that beat the alternatives on this user's own history; \"today\" means nothing beat assuming tomorrow is like today, so say it is expected to be much like today and do NOT present it as a prediction. The verdict field says how wrong each method has actually been. Last night's numbers -> vitara_read.")]
     public Task<string> HealthForecast() => gw.GetAsync("insight", "/api/health/forecast");
 
     // The portrait rather than the reading: standing properties of this body, measured
@@ -126,53 +120,8 @@ public sealed class ModuleTools(ModuleGateway gw)
     public Task<string> HealthVisitBrief() => gw.GetAsync("insight", "/api/health/visit-brief");
 
     [McpServerTool(Name = "health_signature")]
-    [Description("How this user's body runs, from months of their own data: when they sleep and how far free nights drift, which weekday is weakest, how long they take to come back from a hard day, and what their numbers move with. For \"what kind of sleeper am I\", \"which day is my worst\", \"how long do I take to recover\", \"what affects my sleep\". Relationships here moved TOGETHER in their data - say so rather than implying cause. Each part is absent until there is enough history, and absent means not enough data, not zero. Today's readings -> vitara_health; what is off baseline -> health_findings.")]
+    [Description("How this user's body runs, from months of their own data: when they sleep and how far free nights drift, which weekday is weakest, how long they take to come back from a hard day, and what their numbers move with. For \"what kind of sleeper am I\", \"which day is my worst\", \"how long do I take to recover\", \"what affects my sleep\". Relationships here moved TOGETHER in their data - say so rather than implying cause. Each part is absent until there is enough history, and absent means not enough data, not zero. Today's readings -> vitara_read; what is off baseline -> health_findings.")]
     public Task<string> HealthSignature() => gw.GetAsync("insight", "/api/health/signature");
-
-    [McpServerTool(Name = "aasthi_properties")]
-    [Description("Real-estate portfolio: properties, values, profit. For \"my properties\", \"how are rentals doing\". Specific repair/cost/vendor -> maaya_search.")]
-    public Task<string> AasthiProperties() => gw.GetAsync("aasthi", "/api/properties");
-
-    [McpServerTool(Name = "property_rent_status")]
-    [Description("Rent and recurring bills per property this month: expected vs received, and what is late. For \"did rent come in\", \"is the mortgage paid\", \"what is overdue on the rentals\".")]
-    public Task<string> PropertyRentStatus() => gw.GetAsync("aasthi", "/api/recurring-charges/status");
-
-    [McpServerTool(Name = "property_unreceipted")]
-    [Description("Confirmed one-off property spending this year with no receipt attached. For \"what am I missing receipts for\", \"tax paperwork\". Recurring bills are excluded - the bank record covers those. year")]
-    public Task<string> PropertyUnreceipted(
-        [Description("Tax year. Omit for the current one.")] int? year = null)
-        => gw.GetAsync("aasthi", $"/api/ledger/unreceipted{(year is > 0 ? $"?year={year}" : "")}");
-
-    [McpServerTool(Name = "sutra_documents")]
-    [Description("Document vault. No query -> stats (counts by category, expiring soon). With query -> matching docs. query")]
-    public Task<string> SutraDocuments(
-        string? query = null) =>
-        string.IsNullOrWhiteSpace(query)
-            ? gw.GetAsync("sutra", "/api/documents/stats")
-            : gw.GetAsync("sutra", $"/api/documents?q={Uri.EscapeDataString(query)}");
-
-    [McpServerTool(Name = "karma_habits")]
-    [Description("Today's check-ins + active goals. For \"did I do my habits\", \"how are my streaks\".")]
-    public async Task<string> KarmaHabits()
-    {
-        var habits = await gw.GetAsync("karma", "/api/habits/today");
-        var goals = await gw.GetAsync("karma", "/api/goals");
-        return $"{{\"habitsToday\":{habits},\"goals\":{goals}}}";
-    }
-
-    [McpServerTool(Name = "nexus_market")]
-    [Description("Monitor status: tracked symbols, alert COUNT, market open/closed. Actual alerts -> nexus_alerts.")]
-    public Task<string> NexusMarket() => gw.GetAsync("nexus", "/api/nexus/sentinel/status");
-
-    [McpServerTool(Name = "nexus_alerts")]
-    [Description("Alerts Sentinel raised (symbol, kind, message, timestamp), newest first. days (7) · limit (50)")]
-    public Task<string> NexusAlerts(
-        int days = 7,
-        int limit = 50)
-    {
-        var since = DateTime.UtcNow.AddDays(-Math.Max(1, days)).ToString("yyyy-MM-ddTHH:mm:ssZ");
-        return gw.GetAsync("nexus", $"/api/nexus/sentinel/alerts?since={Uri.EscapeDataString(since)}&limit={limit}");
-    }
 
     [McpServerTool(Name = "san_people")]
     [Description("Contacts. For \"who is X\", \"what's X's number\", \"whose birthday is coming up\" (query birthdays). Returns ids. query*")]

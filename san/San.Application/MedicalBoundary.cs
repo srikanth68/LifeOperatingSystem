@@ -28,7 +28,7 @@ public static class MedicalBoundary
         "might have, never suggest a diagnosis, never recommend or adjust a medication, dose " +
         "or supplement, and never tell them a reading is nothing to worry about.\n" +
         "- Answer from their measurements, not from medical knowledge. Call health_findings, " +
-        "health_baselines or vitara_health and report what those actually say. If a tool has " +
+        "health_baselines or vitara_read and report what those actually say. If a tool has " +
         "not been called, you do not know.\n" +
         "- A reading outside a reference range is a question for a clinician, not an answer. " +
         "Say what it is, how long it has been that way, and that it is worth raising.\n" +

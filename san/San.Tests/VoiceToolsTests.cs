@@ -11,18 +11,18 @@ public class VoiceToolsTests
         names.Select(n => new ToolDefinition(n, $"does {n}", new Dictionary<string, ToolParameter>())).ToList();
 
     private static readonly List<ToolDefinition> Full =
-        Catalogue("vitara_health", "memory_recent", "memory_recall", "agenda_now", "maaya_search",
+        Catalogue("vitara_read", "memory_recent", "memory_recall", "agenda_now", "maaya_search",
                   "reminder_create", "workout_log", "maaya_status", "journal_log",
-                  "vault_finances", "property_task_create", "person_create", "food_log", "nexus_market");
+                  "vault_read", "property_task_create", "person_create", "food_log", "nexus_read");
 
     [Fact]
     public void KeepsOnlyTheVoiceSet()
     {
         var kept = VoiceTools.Filter(Full).Select(t => t.Name).ToList();
-        Assert.Contains("vitara_health", kept);
+        Assert.Contains("vitara_read", kept);
         Assert.Contains("memory_recent", kept);
-        Assert.DoesNotContain("vault_finances", kept);
-        Assert.DoesNotContain("nexus_market", kept);
+        Assert.DoesNotContain("vault_read", kept);
+        Assert.DoesNotContain("nexus_read", kept);
     }
 
     [Fact]
@@ -55,16 +55,16 @@ public class VoiceToolsTests
     {
         string[] gateway =
         [
-            "aasthi_properties","action_add","action_complete","actions_pending","agenda_now",
-            "alert_create","alert_delete","alerts_list","calendar_event_create","calendar_events_list",
-            "context_brief","fact_set","facts_list","food_log","goal_create","goal_progress_set",
-            "goals_list","habit_checkin","habit_create","journal_log","journal_read","karma_habits",
-            "maaya_search","maaya_status",
-            "entity_lookup","memory_correct","memory_recall","memory_recent","memory_save","memory_why",
-            "nexus_alerts","nexus_market","northstar_sync",
-            "person_create","person_delete","person_update","property_financial_add","property_task_create",
-            "reminder_complete","reminder_create","reminder_delete","reminder_update","reminders_list",
-            "san_people","sutra_documents","vault_finances","vitara_health","weight_log","workout_log",
+            "aasthi_read", "action_add", "action_complete", "actions_pending", "agenda_now", "alert_create",
+            "alert_delete", "alerts_list", "calendar_event_create", "calendar_events_list", "context_brief",
+            "entity_lookup", "fact_set", "facts_list", "food_log", "goal_create", "goal_progress_set",
+            "habit_checkin", "habit_create", "health_baselines", "health_findings", "health_forecast",
+            "health_signature", "health_visit_brief", "journal_log", "journal_read", "karma_read",
+            "maaya_search", "maaya_status", "memory_correct", "memory_recall", "memory_recent", "memory_save",
+            "memory_why", "nexus_read", "northstar_sync", "person_create", "person_delete", "person_update",
+            "property_financial_add", "property_task_create", "reminder_complete", "reminder_create",
+            "reminder_delete", "reminder_update", "reminders_list", "san_people", "sutra_read", "vault_read",
+            "vitara_read", "weight_log", "workout_log",
         ];
         foreach (var name in VoiceTools.Default)
             Assert.Contains(name, gateway);

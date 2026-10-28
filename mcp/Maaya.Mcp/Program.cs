@@ -80,6 +80,7 @@ builder.Services.AddMcpServer()
     .WithHttpTransport()
     .WithTools<MemoryTools>()
     .WithTools<ModuleTools>()
+    .WithTools<ModuleReadTools>()
     .WithTools<ActionTools>();
 
 var app = builder.Build();

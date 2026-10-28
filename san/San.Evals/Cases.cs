@@ -121,7 +121,9 @@ public static class Cases
 
             new("rent_status_tool", "tool-select", withTools,
                 "Did the rent come in this month?",
-                r => r.CalledAnyOf("property_rent_status", "aasthi_properties"),
+                // aasthi_read is the live catalogue's property tool since the module
+                // read tools were folded; the other two are the fixture's names.
+                r => r.CalledAnyOf("property_rent_status", "aasthi_properties", "aasthi_read"),
                 "Reaches for the property tools rather than answering from nothing.",
                 tools),
 

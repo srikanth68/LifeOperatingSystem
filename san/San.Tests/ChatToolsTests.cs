@@ -11,7 +11,7 @@ public class ChatToolsTests
         names.Select(n => new ToolDefinition(n, $"does {n}", new Dictionary<string, ToolParameter>())).ToList();
 
     private static readonly string[] All =
-        ["reminder_create", "agenda_now", "vitara_health", "maaya_status", "maaya_search",
+        ["reminder_create", "agenda_now", "vitara_read", "maaya_status", "maaya_search",
          "person_create", "person_update", "person_delete", "san_people"];
 
     [Fact]
@@ -28,7 +28,7 @@ public class ChatToolsTests
     public void KeepsEverythingElse()
     {
         var kept = ChatTools.Filter(Catalogue(All)).Select(t => t.Name).ToList();
-        Assert.Equal(["reminder_create", "agenda_now", "vitara_health", "maaya_status", "maaya_search"], kept);
+        Assert.Equal(["reminder_create", "agenda_now", "vitara_read", "maaya_status", "maaya_search"], kept);
     }
 
     [Fact]

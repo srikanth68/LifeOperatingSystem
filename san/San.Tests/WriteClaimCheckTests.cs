@@ -104,7 +104,9 @@ public class WriteClaimCheckTests
     [InlineData("reminders_list", false)]
     [InlineData("actions_pending", false)]
     [InlineData("agenda_now", false)]
-    [InlineData("vitara_health", false)]
+    [InlineData("vitara_read", false)]
+    [InlineData("vault_read", false)]
+    [InlineData("nexus_read", false)]
     [InlineData("maaya_search", false)]
     public void ClassifiesToolsByTheirVerb(string tool, bool isWrite)
         => Assert.Equal(isWrite, WriteClaimCheck.IsWriteTool(tool));

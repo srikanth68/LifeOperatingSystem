@@ -23,8 +23,9 @@ namespace Maaya.Mcp.Tools;
 public static class NameResolver
 {
     // The property names things are called across the modules. Reminders carry "text",
-    // actions "title", habits and most else "name".
-    private static readonly string[] NameFields = ["name", "text", "title", "summary"];
+    // actions "title", habits and most else "name". Properties have no name at all,
+    // only an address -- which is how they are spoken of anyway ("Scoter Street").
+    private static readonly string[] NameFields = ["name", "text", "title", "summary", "address"];
 
     public static (string? Id, string? Error) Resolve(string needle, string json, string what)
     {
@@ -41,6 +42,11 @@ public static class NameResolver
         if (candidates.Count == 0) return (null, $"There are no open {what}s to match against.");
 
         var term = needle.Trim();
+
+        // Not every id is a GUID -- bank accounts carry Plaid's own -- so an id passed
+        // back from an earlier read is recognised by matching it, not by its shape.
+        var byId = candidates.FirstOrDefault(c => c.Id == term);
+        if (byId.Id is not null) return (byId.Id, null);
 
         // Exact first. Only if nothing matches exactly does it widen, so "reading"
         // never loses to "reading before bed" when both exist.

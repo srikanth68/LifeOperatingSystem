@@ -112,6 +112,17 @@ The catalogue grew to **52** on 2026-09-24 (`health_forecast`, `health_signature
 run from that date is not directly comparable with the 48-tool column above. If
 `complete_looks_first` slips, the two health tools are the first thing to try removing.
 
+On 2026-10-27 the module reads were folded: ten single-endpoint tools (`vault_finances`,
+`vitara_health`, `aasthi_properties`, `property_rent_status`, `property_unreceipted`,
+`sutra_documents`, `karma_habits`, `goals_list`, `nexus_market`, `nexus_alerts`) became
+six tools with a `view` argument (`vault_read`, `vitara_read`, `aasthi_read`,
+`karma_read`, `sutra_read`, `nexus_read`; see `mcp/Maaya.Mcp/Tools/ModuleViews.cs`). The
+gateway serves 52 and `tools-live.json` holds 49, without `memory_correct`, `memory_why`
+and `entity_lookup`, which were never added. This is a different catalogue *shape* as well as size, so
+re-baseline before comparing. Two things to watch: whether the model picks the right
+`view` (a wrong one comes back as an error listing the choices, so it costs a step, not
+an answer), and `rent_status_tool`, which now has to reach rent through `aasthi_read`.
+
 `scripts/refresh-eval-tools.py` keeps that export honest:
 
 ```bash

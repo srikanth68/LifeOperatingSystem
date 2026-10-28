@@ -27,7 +27,7 @@ public static class VoiceTools
 {
     public static readonly string[] Default =
     [
-        "vitara_health",      // sleep, readiness, activity — the main voice question
+        "vitara_read",        // sleep, readiness, activity — the main voice question
         "memory_recent",      // what NorthStar has learned lately
         "memory_recall",      // and anything specific it remembers
         "agenda_now",         // "what's on / what am I forgetting", already merged + ranked
