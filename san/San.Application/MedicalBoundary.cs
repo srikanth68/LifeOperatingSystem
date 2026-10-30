@@ -40,20 +40,7 @@ public static class MedicalBoundary
         "- Urgent symptoms — chest pain, trouble breathing, stroke signs, a thought of self-harm " +
         "— are not yours to triage. Say plainly that it needs emergency care now, and stop.";
 
-    // Only when it is relevant. Health is a minority of turns and this is ~230 tokens;
-    // paying it on "what did I spend at the hardware shop" buys nothing. Matching on
-    // the question AND the recent reply, because "is that bad?" is a health question
-    // when the previous turn was about a heart rate.
-    private static readonly string[] Cues =
-    [
-        "health", "doctor", "gp", "symptom", "pain", "sick", "ill", "illness", "fever",
-        "blood", "lab", "cholesterol", "ldl", "hdl", "hba1c", "thyroid", "tsh", "glucose",
-        "diabet", "pressure", "bp", "heart", "hrv", "pulse", "sleep", "apnea", "apnoea",
-        "medication", "medicine", "dose", "supplement", "diagnos", "worried", "worry",
-        "normal range", "test result", "results", "appointment", "clinic", "hospital",
-    ];
-
-    public static bool Applies(params string?[] recentText) =>
-        recentText.Any(t => !string.IsNullOrWhiteSpace(t)
-                            && Cues.Any(c => t!.Contains(c, StringComparison.OrdinalIgnoreCase)));
+    // Attached to EVERY turn, not only health-looking ones. It used to be matched on
+    // cue words to save ~230 tokens, and that switching was what kept breaking the
+    // prompt cache -- see the system-prompt note in ChatController.
 }

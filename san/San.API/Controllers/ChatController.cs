@@ -190,17 +190,18 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
         // So everything stable lives in the system prompt, and everything that changes
         // per turn — recalled memory, the time line, the module snapshot — rides in the
         // newest user message instead, landing after the cached region.
-        // The one rule that must survive the prompt being edited, and the one that is
-        // only paid for when it is relevant. Health is a minority of turns and this
-        // block is ~230 tokens; "is that bad?" counts as a health question when the
-        // previous reply was about a heart rate, so the last exchange is matched too.
-        var medical = MedicalBoundary.Applies(req.Content, turns.LastOrDefault()?.Content)
-            ? MedicalBoundary.Text
-            : null;
-
+        //
+        // The medical rule used to break exactly that. It was attached only to turns that
+        // looked like health questions, to save its ~230 tokens -- but its cues include
+        // "sleep" and "heart", so it switched on and off between ordinary messages, and
+        // each switch moved the system prompt and re-read all ~7000 tokens: measured on
+        // Everest as reused 0, re-read 6698 in 20.4s on the turn after it flipped. Always
+        // attached, it is read once and then cached like the rest, which is cheaper than
+        // the saving ever was, and it can no longer be missing from a health turn the
+        // cues failed to spot.
         var systemPrompt = string.Join("\n\n",
             new[] { basePrompt, factsBlock, toolInstructions, capabilities,
-                    SanOutputConventions.Text, medical, spoken ? SanOutputConventions.Voice : null }
+                    SanOutputConventions.Text, MedicalBoundary.Text, spoken ? SanOutputConventions.Voice : null }
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
 
         var liveContext = string.Join("\n\n",
@@ -240,7 +241,7 @@ public class ChatController(ISanRepository repo, IChatProvider chat, IModuleCont
             ChatWindow.EstimateTokens(context),
             ChatWindow.EstimateTokens(ownContext),
             ChatWindow.EstimateTokens(SanOutputConventions.Text) + ChatWindow.EstimateTokens(capabilities)
-                + ChatWindow.EstimateTokens(medical),
+                + ChatWindow.EstimateTokens(MedicalBoundary.Text),
             tools.Sum(t => ChatWindow.EstimateTokens(t.Name + t.Description)
                            + t.Parameters.Sum(p => ChatWindow.EstimateTokens(p.Key + p.Value.Description))),
             tools.Count,
