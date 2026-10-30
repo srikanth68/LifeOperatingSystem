@@ -41,6 +41,14 @@ x-backend: &backend
   dns:
     - 1.1.1.1
     - 8.8.8.8
+  # Every database query was logged at Information, SQL text and all, so a minute of
+  # san-worker was eighty lines of SELECTs and the line that mattered ("Read ... from
+  # ...") had scrolled out of any --tail. Warnings and errors from EF still show.
+  #
+  # A service that sets its own `environment` REPLACES this one -- the merge key is
+  # shallow -- so insight and san-worker repeat the line.
+  environment:
+    Logging__LogLevel__Microsoft.EntityFrameworkCore: Warning
 
 services:
   vault:
@@ -98,6 +106,7 @@ services:
     # is exactly the split wanted: one shared secrets file, one port per process.
     environment:
       BIND_URL: http://0.0.0.0:5110
+      Logging__LogLevel__Microsoft.EntityFrameworkCore: Warning
     ports: ["5110:5110"]
     depends_on: [vitara]
 
@@ -163,6 +172,7 @@ services:
     # this has to be an override rather than a value in san.env.
     environment:
       - LLM_SLOT=2
+      - Logging__LogLevel__Microsoft.EntityFrameworkCore=Warning
     depends_on: [san]
 
   sutra:
