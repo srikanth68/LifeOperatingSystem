@@ -46,6 +46,24 @@ struct MemoryStatusBody: Codable {
     let note: String?
 }
 
+// ── NorthStar — POST 5500/api/memory (a voice note) ──
+struct MemorySaveBody: Codable {
+    let content: String
+    let kind: String
+    let tags: String
+    let importance: Int
+    let source: String
+    let status: String
+}
+
+// Only what the sheet uses. `note` is set when nothing new was stored -- "already
+// remembered" -- and nil for a fresh save.
+struct SavedMemoryResult: Codable {
+    let id: String
+    let duplicate: Bool?
+    let note: String?
+}
+
 // One module's answer to the server check in Settings.
 struct ProbeResult {
     let ok: Bool

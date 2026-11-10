@@ -26,6 +26,7 @@ struct MemoryView: View {
     @State private var loading = false
     @State private var errorText: String?
     @State private var busy: Set<String> = []
+    @State private var showVoiceNote = false
 
     var body: some View {
         NavigationStack {
@@ -154,6 +155,17 @@ struct MemoryView: View {
                 }
             }
             .navigationTitle("Memory")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showVoiceNote = true } label: {
+                        Image(systemName: "mic.badge.plus")
+                    }
+                    .accessibilityLabel("Voice note")
+                }
+            }
+            .sheet(isPresented: $showVoiceNote) {
+                VoiceNoteView(client: client) { Task { await load() } }
+            }
             .refreshable { await load() }
             .task { await load() }
         }

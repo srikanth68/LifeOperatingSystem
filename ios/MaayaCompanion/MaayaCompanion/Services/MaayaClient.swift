@@ -93,6 +93,14 @@ final class MaayaClient {
                           allowRefresh: true)
     }
 
+    // A voice note, in the owner's own words and checked before saving -- so active from
+    // the start rather than waiting in the review queue.
+    func saveMemory(_ content: String, kind: String) async throws -> SavedMemoryResult {
+        try await send(ModulePort.northstar, "/api/memory", method: "POST",
+                       body: MemorySaveBody(content: content, kind: kind, tags: "voice-note",
+                                            importance: 3, source: "phone-voice", status: "active"))
+    }
+
     @discardableResult
     func dismissInsight(_ id: String) async throws -> Data {
         try await perform(ModulePort.northstar, "/api/insights/\(id)/dismiss", method: "PATCH",
