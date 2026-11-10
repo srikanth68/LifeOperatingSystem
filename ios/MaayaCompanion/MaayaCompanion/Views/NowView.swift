@@ -10,6 +10,10 @@ import SwiftUI
 // Four sources, one list, ordered by when they need attention: San's reminders,
 // today's unticked Karma habits, NorthStar's cross-module action queue, and active
 // alerts. Everything except an alert can be finished from here.
+//
+// One exception to "only what can be finished": the next twelve hours of calendar, at
+// the top. Away from a laptop, "where do I need to be" is the question the phone gets
+// picked up for, the same reason the Nexus watchlist kept its tab.
 struct NowView: View {
     let client: MaayaClient
 
@@ -17,6 +21,7 @@ struct NowView: View {
     @State private var actions: [ActionItem] = []
     @State private var alerts: [AlertItem] = []
     @State private var habits: [KarmaHabit] = []
+    @State private var calendar: NowNextResult?
     @State private var loading = false
     @State private var errorText: String?
     @State private var busy: Set<String> = []       // ids mid-write, so taps can't double-fire
@@ -29,6 +34,19 @@ struct NowView: View {
                     Section {
                         Label(errorText, systemImage: "exclamationmark.triangle")
                             .foregroundStyle(.orange)
+                    }
+                }
+
+                if !comingUp.isEmpty {
+                    Section("Coming up") {
+                        ForEach(comingUp) { e in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(e.title)
+                                Text(eventCaption(e))
+                                    .font(.caption)
+                                    .foregroundStyle(isHappening(e) ? MaayaTheme.gold : .secondary)
+                            }
+                        }
                     }
                 }
 
@@ -57,6 +75,15 @@ struct NowView: View {
                                     } }
                                 }
                                 .tint(.teal)
+                            }
+                            // Some reminders should never have existed -- a background run
+                            // that misread an email -- and for those "done" is a lie and a
+                            // snooze only brings them back. No full swipe: unlike done,
+                            // this cannot be undone.
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button("Delete", role: .destructive) {
+                                    Task { await run(id: r.id) { try await client.deleteReminder(r.id) } }
+                                }
                             }
                         }
                     }
@@ -174,6 +201,32 @@ struct NowView: View {
 
     // MARK: - Data
 
+    // What is on now, then what is next. All-day events are left out: they say nothing
+    // about where to be, and a birthday would otherwise sit at the top all day.
+    private var comingUp: [CalendarEventItem] {
+        guard let calendar else { return [] }
+        return ([calendar.current].compactMap { $0 } + calendar.upcoming).filter { !$0.allDay }
+    }
+
+    private func isHappening(_ e: CalendarEventItem) -> Bool {
+        e.startTime <= .now && e.endTime >= .now
+    }
+
+    // "Now · until 3:30 PM · Office" or "4:00 – 5:00 PM · Dr. Rao".
+    private func eventCaption(_ e: CalendarEventItem) -> String {
+        var parts = [isHappening(e)
+                     ? "Now · until \(Self.time.string(from: e.endTime))"
+                     : "\(Self.time.string(from: e.startTime)) – \(Self.time.string(from: e.endTime))"]
+        if let loc = e.location, !loc.isEmpty { parts.append(loc) }
+        return parts.joined(separator: " · ")
+    }
+
+    private static let time: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        return f
+    }()
+
     private var dueReminders: [ReminderItem] {
         reminders.filter { !$0.done }.sorted { $0.dueAt < $1.dueAt }
     }
@@ -210,26 +263,30 @@ struct NowView: View {
         loading = true
         defer { loading = false }
 
-        // Three round trips over the mesh, issued together rather than in sequence.
+        // Five round trips over the mesh, issued together rather than in sequence.
         async let r = client.reminders()
         async let a = client.pendingActions()
         async let al = client.alerts()
         async let hb = client.karmaToday()
+        async let cal = client.nowNext()
 
         let rr = try? await r
         let aa = try? await a
         let alal = try? await al
         let hh = try? await hb
+        let cc = try? await cal
 
         reminders = rr ?? reminders
         actions   = aa ?? actions
         alerts    = alal ?? alerts
         habits    = hh ?? habits
+        calendar  = cc ?? calendar
 
         let down = [rr == nil ? "reminders" : nil,
                     aa == nil ? "actions" : nil,
                     alal == nil ? "alerts" : nil,
-                    hh == nil ? "habits" : nil].compactMap { $0 }
+                    hh == nil ? "habits" : nil,
+                    cc == nil ? "calendar" : nil].compactMap { $0 }
         errorText = down.isEmpty ? nil : "Couldn't reach: \(down.joined(separator: ", "))"
 
         // The list the phone shows and the notifications it schedules come from the same

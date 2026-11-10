@@ -76,6 +76,23 @@ final class MaayaClient {
         try await perform(ModulePort.northstar, "/api/memory/\(id)", method: "DELETE",
                           httpBody: nil, allowRefresh: true)
     }
+    // The review queue: proposed memories, newest first.
+    func memoryReview(limit: Int = 50) async throws -> MemoryReviewResult {
+        try await get(ModulePort.northstar, "/api/memory/review?limit=\(limit)")
+    }
+    @discardableResult
+    func confirmMemory(_ id: String) async throws -> Data {
+        try await perform(ModulePort.northstar, "/api/memory/\(id)/confirm", method: "POST",
+                          httpBody: try MaayaJSON.encoder.encode(MemoryStatusBody(note: "confirmed on phone")),
+                          allowRefresh: true)
+    }
+    @discardableResult
+    func retractMemory(_ id: String) async throws -> Data {
+        try await perform(ModulePort.northstar, "/api/memory/\(id)/retract", method: "POST",
+                          httpBody: try MaayaJSON.encoder.encode(MemoryStatusBody(note: "retracted on phone")),
+                          allowRefresh: true)
+    }
+
     @discardableResult
     func dismissInsight(_ id: String) async throws -> Data {
         try await perform(ModulePort.northstar, "/api/insights/\(id)/dismiss", method: "PATCH",
@@ -136,6 +153,20 @@ final class MaayaClient {
                           httpBody: try MaayaJSON.encoder.encode(
                               HabitLogBody(date: nil, completed: completed, note: nil)),
                           allowRefresh: true)
+    }
+
+    // For the ones that should never have existed -- a background run that misread an
+    // email -- where "done" would be a lie and snoozing only brings it back.
+    @discardableResult
+    func deleteReminder(_ id: String) async throws -> Data {
+        try await perform(ModulePort.san, "/api/reminders/\(id)", method: "DELETE",
+                          httpBody: nil, allowRefresh: true)
+    }
+
+    // What is on now and over the next few hours, from San's calendar (Google synced,
+    // plus anything San or the email reader added).
+    func nowNext(hours: Int = 12) async throws -> NowNextResult {
+        try await get(ModulePort.san, "/api/calendar/now-next?hours=\(hours)")
     }
 
     // Push a reminder's due time out. The endpoint is a full replace, so the existing
@@ -209,6 +240,21 @@ final class MaayaClient {
         let bodyData = try MaayaJSON.encoder.encode(VoiceSpeakBody(text: text, voice: voice))
         return try await performData(ModulePort.san, "/api/voice/speak", method: "POST",
                                      body: bodyData, contentType: "application/json")
+    }
+
+    // MARK: - Server check
+
+    // Is this module answering, and how fast. Any authenticated 2xx counts as up; the
+    // response itself is thrown away. Never throws -- a down module is the answer.
+    func probe(_ port: Int, _ path: String) async -> ProbeResult {
+        let start = Date()
+        func elapsed() -> Int { Int(Date().timeIntervalSince(start) * 1000) }
+        do {
+            _ = try await perform(port, path, method: "GET", httpBody: nil, allowRefresh: true, timeout: 8)
+            return ProbeResult(ok: true, ms: elapsed(), detail: nil)
+        } catch {
+            return ProbeResult(ok: false, ms: elapsed(), detail: error.localizedDescription)
+        }
     }
 
     // MARK: - Core request plumbing

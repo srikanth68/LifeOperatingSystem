@@ -15,6 +15,7 @@ struct SettingsView: View {
     let calendarManager: CalendarManager
     let healthManager: HealthManager
     let auth: AuthService
+    let client: MaayaClient
 
     private let schemes = ["http", "https"]
 
@@ -50,6 +51,17 @@ struct SettingsView: View {
                     Text("Server")
                 } footer: {
                     Text("Reachable over NordVPN Meshnet or Tailscale (e.g. 100.x.y.z). Each module is served on its own port off this host. The Device Key matches DEVICE_API_KEY on the server for the telemetry/HealthKit uploads.")
+                        .font(.caption)
+                }
+
+                Section {
+                    NavigationLink {
+                        ServerStatusView(client: client)
+                    } label: {
+                        Label("Server status", systemImage: "server.rack")
+                    }
+                } footer: {
+                    Text("Which modules on Everest are answering, and how fast. Start here when San doesn't reply.")
                         .font(.caption)
                 }
 

@@ -119,8 +119,42 @@ struct ChatView: View {
         }
     }
 
+    // One tap instead of typing on a phone, for the questions that get asked most away
+    // from a desk. Each lands on a module read tool San already has (vitara_read,
+    // vault_read, aasthi_read, karma_read), so these are ordinary messages, not a
+    // separate feature -- San answers them exactly as if they had been typed.
+    private static let quickAsks = [
+        "What's on today?",
+        "Anything off with my health?",
+        "How did I sleep this week?",
+        "What did I spend this week?",
+        "Did the rent come in?",
+        "How are my streaks?",
+    ]
+
     private var inputBar: some View {
         VStack(spacing: 8) {
+            if draft.isEmpty && attachedJpeg == nil && !sending {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Self.quickAsks, id: \.self) { ask in
+                            Button {
+                                draft = ask
+                                Task { await send() }
+                            } label: {
+                                Text(ask)
+                                    .font(.caption)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(MaayaTheme.surface, in: Capsule())
+                                    .foregroundStyle(MaayaTheme.gold)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+
             if let attachedJpeg, let ui = UIImage(data: attachedJpeg) {
                 HStack {
                     Image(uiImage: ui)

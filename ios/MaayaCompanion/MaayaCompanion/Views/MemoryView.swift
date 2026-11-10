@@ -7,11 +7,18 @@ import SwiftUI
 // memory gets recalled into San's context again and again -- fixing it here is the
 // cheapest way to make San's answers better.
 //
-// Four sources, fetched together, each allowed to fail on its own: NorthStar's facts,
-// recent memories and insights, and Vitara Insight's active health findings.
+// Five sources, fetched together, each allowed to fail on its own: NorthStar's review
+// queue, facts, recent memories and insights, and Vitara Insight's active health findings.
+//
+// The review queue comes first because it is the one that grows on its own. San's chat
+// distillation and the email reader both PROPOSE memories rather than asserting them,
+// and a proposed memory is recalled marked "unconfirmed" until someone says yes or no.
+// Confirming makes San state it as fact; retracting stops it being recalled while
+// keeping the record of the mistake, which is what Delete further down does not.
 struct MemoryView: View {
     let client: MaayaClient
 
+    @State private var review: [ReviewMemoryItem] = []
     @State private var facts: [UserFactItem] = []
     @State private var memories: [MemoryItem] = []
     @State private var insights: [NorthStarInsight] = []
@@ -27,6 +34,42 @@ struct MemoryView: View {
                     Section {
                         Label(errorText, systemImage: "exclamationmark.triangle")
                             .foregroundStyle(.orange)
+                    }
+                }
+
+                if !review.isEmpty {
+                    Section {
+                        ForEach(review) { m in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(m.content)
+                                if let replaces = m.replaces, !replaces.isEmpty {
+                                    Text("Corrects: \(replaces)")
+                                        .font(.caption)
+                                        .foregroundStyle(MaayaTheme.gold)
+                                }
+                                Text(reviewCaption(m))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                            .opacity(busy.contains(m.id) ? 0.5 : 1)
+                            .swipeActions(edge: .leading) {
+                                Button("Confirm") {
+                                    Task { await run(id: m.id) { try await client.confirmMemory(m.id) } }
+                                }
+                                .tint(.green)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button("Retract") {
+                                    Task { await run(id: m.id) { try await client.retractMemory(m.id) } }
+                                }
+                                .tint(.orange)
+                            }
+                        }
+                    } header: {
+                        Text("To review (\(review.count))")
+                    } footer: {
+                        Text("Swipe right to confirm, left to retract.")
                     }
                 }
 
@@ -94,7 +137,7 @@ struct MemoryView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    ForEach(memories) { m in
+                    ForEach(settledMemories) { m in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(m.content)
                             Text([m.kind, Self.shortDate(m.createdAt)].compactMap { $0 }.joined(separator: " · "))
@@ -128,6 +171,23 @@ struct MemoryView: View {
         return parts.joined(separator: " · ")
     }
 
+    // Recent memories minus the ones already shown for review above, so a proposed
+    // memory is not listed twice with two different sets of swipes.
+    private var settledMemories: [MemoryItem] {
+        let pending = Set(review.map(\.id))
+        return memories.filter { !pending.contains($0.id) }
+    }
+
+    // "event · email · 3 Nov", then why it was proposed, when the proposer said.
+    private func reviewCaption(_ m: ReviewMemoryItem) -> String {
+        var parts = [m.kind]
+        if let source = m.source, !source.isEmpty { parts.append(source) }
+        if let day = Self.shortDate(m.createdAt) { parts.append(day) }
+        var caption = parts.joined(separator: " · ")
+        if let evidence = m.evidence, !evidence.isEmpty { caption += "\n\(evidence)" }
+        return caption
+    }
+
     private static let dayMonth: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "d MMM"
@@ -145,22 +205,26 @@ struct MemoryView: View {
         loading = true
         defer { loading = false }
 
+        async let rv = client.memoryReview()
         async let fa = client.facts()
         async let me = client.recentMemories()
         async let ins = client.insights()
         async let fi = client.healthFindings()
 
+        let rr = try? await rv
         let ff = try? await fa
         let mm = try? await me
         let ii = try? await ins
         let hh = try? await fi
 
+        review   = rr?.memories ?? review
         facts    = (ff ?? facts).sorted { $0.key < $1.key }
         memories = mm ?? memories
         insights = ii ?? insights
         findings = hh ?? findings
 
-        let down = [ff == nil ? "facts" : nil,
+        let down = [rr == nil ? "review queue" : nil,
+                    ff == nil ? "facts" : nil,
                     mm == nil ? "memories" : nil,
                     ii == nil ? "insights" : nil,
                     hh == nil ? "health findings" : nil].compactMap { $0 }

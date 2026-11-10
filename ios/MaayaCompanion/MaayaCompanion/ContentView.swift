@@ -44,7 +44,8 @@ struct ContentView: View {
                         locationManager: locationManager,
                         calendarManager: calendarManager,
                         healthManager: healthManager,
-                        auth: auth
+                        auth: auth,
+                        client: client
                     )
                 }
             }
