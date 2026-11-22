@@ -4,6 +4,8 @@ Default assumptions (adjust once answered — see **Open questions**): adult, he
 beginner–intermediate, gym or dumbbells available, ~60 min/day, wears Oura (Vitara).
 Get a doctor's OK before starting if you have heart, BP, joint or metabolic issues.
 
+> **Start here for the easy version:** [EASY-PLAN-AND-MEALS.md](EASY-PLAN-AND-MEALS.md)
+
 ---
 
 ## 1. The 6 pillars (all four goals share them)
